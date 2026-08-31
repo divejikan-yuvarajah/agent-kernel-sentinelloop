@@ -171,7 +171,24 @@ class IncidentRepository:
         return Incident.model_validate(_first_row(response.data, "update_incident_status"))
 
     def update_incident_fields(self, incident_id: UUID, fields: dict) -> Incident:
-        allowed = {"status", "resolved_at", "closed_at", "reopen_count"}
+        allowed = {
+            "status",
+            "resolved_at",
+            "closed_at",
+            "reopen_count",
+            "hazard_category",
+            "hazard_description",
+            "location",
+            "injury_occurred",
+            "hazard_currently_active",
+            "people_exposed",
+            "current_risk_level",
+            "session_id",
+            "detected_language",
+            "original_message_text",
+            "duplicate_of",
+            "site_id",
+        }
         payload = {key: value for key, value in fields.items() if key in allowed and value is not None}
         if not payload:
             raise PersistenceError("update_incident_fields requires at least one allowed field")

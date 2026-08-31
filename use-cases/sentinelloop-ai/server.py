@@ -11,12 +11,12 @@ pin_openai_agents_sdk()
 from agentkernel.api import RESTAPI
 from agentkernel.openai import OpenAIModule
 from agentkernel.slack import AgentSlackRequestHandler
-from agentkernel.whatsapp import AgentWhatsAppRequestHandler
 
 from agent import build_agents, configure_model_provider
+from integrations.whatsapp_handler import SentinelLoopWhatsAppHandler
 
 configure_model_provider()
 OpenAIModule(build_agents())
 
 if __name__ == "__main__":
-    RESTAPI.run([AgentWhatsAppRequestHandler(), AgentSlackRequestHandler()])
+    RESTAPI.run([SentinelLoopWhatsAppHandler(), AgentSlackRequestHandler()])
