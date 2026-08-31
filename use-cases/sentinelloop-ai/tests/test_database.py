@@ -280,6 +280,15 @@ def test_list_incidents_rejects_unknown_filter_fields():
         IncidentFilters.model_validate({"status": "OPEN", "sql": "drop table"})
 
 
+def test_update_incident_fields_allowlist(repo: IncidentRepository, backend: FakeBackend):
+    created = repo.create_incident(_create_payload())
+    updated = repo.update_incident_fields(created.id, {"status": "CLOSED", "closed_at": "2026-08-31T00:00:00+00:00"})
+    assert updated.status == "CLOSED"
+    assert backend.last_query is not None
+    assert backend.last_query.payload["status"] == "CLOSED"
+    assert "closed_at" in backend.last_query.payload
+
+
 def test_update_incident_status(repo: IncidentRepository):
     created = repo.create_incident(_create_payload())
     updated = repo.update_incident_status(created.id, "ASSESSING")

@@ -1,10 +1,10 @@
 """SentinelLoop agent package.
 
-Intake, incident, risk, guidance, and coordination agents are implemented.
 Do not construct network clients at package import.
 """
 
 from .coordination_agent import CoordinationResult, coordinate_incident, create_coordination_agent
+from .followup_agent import FollowupResult, create_followup_agent, start_worker_verification
 from .guidance_agent import GuidanceResult, create_guidance_agent, generate_guidance
 from .incident_agent import IncidentAnalysis, analyze_incident, create_incident_agent
 from .intake_agent import IntakeResult, create_intake_agent, process_intake
@@ -26,4 +26,7 @@ __all__ = [
     "CoordinationResult",
     "coordinate_incident",
     "create_coordination_agent",
+    "FollowupResult",
+    "create_followup_agent",
+    "start_worker_verification",
 ]

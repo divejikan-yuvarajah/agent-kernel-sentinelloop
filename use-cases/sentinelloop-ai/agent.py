@@ -58,15 +58,7 @@ def _chat_model() -> OpenAIChatCompletionsModel:
 
 def build_agents() -> list[Agent]:
     model = _chat_model()
-    followup_agent = Agent(
-        name="followup_agent",
-        handoff_description="Verifies remediation with the original worker and closes or reopens the same incident.",
-        instructions=(
-            f"{SHARED} You are followup_agent. Ask whether the reported hazard is still present. "
-            "Do not close an incident yourself."
-        ),
-        model=model,
-    )
+    followup_agent = _load_local("followup_agent.py", "create_followup_agent")(model=model)
     coordination_agent = _load_local("coordination_agent.py", "create_coordination_agent")(
         model=model, handoffs=[followup_agent]
     )

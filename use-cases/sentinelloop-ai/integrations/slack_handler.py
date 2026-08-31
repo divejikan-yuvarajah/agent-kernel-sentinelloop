@@ -269,6 +269,29 @@ class SlackHandler:
         }
 
 
+IMAGE_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/webp", "image/gif", "image/jpg"})
+
+
+def extract_slack_file(event: dict[str, Any]) -> dict[str, Any] | None:
+    files = event.get("files") or []
+    if not files or not isinstance(files, list):
+        file = event.get("file")
+        files = [file] if isinstance(file, dict) else []
+    if not files or not isinstance(files[0], dict):
+        return None
+    item = files[0]
+    return {
+        "id": item.get("id"),
+        "name": item.get("name") or item.get("title"),
+        "mimetype": item.get("mimetype") or item.get("filetype"),
+        "url_private": item.get("url_private_download") or item.get("url_private"),
+        "user": event.get("user") or item.get("user"),
+        "thread_ts": event.get("thread_ts") or event.get("ts"),
+        "channel": event.get("channel") or event.get("channel_id"),
+        "event_id": event.get("event_id") or item.get("id"),
+    }
+
+
 def extract_action(payload: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
     """Return (action_id, incident_id, selected_team)."""
     actions = payload.get("actions") or []

@@ -570,7 +570,28 @@ class CoordinationService:
         result = await self._apply_status(
             record, status, actor=actor, event_type=event, mapping=mapping, thread_message=message
         )
+        if status == STATUS_RESOLVED and result.coordination_error is None:
+            await self._trigger_followup(record, mapping, actor)
         return result
+
+    async def _trigger_followup(
+        self, record: CoordinationRecord, mapping: dict[str, Any] | None, actor: str | None
+    ) -> None:
+        try:
+            from agents.followup_agent import start_worker_verification
+
+            payload = dict(mapping or {})
+            payload.setdefault("incident_id", record.incident_id)
+            payload.setdefault("incident_ref", record.incident_id)
+            payload["status"] = STATUS_RESOLVED
+            payload["assigned_team"] = record.assigned_team
+            payload["slack_channel_id"] = record.slack_channel_id
+            payload["slack_thread_ts"] = record.slack_thread_ts
+            if record.uuid:
+                payload.setdefault("id", record.uuid)
+            await start_worker_verification(payload, actor=actor)
+        except Exception:
+            log.exception("followup trigger failed incident=%s", record.incident_id)
 
     async def handle_thread_event(
         self, event: dict[str, Any], *, mapping_lookup: dict[str, dict[str, Any]] | None = None

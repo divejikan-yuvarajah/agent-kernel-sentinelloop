@@ -170,6 +170,20 @@ class IncidentRepository:
             raise RecordNotFoundError(f"incident not found: {incident_id}")
         return Incident.model_validate(_first_row(response.data, "update_incident_status"))
 
+    def update_incident_fields(self, incident_id: UUID, fields: dict) -> Incident:
+        allowed = {"status", "resolved_at", "closed_at", "reopen_count"}
+        payload = {key: value for key, value in fields.items() if key in allowed and value is not None}
+        if not payload:
+            raise PersistenceError("update_incident_fields requires at least one allowed field")
+        log.info("update_incident_fields incident_id=%s keys=%s", incident_id, sorted(payload))
+        response = _execute(
+            self._client.table("incidents").update(payload).eq("id", str(incident_id)),
+            "update_incident_fields",
+        )
+        if not response.data:
+            raise RecordNotFoundError(f"incident not found: {incident_id}")
+        return Incident.model_validate(_first_row(response.data, "update_incident_fields"))
+
     def add_update(self, data: IncidentUpdateCreate) -> IncidentUpdate:
         payload = _dump(data)
         log.info("add_update table=incident_updates type=%s", data.update_type)
@@ -332,6 +346,10 @@ def list_incidents(filters: IncidentFilters | None = None) -> list[Incident]:
 
 def update_incident_status(incident_id: UUID, status: str) -> Incident:
     return _repo().update_incident_status(incident_id, status)
+
+
+def update_incident_fields(incident_id: UUID, fields: dict) -> Incident:
+    return _repo().update_incident_fields(incident_id, fields)
 
 
 def add_update(data: IncidentUpdateCreate) -> IncidentUpdate:

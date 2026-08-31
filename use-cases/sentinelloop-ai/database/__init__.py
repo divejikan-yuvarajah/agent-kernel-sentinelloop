@@ -31,6 +31,7 @@ from database.repository import (
     increment_duplicate_count,
     list_incidents,
     reset_default_repository,
+    update_incident_fields,
     update_incident_status,
 )
 from database.schemas import (
@@ -73,5 +74,6 @@ __all__ = [
     "list_incidents",
     "reset_default_repository",
     "reset_supabase_client",
+    "update_incident_fields",
     "update_incident_status",
 ]
