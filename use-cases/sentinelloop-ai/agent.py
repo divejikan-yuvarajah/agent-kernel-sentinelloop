@@ -88,17 +88,7 @@ def build_agents() -> list[Agent]:
         handoffs=[coordination_agent],
         model=model,
     )
-    risk_agent = Agent(
-        name="risk_agent",
-        handoff_description="Estimates severity and likelihood; deterministic code owns the official score.",
-        instructions=(
-            f"{SHARED} You are risk_agent. You may discuss severity and likelihood in words. "
-            "You must not output risk_score = severity × likelihood as an official result. "
-            "Handoff to guidance_agent next."
-        ),
-        handoffs=[guidance_agent],
-        model=model,
-    )
+    risk_agent = _load_local("risk_agent.py", "create_risk_agent")(model=model, handoffs=[guidance_agent])
     incident_agent = _load_local("incident_agent.py", "create_incident_agent")(model=model, handoffs=[risk_agent])
     intake_agent = _load_local("intake_agent.py", "create_intake_agent")(
         model=model, handoffs=[incident_agent, followup_agent]

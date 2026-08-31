@@ -11,5 +11,6 @@ No Agent Kernel imports in this scaffold.
 """
 
 from .model_router import ModelCallResult, call_model
+from .risk_tools import calculate_risk
 
-__all__ = ["ModelCallResult", "call_model"]
+__all__ = ["ModelCallResult", "call_model", "calculate_risk"]
