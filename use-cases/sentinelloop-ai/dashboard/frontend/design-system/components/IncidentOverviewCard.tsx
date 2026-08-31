@@ -7,6 +7,7 @@ type Props = {
   incident: IncidentSummary;
   onOpen?: (id: string) => void;
   loading?: boolean;
+  imageSrc?: string | null;
 };
 
 function cardState(incident: IncidentSummary) {
@@ -16,7 +17,7 @@ function cardState(incident: IncidentSummary) {
   return "active";
 }
 
-export function IncidentOverviewCard({ incident, onOpen, loading = false }: Props) {
+export function IncidentOverviewCard({ incident, onOpen, loading = false, imageSrc = null }: Props) {
   if (loading) {
     return <Card variant="incident-card" loading aria-hidden="true" />;
   }
@@ -38,6 +39,11 @@ export function IncidentOverviewCard({ incident, onOpen, loading = false }: Prop
       aria-label={`Incident ${incident.incident_id}, ${incident.category ?? "uncategorized"}, ${incident.status}`}
     >
       <div className="ds-incident-card">
+        {imageSrc ? (
+          <div className="ds-incident-card__photo">
+            <img src={imageSrc} alt="" loading="lazy" />
+          </div>
+        ) : null}
         <header className="ds-incident-card__head">
           <p className="ds-mono" style={{ margin: 0, fontSize: "var(--font-size-xs)" }}>
             {incident.incident_id}

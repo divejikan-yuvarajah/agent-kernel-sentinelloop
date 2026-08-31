@@ -86,6 +86,7 @@ export type RecurringHazard = {
   trend_direction: "up" | "down" | "stable";
   first_seen: string | null;
   last_seen: string | null;
+  imageSrc?: string | null;
 };
 
 export type ActivityEvent = {
@@ -101,6 +102,7 @@ export type QrLocationStat = {
   count: number;
   risk_score: number | null;
   insight: string | null;
+  imageSrc?: string | null;
 };
 
 export type RepeatedHazardStat = {
@@ -166,6 +168,7 @@ export type EvidenceItem = {
   stage?: string | null;
   uploaded_by?: string | null;
   channel?: string | null;
+  imageSrc?: string | null;
 };
 
 export type AnalyticsPoint = {

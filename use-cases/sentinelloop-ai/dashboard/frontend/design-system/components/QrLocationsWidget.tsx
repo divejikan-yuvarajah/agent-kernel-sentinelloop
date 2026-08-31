@@ -17,6 +17,7 @@ export function QrLocationsWidget({ items, taggedCount = 0 }: Props) {
       <ul className="ds-recurring" aria-label="Most reported QR locations">
         {items.map((item) => (
           <li key={`${item.location}-${item.equipment ?? ""}`}>
+            {item.imageSrc ? <img src={item.imageSrc} alt="" className="ds-thumb" style={{ width: "100%", height: 80, marginBottom: 8 }} /> : null}
             <div className="ds-recurring__head">
               <strong>{item.equipment || item.location}</strong>
               <span className="ds-mono">{item.count}</span>

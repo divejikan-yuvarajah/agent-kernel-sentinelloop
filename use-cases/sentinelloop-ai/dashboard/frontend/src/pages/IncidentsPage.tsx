@@ -15,6 +15,8 @@ import { normalizeRisk } from "@ds/colors";
 import type { IncidentSummary } from "@ds/types";
 
 import { fetchIncidents } from "../api/client";
+import { incidentThumbnail } from "../data/demoImages";
+import { EvidenceImage } from "../components/EvidenceImage";
 import { useDemoMode } from "../demo/useDemoMode";
 
 function formatDate(value: string | null) {
@@ -181,6 +183,7 @@ export function IncidentsPage() {
             <table className="ds-table">
               <thead>
                 <tr>
+                  <th>Image</th>
                   <th>Incident ID</th>
                   <th>Category</th>
                   <th>Location</th>
@@ -197,6 +200,13 @@ export function IncidentsPage() {
                   <TableRow
                     key={incident.incident_id}
                     cells={[
+                      <EvidenceImage
+                        key="img"
+                        src={incidentThumbnail(incident.incident_id, incident.category, incident.location)}
+                        alt={incident.title || incident.incident_id}
+                        className="ds-thumb"
+                        ratio="4/3"
+                      />,
                       <button
                         key="id"
                         type="button"
@@ -229,6 +239,7 @@ export function IncidentsPage() {
               <IncidentOverviewCard
                 key={`${incident.incident_id}-card`}
                 incident={incident}
+                imageSrc={incidentThumbnail(incident.incident_id, incident.category, incident.location)}
                 onOpen={(id) => navigate(`/incidents/${id}`)}
               />
             ))}

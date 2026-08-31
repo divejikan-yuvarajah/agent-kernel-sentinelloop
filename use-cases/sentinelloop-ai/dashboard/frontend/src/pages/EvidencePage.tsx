@@ -6,6 +6,8 @@ import type { EvidenceItem, IncidentSummary } from "@ds/types";
 
 import { fetchIncidents } from "../api/client";
 import { evidenceRecords } from "../data/demoData";
+import { evidenceRecord, incidentPair } from "../data/demoImages";
+import { EvidenceImage } from "../components/EvidenceImage";
 import { useDemoMode } from "../demo/useDemoMode";
 
 export function EvidencePage() {
@@ -27,14 +29,21 @@ export function EvidencePage() {
   }, [demo]);
 
   const gallery: EvidenceItem[] = demo
-    ? evidenceRecords.map((item) => ({
-        id: item.id,
-        label: item.label,
-        source: item.source,
-        timestamp: item.date,
-        kind: item.kind,
-        stage: item.stage,
-      }))
+    ? evidenceRecords.map((item) => {
+        const known = evidenceRecord(item.id);
+        const pair = incidentPair(item.incident_id);
+        return {
+          id: item.id,
+          label: item.label,
+          source: item.source,
+          timestamp: item.date,
+          kind: item.kind,
+          stage: item.stage,
+          imageSrc: known?.src || (item.stage === "verification" ? pair.after : pair.before),
+          channel: "channel" in item ? String(item.channel || "") : item.source,
+          uploaded_by: "uploaded_by" in item ? String(item.uploaded_by || "") : undefined,
+        };
+      })
     : [];
 
   return (
@@ -44,7 +53,10 @@ export function EvidencePage() {
       </p>
       {gallery.length > 0 ? (
         <Panel title="Before / after gallery" style={{ marginBottom: 24 }}>
-          <EvidenceViewer items={gallery} />
+          <EvidenceViewer
+            items={gallery}
+            renderImage={(item) => <EvidenceImage src={item.imageSrc} alt={item.label} />}
+          />
         </Panel>
       ) : null}
       <Panel title="Inbox">
@@ -62,6 +74,7 @@ export function EvidencePage() {
               <IncidentOverviewCard
                 key={incident.incident_id}
                 incident={incident}
+                imageSrc={incidentPair(incident.incident_id, incident.category).before}
                 onOpen={(id) => navigate(`/incidents/${id}`)}
               />
             ))}

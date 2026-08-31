@@ -6,6 +6,7 @@ import type { GuardrailConfigView } from "@ds/types";
 
 import { fetchGuardrailConfig } from "../api/client";
 import { organization } from "../data/demoData";
+import { demoImages } from "../data/demoImages";
 import { useDemoMode } from "../demo/useDemoMode";
 
 export function SettingsPage() {
@@ -66,6 +67,26 @@ export function SettingsPage() {
         <p style={{ marginTop: 24 }}>
           <Link to="/design-system">Design system catalog</Link>
         </p>
+      </Panel>
+      <Panel title="Evidence Storage Overview" style={{ marginTop: 24 }}>
+        <div className="ds-grid ds-grid--metrics">
+          <article>
+            <p className="ds-metric__label">Total Images</p>
+            <p className="ds-metric__value">{demoImages.storage.totalImages}</p>
+          </article>
+          <article>
+            <p className="ds-metric__label">Before Evidence</p>
+            <p className="ds-metric__value">{demoImages.storage.beforeEvidence}</p>
+          </article>
+          <article>
+            <p className="ds-metric__label">After Evidence</p>
+            <p className="ds-metric__value">{demoImages.storage.afterEvidence}</p>
+          </article>
+          <article>
+            <p className="ds-metric__label">Pending Review</p>
+            <p className="ds-metric__value">{demoImages.storage.pendingReview}</p>
+          </article>
+        </div>
       </Panel>
       <Panel title="AI Safety policies (admin, read-only)" style={{ marginTop: 24 }}>
         <p>Normal users cannot modify these rules. Changes require a configuration deployment.</p>

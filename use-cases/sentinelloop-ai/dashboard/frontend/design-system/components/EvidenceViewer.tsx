@@ -1,11 +1,14 @@
+import type { ReactNode } from "react";
+
 import type { EvidenceItem } from "../types";
 import { Card } from "./Card";
 
 type Props = {
   items: EvidenceItem[];
+  renderImage?: (item: EvidenceItem) => ReactNode;
 };
 
-export function EvidenceViewer({ items }: Props) {
+export function EvidenceViewer({ items, renderImage }: Props) {
   if (items.length === 0) {
     return <Card variant="evidence-card" empty emptyMessage="No evidence attached." />;
   }
@@ -13,7 +16,15 @@ export function EvidenceViewer({ items }: Props) {
     <div className="ds-evidence">
       {items.map((item) => (
         <Card key={item.id} variant="evidence-card" className="ds-evidence__item">
-          <div className="ds-evidence__frame" data-stage={item.stage ?? undefined} aria-hidden="true" />
+          {renderImage ? (
+            <div className="ds-evidence__frame">{renderImage(item)}</div>
+          ) : item.imageSrc ? (
+            <div className="ds-evidence__frame">
+              <img src={item.imageSrc} alt={item.label} loading="lazy" />
+            </div>
+          ) : (
+            <div className="ds-evidence__frame" data-stage={item.stage ?? undefined} aria-hidden="true" />
+          )}
           <div className="ds-evidence__meta">
             <p className="ds-evidence__id">{item.id}</p>
             {item.stage ? (

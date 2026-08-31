@@ -1,7 +1,18 @@
 import { AppShell, Panel } from "@ds/index";
 
 import { knowledgeBase } from "../data/demoData";
+import { categoryImage } from "../data/demoImages";
+import { EvidenceImage } from "../components/EvidenceImage";
 import { useDemoMode } from "../demo/useDemoMode";
+
+const KB_CATEGORY: Record<string, string> = {
+  "Electrical Safety": "electrical",
+  "Fire Safety": "fire/smoke",
+  "Chemical Safety": "chemical",
+  "Machine Safety": "machine",
+  "PPE Safety": "ppe",
+  "General Hazards": "structural",
+};
 
 export function KnowledgePage() {
   const [demo] = useDemoMode();
@@ -14,7 +25,9 @@ export function KnowledgePage() {
         <div className="ds-grid ds-grid--cards">
           {knowledgeBase.map((doc) => (
             <Panel key={doc.file} title={doc.category}>
+              <EvidenceImage src={categoryImage(KB_CATEGORY[doc.category])} alt={doc.category} ratio="16/9" />
               <p className="ds-mono">{doc.file}</p>
+              <p>Rules:</p>
               <ul>
                 {doc.rules.map((rule) => (
                   <li key={rule}>{rule}</li>

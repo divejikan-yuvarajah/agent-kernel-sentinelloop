@@ -4,6 +4,8 @@ import { AppShell, Card, RiskIndicator } from "@ds/index";
 import { normalizeRisk } from "@ds/colors";
 
 import { notifications } from "../data/demoData";
+import { incidentThumbnail } from "../data/demoImages";
+import { EvidenceImage } from "../components/EvidenceImage";
 import { useDemoMode } from "../demo/useDemoMode";
 
 export function NotificationsPage() {
@@ -15,7 +17,12 @@ export function NotificationsPage() {
         <div className="ds-grid">
           {notifications.map((item) => (
             <Card key={item.id} variant="activity-card">
-              <div className="ds-meta-row" style={{ marginTop: 0 }}>
+              <EvidenceImage
+                src={incidentThumbnail(item.body.includes("INC-2026-00421") ? "INC-2026-00421" : item.body.includes("00420") ? "INC-2026-00420" : "INC-2026-00415")}
+                alt=""
+                ratio="16/9"
+              />
+              <div className="ds-meta-row" style={{ marginTop: 12 }}>
                 <RiskIndicator level={normalizeRisk(item.severity)} score={item.severity === "CRITICAL" ? 25 : 12} />
                 <span className="ds-mono">{item.time}</span>
               </div>

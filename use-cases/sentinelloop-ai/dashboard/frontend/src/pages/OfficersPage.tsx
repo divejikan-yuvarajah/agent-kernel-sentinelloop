@@ -5,6 +5,7 @@ import type { IncidentSummary } from "@ds/types";
 
 import { fetchIncidents } from "../api/client";
 import { users } from "../data/demoData";
+import { avatarFor } from "../data/demoImages";
 import { useDemoMode } from "../demo/useDemoMode";
 
 export function OfficersPage() {
@@ -74,7 +75,8 @@ export function OfficersPage() {
         <div className="ds-grid ds-grid--cards">
           {officers.map((officer) => (
             <Card key={officer.name} variant="officer-card">
-              <h3 className="ds-display-semibold" style={{ margin: "0 0 8px", fontSize: "var(--font-size-md)" }}>
+              <img className="ds-avatar" src={avatarFor(officer.name)} alt="" />
+              <h3 className="ds-display-semibold" style={{ margin: "12px 0 8px", fontSize: "var(--font-size-md)" }}>
                 {officer.name}
               </h3>
               <p className="ds-mono" style={{ margin: "0 0 8px", color: "var(--chalk-muted)" }}>

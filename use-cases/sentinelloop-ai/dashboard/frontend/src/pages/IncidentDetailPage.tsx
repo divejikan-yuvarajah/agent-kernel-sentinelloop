@@ -20,7 +20,9 @@ import { normalizeRisk } from "@ds/colors";
 
 import { fetchAuditExport, fetchIncident, type AuditExport, type IncidentDetail } from "../api/client";
 import { AuditTrailView } from "../components/AuditTrailView";
+import { EvidenceImage } from "../components/EvidenceImage";
 import { slackThread } from "../data/demoData";
+import { evidenceRecord, incidentPair, visionAnalysis } from "../data/demoImages";
 import { useDemoMode } from "../demo/useDemoMode";
 
 function downloadAudit(audit: AuditExport) {
@@ -96,17 +98,24 @@ export function IncidentDetailPage() {
       title: event.title,
       detail: event.detail ?? undefined,
     })) ?? [];
+  const pair = incidentPair(detail?.incident_id, detail?.category);
+  const vision = visionAnalysis(detail?.incident_id, detail?.category);
   const evidence: EvidenceItem[] =
-    detail?.evidence.map((item) => ({
-      id: item.evidence_id,
-      label: item.label ?? "Evidence",
-      source: item.source ?? "unknown",
-      timestamp: item.uploaded_at ?? "",
-      kind: item.has_image ? "image" : item.content_kind === "voice" || item.kind === "voice" ? "voice" : "file",
-      stage: item.stage,
-      uploaded_by: item.uploaded_by,
-      channel: item.source,
-    })) ?? [];
+    detail?.evidence.map((item) => {
+      const known = evidenceRecord(item.evidence_id);
+      const after = item.stage === "verification";
+      return {
+        id: item.evidence_id,
+        label: item.label ?? "Evidence",
+        source: item.source ?? "unknown",
+        timestamp: item.uploaded_at ?? "",
+        kind: item.has_image ? "image" : item.content_kind === "voice" || item.kind === "voice" ? "voice" : "file",
+        stage: item.stage,
+        uploaded_by: item.uploaded_by,
+        channel: item.source,
+        imageSrc: item.has_image || item.kind === "image" ? known?.src || (after ? pair.after : pair.before) : null,
+      };
+    }) ?? [];
 
   return (
     <AppShell title={detail?.incident_id ?? "Incident"} operationalStatus={detail?.status ?? "OPEN"}>
@@ -167,6 +176,44 @@ export function IncidentDetailPage() {
                 <p className="ds-mono">Language: {detail.language ?? detail.reporter.language ?? "—"}</p>
               </Panel>
             ) : null}
+            <Panel title="Worker Evidence" style={{ marginBottom: 24 }}>
+              <p>
+                Reported by: {detail.is_anonymous ? "Anonymous Worker" : "Worker"}
+              </p>
+              <p>
+                Channel:{" "}
+                {(detail.input_channel || detail.reporter.source_channel) === "telegram"
+                  ? "📱 Telegram Image"
+                  : (detail.input_channel || detail.reporter.source_channel) === "whatsapp"
+                    ? "💬 WhatsApp Image"
+                    : detail.input_channel || detail.reporter.source_channel || "Workshop"}
+              </p>
+              <p className="ds-mono">AI Processing: Completed</p>
+              <EvidenceImage src={pair.before} alt={detail.title || "Worker evidence"} ratio="16/9" />
+            </Panel>
+            <Panel title="Incident Evidence Gallery" style={{ marginBottom: 24 }}>
+              <div className="ds-before-after">
+                <article>
+                  <p className="ds-metric__label">Before</p>
+                  <EvidenceImage src={pair.before} alt="Original worker image" />
+                </article>
+                <article>
+                  <p className="ds-metric__label">After</p>
+                  <EvidenceImage src={pair.after} alt="Resolution image" />
+                </article>
+              </div>
+            </Panel>
+            <Panel title="AI Vision Analysis" style={{ marginBottom: 24 }}>
+              <p className="ds-mono">{vision.label}</p>
+              <p>Detected Objects:</p>
+              <ul className="ds-vision">
+                {vision.objects.map((item) => (
+                  <li key={item}>✓ {item}</li>
+                ))}
+              </ul>
+              <p>Possible Hazard: {vision.hazard}</p>
+              <p>Confidence: {vision.confidence}%</p>
+            </Panel>
             {detail.voice_report ? (
               <Panel title="🎤 Voice Report" style={{ marginBottom: 24 }}>
                 <p>Duration: {detail.voice_report.duration_seconds ?? "—"} seconds</p>
@@ -258,7 +305,16 @@ export function IncidentDetailPage() {
               </Panel>
             ) : null}
             <Panel title="Evidence">
-              <EvidenceViewer items={evidence} />
+              <EvidenceViewer
+                items={evidence}
+                renderImage={(item) =>
+                  item.kind === "image" ? (
+                    <EvidenceImage src={item.imageSrc} alt={item.label} />
+                  ) : (
+                    <div className="ds-photo ds-photo--empty">Voice</div>
+                  )
+                }
+              />
             </Panel>
           </div>
         </div>

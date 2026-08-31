@@ -6,6 +6,8 @@ import type { RiskLevel } from "@ds/colors";
 
 import { fetchAnalyticsSummary, fetchRecurring } from "../api/client";
 import { kpis } from "../data/demoData";
+import { categoryImage, locationImage, locationRiskDemo } from "../data/demoImages";
+import { EvidenceImage } from "../components/EvidenceImage";
 import { useDemoMode } from "../demo/useDemoMode";
 
 const AnalyticsDashboard = lazy(() =>
@@ -34,7 +36,7 @@ export function AnalyticsPage() {
     Promise.all([fetchAnalyticsSummary(), fetchRecurring()])
       .then(([analytics, repeats]) => {
         setSummary(analytics);
-        setRecurring(repeats.items);
+        setRecurring(repeats.items.map((item) => ({ ...item, imageSrc: locationImage(item.location) })));
         setError(null);
       })
       .catch((err: Error) => setError(err.message))
@@ -84,6 +86,45 @@ export function AnalyticsPage() {
           />
         </Suspense>
       )}
+      <Panel title="Most reported hazard" style={{ marginTop: 24 }}>
+        <div className="ds-grid ds-grid--split">
+          <article>
+            <EvidenceImage src={categoryImage("electrical")} alt="Electrical hazard" ratio="16/9" />
+            <p>Electrical</p>
+            <p className="ds-mono">35 incidents</p>
+          </article>
+          <div className="ds-photo-grid">
+            {(summary?.category_share ?? [
+              { label: "Electrical", percent: 35 },
+              { label: "Chemical", percent: 15 },
+              { label: "Machine", percent: 20 },
+              { label: "Fire/Smoke", percent: 10 },
+            ]).map((item) => (
+              <article key={item.label}>
+                <EvidenceImage src={categoryImage(item.label)} alt={item.label} />
+                <p>{item.label}</p>
+                <p className="ds-mono">{item.percent}%</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </Panel>
+      <Panel title="Workshop Safety Map" style={{ marginTop: 24 }}>
+        <div className="ds-photo-grid">
+          {locationRiskDemo.map((site) => (
+            <article key={site.location} className="ds-location-tile">
+              <EvidenceImage src={site.src} alt={site.location} ratio="16/9" />
+              <p>
+                <strong>{site.location}</strong>
+                {site.risk === "CRITICAL" ? " 🔴" : site.risk === "HIGH" ? " 🟠" : " 🟢"}
+              </p>
+              <p className="ds-mono">
+                Active hazards: {site.active} · {site.risk}
+              </p>
+            </article>
+          ))}
+        </div>
+      </Panel>
       <div className="ds-grid ds-grid--metrics" style={{ marginTop: 24 }}>
         <Card variant="analytics-card">
           <p className="ds-metric__label">Average detection</p>
@@ -144,7 +185,10 @@ export function AnalyticsPage() {
         />
       </Panel>
       <Panel title="QR locations" style={{ marginTop: 24 }}>
-        <QrLocationsWidget items={summary?.top_qr_locations ?? []} taggedCount={summary?.qr_tagged_incidents ?? 0} />
+        <QrLocationsWidget
+          items={(summary?.top_qr_locations ?? []).map((item) => ({ ...item, imageSrc: locationImage(item.location) }))}
+          taggedCount={summary?.qr_tagged_incidents ?? 0}
+        />
       </Panel>
     </AppShell>
   );

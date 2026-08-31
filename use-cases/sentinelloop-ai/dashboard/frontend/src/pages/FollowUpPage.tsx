@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { AppShell, Panel, StatusIndicator } from "@ds/index";
 
 import { followUpCases } from "../data/demoData";
+import { incidentPair } from "../data/demoImages";
+import { EvidenceImage } from "../components/EvidenceImage";
 import { useDemoMode } from "../demo/useDemoMode";
 
 export function FollowUpPage() {
@@ -19,6 +21,7 @@ export function FollowUpPage() {
           <Panel title="Waiting confirmation">
             {pending.map((item) => (
               <article key={item.incident_id} style={{ marginBottom: 16 }}>
+                <EvidenceImage src={incidentPair(item.incident_id).before} alt={item.title} />
                 <p className="ds-mono">
                   <Link to={`/incidents/${item.incident_id}`}>{item.incident_id}</Link>
                 </p>
@@ -31,6 +34,10 @@ export function FollowUpPage() {
           <Panel title="Completed verification">
             {done.map((item) => (
               <article key={item.incident_id} style={{ marginBottom: 16 }}>
+                <div className="ds-before-after">
+                  <EvidenceImage src={incidentPair(item.incident_id).before} alt="Before" />
+                  <EvidenceImage src={incidentPair(item.incident_id).after} alt="After" />
+                </div>
                 <p className="ds-mono">
                   <Link to={`/incidents/${item.incident_id}`}>{item.incident_id}</Link>
                 </p>

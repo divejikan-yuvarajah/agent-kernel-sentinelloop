@@ -5,6 +5,8 @@ import { AppShell, Button, Card, Panel } from "@ds/index";
 import type { GuardrailComplianceExport, GuardrailStatus } from "@ds/types";
 
 import { fetchComplianceExport, fetchGuardrailStatus } from "../api/client";
+import { demoImages } from "../data/demoImages";
+import { EvidenceImage } from "../components/EvidenceImage";
 import { useDemoMode } from "../demo/useDemoMode";
 
 function downloadReport(report: GuardrailComplianceExport) {
@@ -60,6 +62,17 @@ export function SafetyCenterPage() {
           {error}
         </p>
       ) : null}
+      <div className="ds-grid ds-grid--split" style={{ marginBottom: 24 }}>
+        <Panel title="Guidance Validation">
+          <EvidenceImage src={demoImages.dashboards.shield} alt="AI safety verification" />
+          <p className="ds-metric__value">Passed</p>
+          <p className="ds-mono">98%</p>
+        </Panel>
+        <Panel title="AI Safety Block">
+          <EvidenceImage src={demoImages.dashboards.warning} alt="Blocked unsafe instruction" />
+          <p>Unsafe instruction prevented</p>
+        </Panel>
+      </div>
       <div className="ds-grid ds-grid--metrics">
         {(status?.cards ?? []).map((card) => (
           <Card key={card.name} variant="analytics-card">

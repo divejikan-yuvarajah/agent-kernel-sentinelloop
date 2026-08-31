@@ -17,6 +17,8 @@ import type { AnalyticsSummary, IncidentSummary, LoopStage, RecurringHazard, Rou
 
 import { fetchAnalyticsSummary, fetchIncidents, fetchRecurring, fetchRouterStatus } from "../api/client";
 import { organization } from "../data/demoData";
+import { incidentThumbnail, locationImage, recentEvidenceFeed, locationRiskDemo } from "../data/demoImages";
+import { EvidenceImage } from "../components/EvidenceImage";
 import { useDemoMode } from "../demo/useDemoMode";
 
 const FALLBACK_STAGES: LoopStage[] = [
@@ -51,7 +53,7 @@ export function DashboardPage() {
     let cancelled = false;
     setLoading(true);
     Promise.all([
-      fetchIncidents({ limit: 24, sort_by: "newest", stage: stage ?? undefined }),
+      fetchIncidents({ limit: 8, sort_by: "newest", stage: stage ?? undefined }),
       fetchAnalyticsSummary(),
       fetchRecurring(),
       fetchRouterStatus(),
@@ -60,7 +62,7 @@ export function DashboardPage() {
         if (cancelled) return;
         setIncidents(list.items);
         setSummary(analytics);
-        setRecurring(repeats.items);
+        setRecurring(repeats.items.map((item) => ({ ...item, imageSrc: locationImage(item.location) })));
         setRouter(routerStatus);
         setError(null);
       })
@@ -88,6 +90,9 @@ export function DashboardPage() {
   );
   const trend = summary?.monthly_trend ?? [];
   const trendMax = Math.max(...trend.map((point) => point.value), 1);
+  const watchedLocations = locationRiskDemo.filter(
+    (site) => !recurring.some((item) => item.location === site.location),
+  );
   const kpis = [
     { label: "Total incidents", value: String(summary?.total_incidents ?? 0) },
     { label: "Open incidents", value: String(openCount) },
@@ -127,6 +132,66 @@ export function DashboardPage() {
           </Card>
         ))}
       </div>
+      <div className="ds-grid ds-grid--split" style={{ marginBottom: "var(--space-5)" }}>
+        <Panel title="Latest Critical Hazard">
+          {(() => {
+            const critical = incidents.find((row) => (row.risk_level || "").toUpperCase() === "CRITICAL") ?? incidents[0];
+            if (!critical) return <p className="ds-empty">No critical hazards in the current window.</p>;
+            return (
+              <button
+                type="button"
+                onClick={() => navigate(`/incidents/${critical.incident_id}`)}
+                style={{ display: "block", width: "100%", background: "none", border: 0, color: "inherit", textAlign: "left", cursor: "pointer", padding: 0 }}
+              >
+                <EvidenceImage
+                  src={incidentThumbnail(critical.incident_id, critical.category, critical.location)}
+                  alt={critical.title || "Critical hazard"}
+                  ratio="16/9"
+                />
+                <p style={{ margin: "12px 0 0" }}>{critical.location}</p>
+                <p className="ds-mono">{critical.category} · {critical.risk_level} risk</p>
+              </button>
+            );
+          })()}
+        </Panel>
+        <Panel title="Recent evidence feed">
+          {recentEvidenceFeed.map((item) => (
+            <button
+              key={item.incident_id + item.when}
+              type="button"
+              onClick={() => navigate(`/incidents/${item.incident_id}`)}
+              style={{ display: "grid", gridTemplateColumns: "72px 1fr", gap: 12, width: "100%", background: "none", border: 0, color: "inherit", textAlign: "left", cursor: "pointer", padding: "8px 0" }}
+            >
+              <EvidenceImage src={item.src} alt={item.title} ratio="1/1" />
+              <span>
+                <strong>{item.title}</strong>
+                <span className="ds-mono" style={{ display: "block", fontSize: "var(--font-size-xs)" }}>
+                  {item.channel === "telegram" ? "📱 Telegram Image" : "💬 WhatsApp Image"} · {item.location}
+                </span>
+                <span className="ds-mono" style={{ fontSize: "var(--font-size-xs)", color: "var(--chalk-muted)" }}>
+                  {item.when}
+                </span>
+              </span>
+            </button>
+          ))}
+        </Panel>
+      </div>
+      <Panel title="Workshop Safety Map" style={{ marginBottom: "var(--space-5)" }}>
+        <div className="ds-photo-grid">
+          {locationRiskDemo.map((site) => (
+            <article key={site.location} className="ds-location-tile">
+              <EvidenceImage src={site.src} alt={site.location} ratio="16/9" />
+              <p>
+                <strong>{site.location}</strong>
+                {site.risk === "CRITICAL" ? " 🔴" : site.risk === "HIGH" ? " 🟠" : " 🟢"}
+              </p>
+              <p className="ds-mono">
+                Active hazards: {site.active} · Current risk: {site.risk}
+              </p>
+            </article>
+          ))}
+        </div>
+      </Panel>
       <div className="ds-command">
         <Panel className="ds-command__hero" title="Detect · Understand · Act · Learn">
           <p className="sr-only">
@@ -139,31 +204,28 @@ export function DashboardPage() {
             loading={loading}
             onSelectStage={(next) => setStage((current) => (current === next ? null : next))}
           />
+          <div className="ds-command__metrics">
+            {loading ? (
+              <>
+                <Card variant="analytics-card" loading />
+                <Card variant="analytics-card" loading />
+              </>
+            ) : (
+              <>
+                <RiskDistributionWidget counts={summary?.incidents_by_risk_level ?? {}} />
+                <ResponsePerformanceWidget
+                  avgResponse={summary?.avg_response_time ?? null}
+                  avgResolution={summary?.average_resolution_time ?? null}
+                  fastest={summary?.fastest_response_time ?? null}
+                  slowest={summary?.slowest_response_time ?? null}
+                />
+              </>
+            )}
+          </div>
         </Panel>
-        <div className="ds-command__side">
-          <Panel title="Live incident feed">
-            <ActivityFeed events={activity} loading={loading} />
-          </Panel>
-          <Panel title="Risk mix">
-            {loading ? (
-              <Card variant="analytics-card" loading />
-            ) : (
-              <RiskDistributionWidget counts={summary?.incidents_by_risk_level ?? {}} />
-            )}
-          </Panel>
-          <Panel title="Response">
-            {loading ? (
-              <Card variant="analytics-card" loading />
-            ) : (
-              <ResponsePerformanceWidget
-                avgResponse={summary?.avg_response_time ?? null}
-                avgResolution={summary?.average_resolution_time ?? null}
-                fastest={summary?.fastest_response_time ?? null}
-                slowest={summary?.slowest_response_time ?? null}
-              />
-            )}
-          </Panel>
-        </div>
+        <Panel title="Live incident feed">
+          <ActivityFeed events={activity.slice(0, 6)} loading={loading} />
+        </Panel>
       </div>
       {trend.length > 0 ? (
         <div className="ds-grid ds-grid--split" style={{ marginBottom: "var(--space-5)" }}>
@@ -197,7 +259,7 @@ export function DashboardPage() {
         </div>
       ) : null}
       <RouterStatusStrip status={router} loading={loading} />
-      <div className="ds-grid ds-grid--split" style={{ marginTop: "var(--space-5)" }}>
+      <div className="ds-dash-learn">
         <Panel title={stage ? `Incidents · ${stage}` : "Active incidents"} titleTooltip="We detect hazards.">
           {loading ? (
             <div className="ds-grid ds-grid--cards">
@@ -225,10 +287,11 @@ export function DashboardPage() {
             <p className="ds-empty">No active incidents. All safety issues are currently resolved.</p>
           ) : (
             <div className="ds-grid ds-grid--cards">
-              {incidents.map((incident) => (
+              {incidents.slice(0, 4).map((incident) => (
                 <IncidentOverviewCard
                   key={incident.incident_id}
                   incident={incident}
+                  imageSrc={incidentThumbnail(incident.incident_id, incident.category, incident.location)}
                   onOpen={(id) => navigate(`/incidents/${id}`)}
                 />
               ))}
@@ -236,7 +299,24 @@ export function DashboardPage() {
           )}
         </Panel>
         <Panel title="Learn · recurring hazards" titleTooltip="We learn recurring problems.">
-          <RecurringHazardsWidget items={recurring} loading={loading} />
+          <div className="ds-learn-fill">
+            <RecurringHazardsWidget items={recurring.slice(0, watchedLocations.length ? 2 : 4)} loading={loading} dense />
+            {!loading && watchedLocations.length > 0 ? (
+              <ul className="ds-learn-watch" aria-label="Other watched locations">
+                {watchedLocations.map((site) => (
+                  <li key={site.location}>
+                    <EvidenceImage src={site.src} alt={site.location} ratio="1/1" />
+                    <span>
+                      <strong>{site.location}</strong>
+                      <span className="ds-mono">
+                        {site.active} active · {site.risk}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         </Panel>
       </div>
     </AppShell>

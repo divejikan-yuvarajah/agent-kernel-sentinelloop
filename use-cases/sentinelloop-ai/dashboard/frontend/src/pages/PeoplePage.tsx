@@ -3,6 +3,8 @@ import { useMemo, useState } from "react";
 import { AppShell, Card, InputField, StatusIndicator } from "@ds/index";
 
 import { incidents, users, workers } from "../data/demoData";
+import { avatarFor, incidentThumbnail } from "../data/demoImages";
+import { EvidenceImage } from "../components/EvidenceImage";
 import { useDemoMode } from "../demo/useDemoMode";
 
 export function PeoplePage() {
@@ -56,7 +58,8 @@ export function PeoplePage() {
           <div className="ds-grid ds-grid--cards">
             {officerHits.map((user) => (
               <Card key={user.id} variant="officer-card">
-                <h3 className="ds-display-semibold" style={{ margin: "0 0 8px", fontSize: "var(--font-size-md)" }}>
+                <img className="ds-avatar" src={avatarFor(user.name)} alt="" />
+                <h3 className="ds-display-semibold" style={{ margin: "12px 0 8px", fontSize: "var(--font-size-md)" }}>
                   {user.name}
                 </h3>
                 <p>{user.role}</p>
@@ -71,7 +74,8 @@ export function PeoplePage() {
           <div className="ds-grid ds-grid--cards">
             {workerHits.map((worker) => (
               <Card key={worker.id} variant="officer-card">
-                <h3 className="ds-display-semibold" style={{ margin: "0 0 8px", fontSize: "var(--font-size-md)" }}>
+                <img className="ds-avatar" src={avatarFor(worker.name, worker.anonymous)} alt="" />
+                <h3 className="ds-display-semibold" style={{ margin: "12px 0 8px", fontSize: "var(--font-size-md)" }}>
                   {worker.anonymous ? "Anonymous reporter" : worker.name}
                 </h3>
                 <p>{worker.role}</p>
@@ -88,9 +92,16 @@ export function PeoplePage() {
                 <p className="ds-empty">No matching incidents, equipment, or workers.</p>
               ) : (
                 incidentHits.slice(0, 8).map((row) => (
-                  <p key={row.incident_id}>
-                    <span className="ds-mono">{row.incident_id}</span> · {row.category} · {row.location}
-                    {row.equipment ? ` · ${row.equipment}` : ""}
+                  <p key={row.incident_id} style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                    <EvidenceImage
+                      src={incidentThumbnail(row.incident_id, row.category, row.location)}
+                      alt=""
+                      className="ds-thumb"
+                    />
+                    <span>
+                      <span className="ds-mono">{row.incident_id}</span> · {row.category} · {row.location}
+                      {row.equipment ? ` · ${row.equipment}` : ""}
+                    </span>
                   </p>
                 ))
               )}
