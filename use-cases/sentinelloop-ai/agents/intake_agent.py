@@ -25,6 +25,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from tools.model_router import ModelCallResult, ModelRouterError, call_model
+from tools.qr_tags import SOURCE_QR_TAGGED, parse_loc_tag
 
 log = logging.getLogger("sentinelloop.intake")
 
@@ -47,6 +48,9 @@ NV_LAST_MSG = "last_inbound_message_id"
 NV_LAST_HAZARD = "last_intake_is_hazard_report"
 NV_LAST_RESULT = "last_intake_result"
 NV_UPDATED = "last_activity_at"
+NV_QR_LOCATION = "qr_location"
+NV_QR_EQUIPMENT = "qr_equipment"
+NV_QR_SOURCE = "qr_source"
 
 ROLE_FAST = "role_fast"
 
@@ -136,6 +140,9 @@ class IntakeResult(BaseModel):
     message_type: MessageType = "text"
     budget_limited: bool = False
     text_truncated: bool = False
+    clean_text: str | None = None
+    source: str | None = None
+    location_confidence: float | None = None
 
 
 CallModelFn = Callable[..., Awaitable[ModelCallResult]]
@@ -167,14 +174,26 @@ def _load_intake_settings() -> dict[str, Any]:
 
 
 def parse_qr_prefix(text: str, *, field_max: int = 200) -> QrParse:
-    """Parse a leading SLQR tag. Prompt 13 was not in-repo; this is the SentinelLoop prefix.
+    """Parse a leading location tag.
 
-    Canonical forms (message start):
+    ``[LOC:location|equipment]`` is the WhatsApp deep-link format. The original
+    SLQR prefixes remain supported and unchanged:
+
     - ``SLQR location="..." equipment="..."``
     - ``<SLQR location="..." equipment="...">``
     - ``SLQR{"location":"...","equipment":"..."}``
     """
     original = text or ""
+    loc = parse_loc_tag(original, field_max=field_max)
+    if loc.present:
+        return QrParse(
+            present=True,
+            valid=loc.valid,
+            location=loc.location,
+            equipment=loc.equipment,
+            human_text=loc.human_text,
+        )
+
     stripped = original.lstrip("\ufeff").lstrip()
     if not stripped:
         return QrParse(human_text=original)
@@ -369,14 +388,15 @@ async def process_intake(
 
     field_max = int(settings.get("qr_field_max_length") or 200)
     qr = parse_qr_prefix(source, field_max=field_max)
-    human = qr.human_text if qr.present and qr.valid else (qr.human_text if not qr.present else source)
+    ak_session, store = _resolve_session(phone, session=session, session_store=session_store)
+    session_id = ak_session.id
+    cache = ak_session.get_non_volatile_cache()
+    if not qr.present:
+        qr = _restore_qr_from_session(qr, cache, source)
+    human = qr.human_text if qr.valid else source
     if qr.present and not qr.valid:
         human = source
 
-    ak_session, store = _resolve_session(phone, session=session, session_store=session_store)
-    session_id = ak_session.id
-
-    cache = ak_session.get_non_volatile_cache()
     if external_message_id and cache.get(NV_LAST_MSG) == external_message_id:
         cached = cache.get(NV_LAST_RESULT)
         if isinstance(cached, dict):
@@ -387,7 +407,7 @@ async def process_intake(
 
     if not human.strip():
         result = IntakeResult(
-            raw_text=human,
+            raw_text=source,
             translated_text="",
             language="unknown",
             is_hazard_report=False,
@@ -399,6 +419,9 @@ async def process_intake(
             external_message_id=external_message_id,
             message_type=message_type,
             text_truncated=truncated,
+            clean_text=human,
+            source=SOURCE_QR_TAGGED if qr.valid else None,
+            location_confidence=1.0 if qr.valid and qr.location else None,
         )
         _write_session_cursor(ak_session, result, store)
         log.info(
@@ -411,7 +434,8 @@ async def process_intake(
         return result
 
     preserved = {
-        "raw_text": human,
+        "raw_text": source,
+        "clean_text": human,
         "qr_location": qr.location if qr.valid else None,
         "qr_equipment": qr.equipment if qr.valid else None,
         "session_id": session_id,
@@ -425,7 +449,7 @@ async def process_intake(
     payload = await _classify_with_router(human, qr, router, preserved)
     language = _normalize_language(payload.language)
     result = IntakeResult(
-        raw_text=human,
+        raw_text=source,
         translated_text=payload.translated_text,
         language=language,
         is_hazard_report=bool(payload.is_hazard_report),
@@ -443,6 +467,9 @@ async def process_intake(
         message_type=message_type,
         budget_limited=bool(preserved.get("budget_limited")),
         text_truncated=truncated,
+        clean_text=human,
+        source=SOURCE_QR_TAGGED if qr.valid else None,
+        location_confidence=1.0 if qr.valid and qr.location else None,
     )
     _write_session_cursor(ak_session, result, store)
     elapsed_ms = int((time.monotonic() - started) * 1000)
@@ -483,11 +510,29 @@ def _write_session_cursor(session: Any, result: IntakeResult, store: Any) -> Non
     cache.set(NV_STAGE, "intake")
     cache.set(NV_LAST_HAZARD, result.is_hazard_report)
     cache.set(NV_UPDATED, datetime.now(timezone.utc).isoformat())
+    if result.qr_tag_valid:
+        cache.set(NV_QR_LOCATION, result.qr_location)
+        cache.set(NV_QR_EQUIPMENT, result.qr_equipment)
+        cache.set(NV_QR_SOURCE, SOURCE_QR_TAGGED)
     if result.external_message_id:
         cache.set(NV_LAST_MSG, result.external_message_id)
         cache.set(NV_LAST_RESULT, json.loads(result.model_dump_json()))
     if store is not None:
         store.store(session)
+
+
+def _restore_qr_from_session(qr: QrParse, cache: Any, source: str) -> QrParse:
+    location = cache.get(NV_QR_LOCATION) if cache is not None else None
+    equipment = cache.get(NV_QR_EQUIPMENT) if cache is not None else None
+    if not location and not equipment:
+        return qr
+    return QrParse(
+        present=True,
+        valid=True,
+        location=str(location).strip() or None if location else None,
+        equipment=str(equipment).strip() or None if equipment else None,
+        human_text=source,
+    )
 
 
 async def _classify_with_router(

@@ -80,6 +80,7 @@ _DEFAULT_TEMPERATURE = {
 
 _ZERO = Decimal("0")
 _WARNED_BUDGET_BANDS: set[str] = set()
+_RECENT_CALLS_MAX = 40
 
 
 class ModelRouterConfigError(ValueError):
@@ -498,6 +499,7 @@ class ModelRouter:
                 "request_count": 0,
                 "paid_call_count": 0,
                 "per_model_spend_usd": {},
+                "recent_calls": [],
             }
             _atomic_write_json(self._ledger_path, self._ledger)
             self._cumulative = _ZERO
@@ -816,6 +818,14 @@ class ModelRouter:
             )
             if paid:
                 self._maybe_budget_warning()
+            await self._note_recent_call(
+                role=role,
+                model=served,
+                latency_s=latency,
+                usage=usage,
+                cost=cost if paid else _ZERO,
+                paid=paid,
+            )
             return ModelCallResult(
                 content=content,
                 model=served,
@@ -911,6 +921,39 @@ class ModelRouter:
                 self._cumulative,
                 self._budget_ceiling,
             )
+
+    async def _note_recent_call(
+        self,
+        *,
+        role: str,
+        model: str | None,
+        latency_s: float,
+        usage: dict[str, Any] | None,
+        cost: Decimal,
+        paid: bool,
+    ) -> None:
+        usage_safe = {
+            "prompt_tokens": (usage or {}).get("prompt_tokens"),
+            "completion_tokens": (usage or {}).get("completion_tokens"),
+            "total_tokens": (usage or {}).get("total_tokens"),
+        }
+        entry = {
+            "timestamp": _now_iso(),
+            "model": model,
+            "model_role": role,
+            "latency_s": round(float(latency_s), 3),
+            "token_usage": usage_safe,
+            "cost_usd": str(cost),
+            "paid": paid,
+            "tier": "PAID" if paid else "FREE",
+        }
+        async with self._ledger_lock:
+            calls = list(self._ledger.get("recent_calls") or [])
+            calls.append(entry)
+            self._ledger["recent_calls"] = calls[-_RECENT_CALLS_MAX:]
+            if not paid:
+                self._ledger["request_count"] = int(self._ledger.get("request_count") or 0) + 1
+            self._persist_ledger()
 
     def _maybe_budget_warning(self) -> None:
         if self._budget_ceiling in {None, _ZERO}:

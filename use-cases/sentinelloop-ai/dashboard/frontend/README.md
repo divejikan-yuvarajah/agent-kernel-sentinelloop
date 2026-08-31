@@ -1,19 +1,29 @@
 # SentinelLoop dashboard frontend
 
-Placeholder only. No UI framework or components yet.
+React + Vite operations UI. Styling is CSS custom properties (no Tailwind).
+The dashboard talks to `dashboard/api.py` later; this build uses local mock
+data and does not import agent internals.
 
-Later this layer may display:
+## Design system first
 
-- incident queue and open incidents
-- Critical incidents
-- filters by site, category, language, and risk
-- hazard categories and lifecycle status
-- assignments and remediation evidence
-- worker verification and reopened incidents
-- risk explanation and audit timeline
-- summary / resolution metrics
+Tokens, type, and primitives live in `design-system/`. Rules:
+`documentation/design-rules.md`. Catalog: `/design-system`.
 
-Do not call agent internals from the frontend. Use `dashboard/api.py` →
-Supabase repositories.
+## Scripts
 
-Status: scaffolded — not implemented.
+```bash
+cd use-cases/sentinelloop-ai/dashboard/frontend
+npm install
+npm run dev      # http://localhost:5173
+npm run build
+```
+
+## Routes
+
+- `/` Dashboard
+- `/incidents` Active incidents
+- `/incidents/:incidentId` Incident workspace
+- `/evidence` Evidence review
+- `/officers` Officers
+- `/analytics` Analytics
+- `/settings` Settings

@@ -26,9 +26,10 @@ from database.exceptions import (
     PersistenceError,
     RecordNotFoundError,
 )
-from database.models import Assignment, Incident, IncidentEvidence, IncidentUpdate
+from database.models import Assignment, Incident, IncidentEvidence, IncidentUpdate, RiskAssessment
 from database.schemas import (
     EVIDENCE_STAGES,
+    MAX_LIST_LIMIT,
     AssignmentCreate,
     EvidenceCreate,
     EvidenceFile,
@@ -138,6 +139,31 @@ class IncidentRepository:
             return None
         return Incident.model_validate(rows[0])
 
+    def get_incident_by_ref(self, incident_ref: str) -> Incident | None:
+        response = _execute(
+            self._client.table("incidents").select("*").eq("incident_ref", incident_ref).limit(1),
+            "get_incident_by_ref",
+        )
+        rows = response.data or []
+        if not rows:
+            return None
+        return Incident.model_validate(rows[0])
+
+    def list_all_incidents(self, filters: IncidentFilters | None = None) -> list[Incident]:
+        """Page through matching incidents. Dashboard analytics uses this; agents should not."""
+        filters = filters or IncidentFilters()
+        collected: list[Incident] = []
+        offset = 0
+        page_size = MAX_LIST_LIMIT
+        while offset < 10_000:
+            page_filters = filters.model_copy(update={"limit": page_size, "offset": offset})
+            chunk = self.list_incidents(page_filters)
+            collected.extend(chunk)
+            if len(chunk) < page_size:
+                break
+            offset += page_size
+        return collected
+
     def list_incidents(self, filters: IncidentFilters | None = None) -> list[Incident]:
         filters = filters or IncidentFilters()
         query = self._client.table("incidents").select("*")
@@ -229,6 +255,75 @@ class IncidentRepository:
         if not rows:
             return None
         return Assignment.model_validate(rows[0])
+
+    def list_assignments_for_incidents(self, incident_ids: list[UUID]) -> list[Assignment]:
+        if not incident_ids:
+            return []
+        response = _execute(
+            self._client.table("assignments")
+            .select("*")
+            .in_("incident_id", [str(item) for item in incident_ids])
+            .order("created_at", desc=True),
+            "list_assignments_for_incidents",
+        )
+        return [Assignment.model_validate(row) for row in (response.data or [])]
+
+    def list_evidence_for_incident(self, incident_id: UUID) -> list[IncidentEvidence]:
+        response = _execute(
+            self._client.table("incident_evidence")
+            .select("*")
+            .eq("incident_id", str(incident_id))
+            .order("created_at", desc=False),
+            "list_evidence_for_incident",
+        )
+        return [IncidentEvidence.model_validate(row) for row in (response.data or [])]
+
+    def list_updates_for_incident(self, incident_id: UUID) -> list[IncidentUpdate]:
+        response = _execute(
+            self._client.table("incident_updates")
+            .select("*")
+            .eq("incident_id", str(incident_id))
+            .order("created_at", desc=False),
+            "list_updates_for_incident",
+        )
+        return [IncidentUpdate.model_validate(row) for row in (response.data or [])]
+
+    def list_recent_updates(self, *, limit: int = 20) -> list[IncidentUpdate]:
+        cap = min(max(limit, 1), MAX_LIST_LIMIT)
+        response = _execute(
+            self._client.table("incident_updates").select("*").order("created_at", desc=True).limit(cap),
+            "list_recent_updates",
+        )
+        return [IncidentUpdate.model_validate(row) for row in (response.data or [])]
+
+    def list_risk_assessments_for_incident(self, incident_id: UUID) -> list[RiskAssessment]:
+        response = _execute(
+            self._client.table("risk_assessments")
+            .select("*")
+            .eq("incident_id", str(incident_id))
+            .order("created_at", desc=True),
+            "list_risk_assessments_for_incident",
+        )
+        return [RiskAssessment.model_validate(row) for row in (response.data or [])]
+
+    def list_risk_assessments_for_incidents(self, incident_ids: list[UUID]) -> list[RiskAssessment]:
+        if not incident_ids:
+            return []
+        response = _execute(
+            self._client.table("risk_assessments")
+            .select("*")
+            .in_("incident_id", [str(item) for item in incident_ids])
+            .order("created_at", desc=True),
+            "list_risk_assessments_for_incidents",
+        )
+        return [RiskAssessment.model_validate(row) for row in (response.data or [])]
+
+    def list_duplicates_of(self, incident_id: UUID) -> list[Incident]:
+        response = _execute(
+            self._client.table("incidents").select("*").eq("duplicate_of", str(incident_id)),
+            "list_duplicates_of",
+        )
+        return [Incident.model_validate(row) for row in (response.data or [])]
 
     def update_assignment(self, assignment_id: UUID, fields: dict) -> Assignment:
         allowed = {"team", "slack_channel_id", "assigned_to", "assignment_status", "acknowledged_at", "completed_at"}

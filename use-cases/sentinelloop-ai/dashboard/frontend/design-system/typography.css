@@ -1,0 +1,29 @@
+.ds-display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--chalk);
+  line-height: var(--line-tight);
+}
+
+.ds-display-semibold {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--chalk);
+  line-height: var(--line-tight);
+}
+
+.ds-body {
+  font-family: var(--font-body);
+  font-weight: 400;
+  color: var(--chalk);
+  line-height: var(--line-body);
+}
+
+.ds-mono {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--chalk);
+}

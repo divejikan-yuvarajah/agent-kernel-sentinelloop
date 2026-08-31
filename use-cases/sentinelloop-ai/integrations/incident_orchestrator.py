@@ -503,7 +503,7 @@ class IncidentOrchestrator:
             draft["raw_text"] = _join_text(previous.get("raw_text"), intake_data.get("raw_text") or text)
         if message.media:
             draft["has_image"] = True
-        for key in ("qr_location", "qr_equipment", "language", "session_id"):
+        for key in ("qr_location", "qr_equipment", "language", "session_id", "source", "location_confidence", "clean_text"):
             if previous.get(key) and not draft.get(key):
                 draft[key] = previous[key]
         log.info("clarification_reply_merged")
@@ -908,7 +908,7 @@ class IncidentOrchestrator:
                     session_id=str(getattr(session, "id", None) or message.sender_id),
                     detected_language=str(merged.get("language") or "") or None,
                     hazard_category=merged.get("hazard_category"),
-                    hazard_description=merged.get("translated_text") or merged.get("raw_text"),
+                    hazard_description=merged.get("translated_text") or merged.get("clean_text") or merged.get("raw_text"),
                     location=merged.get("location") or merged.get("qr_location"),
                     injury_occurred=(
                         merged.get("already_injured") if isinstance(merged.get("already_injured"), bool) else None
@@ -966,7 +966,7 @@ class IncidentOrchestrator:
             return
         fields = {
             "hazard_category": merged.get("hazard_category"),
-            "hazard_description": merged.get("translated_text") or merged.get("raw_text"),
+            "hazard_description": merged.get("translated_text") or merged.get("clean_text") or merged.get("raw_text"),
             "location": merged.get("location") or merged.get("qr_location"),
             "injury_occurred": (
                 merged.get("already_injured") if isinstance(merged.get("already_injured"), bool) else None
@@ -1143,6 +1143,8 @@ class IncidentOrchestrator:
             "has_image": merged.get("has_image"),
             "qr_location": merged.get("qr_location"),
             "qr_equipment": merged.get("qr_equipment"),
+            "source": merged.get("source")
+            or ("QR_TAGGED" if merged.get("qr_location") or merged.get("qr_equipment") else None),
             "duplicate_count": merged.get("duplicate_count") or 1,
             "risk": risk,
             "risk_level": risk.get("level") or merged.get("current_risk_level"),

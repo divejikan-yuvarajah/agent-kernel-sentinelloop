@@ -1,0 +1,76 @@
+/* SentinelLoop design tokens. Saturated hues are reserved for operational state. */
+
+:root {
+  --ink: #1c2024;
+  --panel: #262b31;
+  --chalk: #f2f0ea;
+
+  --signal-amber: #e8a33d;
+  --ember-orange: #c9642e;
+  --hazard-red: #d64545;
+  --verified-teal: #3fa796;
+
+  --chalk-muted: #b7b5ae;
+  --border: #3a4047;
+  --border-strong: #4d555e;
+  --focus-ring: #f2f0ea;
+
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "IBM Plex Sans", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+
+  --font-size-xs: 11px;
+  --font-size-sm: 13px;
+  --font-size-md: 15px;
+  --font-size-lg: 18px;
+  --font-size-xl: 24px;
+  --font-size-2xl: 32px;
+
+  --line-tight: 1.25;
+  --line-body: 1.45;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+
+  --risk-tab-width: 5px;
+
+  --transition-duration: 120ms;
+  --transition-timing: ease;
+  --shadow: none;
+
+  --risk-low: var(--verified-teal);
+  --risk-medium: var(--signal-amber);
+  --risk-high: var(--ember-orange);
+  --risk-critical: var(--hazard-red);
+
+  --status-open: var(--hazard-red);
+  --status-investigating: var(--signal-amber);
+  --status-verified: var(--verified-teal);
+  --status-resolved: var(--verified-teal);
+
+  --sidebar-width: 240px;
+  --header-height: 56px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition-duration: 0ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

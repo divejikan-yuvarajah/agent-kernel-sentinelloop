@@ -51,6 +51,10 @@ class FakeQuery:
         self.filters[key] = value
         return self
 
+    def in_(self, key, values):
+        self.filters[f"in:{key}"] = list(values)
+        return self
+
     def gte(self, key, value):
         self.filters[f"gte:{key}"] = value
         return self
@@ -143,9 +147,18 @@ class FakeBackend:
             return FakeResponse([row])
         matched = rows
         for key, value in query.filters.items():
-            if key.startswith("gte:") or key.startswith("lte:"):
-                continue
-            matched = [r for r in matched if str(r.get(key)) == str(value)]
+            if key.startswith("gte:"):
+                field = key[4:]
+                matched = [r for r in matched if str(r.get(field) or "") >= str(value)]
+            elif key.startswith("lte:"):
+                field = key[4:]
+                matched = [r for r in matched if str(r.get(field) or "") <= str(value)]
+            elif key.startswith("in:"):
+                field = key[3:]
+                allowed = {str(item) for item in value}
+                matched = [r for r in matched if str(r.get(field)) in allowed]
+            else:
+                matched = [r for r in matched if str(r.get(key)) == str(value)]
         if query.op == "update":
             if not matched:
                 return FakeResponse([])
@@ -154,8 +167,9 @@ class FakeBackend:
                 row.update(query.payload)
                 updated.append(dict(row))
             return FakeResponse(updated)
-        if query.order_by and query.order_by[1]:
-            matched = sorted(matched, key=lambda r: r.get("created_at") or "", reverse=True)
+        if query.order_by:
+            column, desc = query.order_by
+            matched = sorted(matched, key=lambda r: r.get(column) or "", reverse=bool(desc))
         if query.range_span is not None:
             start, end = query.range_span
             matched = matched[start : end + 1]
@@ -389,6 +403,16 @@ def test_increment_duplicate_count(repo: IncidentRepository, backend: FakeBacken
     assert backend.last_query is not None
     assert backend.last_query.table == "incidents"
     assert backend.last_query.payload == {"duplicate_count": 2}
+
+
+def test_dashboard_read_helpers(repo: IncidentRepository):
+    created = repo.create_incident(_create_payload(incident_ref="SL-2026-000088"))
+    assert repo.get_incident_by_ref("SL-2026-000088") is not None
+    repo.add_update(IncidentUpdateCreate(incident_id=created.id, update_type="incident_created", new_status="REPORTED"))
+    assert repo.list_updates_for_incident(created.id)
+    assert repo.list_recent_updates(limit=5)
+    assert repo.list_evidence_for_incident(created.id) == []
+    assert repo.list_all_incidents()
 
 
 def test_client_requires_env(monkeypatch):

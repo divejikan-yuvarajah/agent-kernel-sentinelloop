@@ -149,6 +149,8 @@ def test_qr_location_overrides_and_skips_location_question():
     assert result.recommended_action == "immediate_escalation"
     assert result.confidence.location == 1.0
     assert result.confidence.equipment_involved == 1.0
+    assert result.source == "QR_TAGGED"
+    assert result.location_confidence == 1.0
 
 
 def test_qr_prevents_location_clarification_on_non_emergency():

@@ -1,14 +1,15 @@
 # Scripts
 
-Operational helpers for later phases. None are implemented in this scaffold.
+Operational helpers. Incident business logic stays in agents and tools.
 
-Possible future scripts:
+## Location QR posters
 
-- local development setup checks
-- test data seeding
-- demo reset
-- QR generation for the WhatsApp reporting channel (`assets/qr/`)
-- knowledge-base ingestion into the retrieval backend
-- environment verification (required env vars present, no secrets in git)
+```bash
+uv run python scripts/generate_location_qr.py
+```
 
-Do not put incident business logic here.
+Reads `locations.yaml`, writes PNG stickers and A4 posters to `assets/qr/`, and writes `assets/qr/location_registry.json`. Requires `WHATSAPP_QR_NUMBER` (E.164 digits, no `+`) or `--whatsapp-number`.
+
+Does not call agents, mutate incidents, or contact WhatsApp.
+
+See `docs/qr_location_system.md`.

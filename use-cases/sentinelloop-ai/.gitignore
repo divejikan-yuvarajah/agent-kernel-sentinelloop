@@ -21,3 +21,8 @@ spend_ledger.json
 .windsurf/rules/
 .codex/skills/
 .aider/skills/
+
+# Generated location QR posters (rebuild with scripts/generate_location_qr.py)
+assets/qr/*.png
+assets/qr/posters/
+assets/qr/location_registry.json

@@ -1,5 +1,5 @@
 """SentinelLoop dashboard package.
 
-Presentation and operations API only. Must not own incident business
-rules or import agent internals.
+Read-only operations API plus the Vite command-center UI.
+Must not own incident business rules, import agents, or mutate incidents.
 """

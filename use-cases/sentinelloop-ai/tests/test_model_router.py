@@ -654,6 +654,19 @@ def test_image_content_without_compatible_model_errors(tmp_path: Path):
     run(router.aclose())
 
 
+def test_successful_call_appends_recent_calls(tmp_path: Path):
+    fake = FakeOpenRouter()
+    router = make_router(tmp_path, fake)
+    run(router.call_model("role_fast", MESSAGES))
+    ledger = json.loads((tmp_path / "spend_ledger.json").read_text(encoding="utf-8"))
+    assert ledger["recent_calls"]
+    entry = ledger["recent_calls"][-1]
+    assert entry["model_role"] == "role_fast"
+    assert entry["model"]
+    assert "api_key" not in entry
+    run(router.aclose())
+
+
 @pytest.mark.skipif(os.environ.get("SENTINELLOOP_LIVE_OPENROUTER") != "1", reason="opt-in live OpenRouter smoke test")
 def test_live_openrouter_smoke():
     """Opt-in: SENTINELLOOP_LIVE_OPENROUTER=1. May call a free model."""

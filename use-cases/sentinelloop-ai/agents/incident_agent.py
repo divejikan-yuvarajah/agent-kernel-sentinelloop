@@ -21,6 +21,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from tools.model_router import ModelCallResult, call_model
+from tools.qr_tags import SOURCE_QR_TAGGED
 
 log = logging.getLogger("sentinelloop.incident")
 
@@ -258,6 +259,8 @@ class IncidentAnalysis(BaseModel):
     has_image: bool = False
     qr_location: str | None = None
     qr_equipment: str | None = None
+    source: str | None = None
+    location_confidence: float | None = None
     needs_clarification: bool = False
     clarification_question: str | None = None
     skip_clarification: bool = False
@@ -483,14 +486,23 @@ def merge_with_previous_incident(
         if value is None or value == "" or value == []:
             continue
         data[key] = value
-    if current.qr_location:
-        data["location"] = current.qr_location
-        data["qr_location"] = current.qr_location
-    if current.qr_equipment:
-        data["equipment_involved"] = current.qr_equipment
-        data["qr_equipment"] = current.qr_equipment
+    qr_location = current.qr_location or previous.qr_location
+    qr_equipment = current.qr_equipment or previous.qr_equipment
+    if qr_location:
+        data["location"] = qr_location
+        data["qr_location"] = qr_location
+        data["source"] = SOURCE_QR_TAGGED
+        data["location_confidence"] = 1.0
+    if qr_equipment:
+        data["equipment_involved"] = qr_equipment
+        data["qr_equipment"] = qr_equipment
+        data["source"] = SOURCE_QR_TAGGED
     merged_conf = previous.confidence.model_dump()
     merged_conf.update({k: v for k, v in current.confidence.model_dump().items() if v})
+    if qr_location:
+        merged_conf["location"] = 1.0
+    if qr_equipment:
+        merged_conf["equipment_involved"] = 1.0
     data["confidence"] = merged_conf
     merged_ev = previous.evidence.model_dump()
     for key, value in current.evidence.model_dump().items():
@@ -589,6 +601,8 @@ def build_fallback_result(
         has_image=has_image,
         qr_location=qr_location,
         qr_equipment=qr_equipment,
+        source=SOURCE_QR_TAGGED if (qr_location or qr_equipment) else None,
+        location_confidence=1.0 if qr_location else None,
         skip_clarification=skip,
         emergency_type=etype,
         emergency_reason=reason,
@@ -632,8 +646,9 @@ def _has_image(mapping: dict[str, Any]) -> bool:
 
 def _usable_text(mapping: dict[str, Any]) -> str:
     translated = str(mapping.get("translated_text") or "").strip()
+    clean = str(mapping.get("clean_text") or "").strip()
     raw = str(mapping.get("raw_text") or "").strip()
-    return translated or raw
+    return translated or clean or raw
 
 
 def _looks_like_phone(value: str) -> bool:
@@ -780,6 +795,8 @@ async def analyze_incident(
             equipment_involved=qr_equipment,
             qr_location=qr_location,
             qr_equipment=qr_equipment,
+            source=SOURCE_QR_TAGGED if (qr_location or qr_equipment) else None,
+            location_confidence=1.0 if qr_location else None,
             has_image=has_image,
             session_id=session_id,
             incident_id=incident_id or mapping.get("incident_id"),
@@ -813,7 +830,7 @@ async def analyze_incident(
         "WORKER_MESSAGE_START\n"
         f"{text}\n"
         "WORKER_MESSAGE_END\n"
-        f"RAW_TEXT_START\n{mapping.get('raw_text') or ''}\nRAW_TEXT_END"
+        f"RAW_TEXT_START\n{mapping.get('clean_text') or mapping.get('raw_text') or ''}\nRAW_TEXT_END"
     )
     if qr_location or qr_equipment:
         user += (
@@ -883,6 +900,8 @@ async def analyze_incident(
         has_image=has_image,
         qr_location=qr_location,
         qr_equipment=qr_equipment,
+        source=SOURCE_QR_TAGGED if (qr_location or qr_equipment) else None,
+        location_confidence=1.0 if qr_location else None,
         severity=payload.severity or "low",
         secondary_hazards=payload.secondary_hazards,
         emergency_type=payload.emergency_type,

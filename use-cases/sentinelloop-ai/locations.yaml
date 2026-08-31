@@ -1,0 +1,59 @@
+# SentinelLoop workplace QR locations.
+# Generate posters with: uv run python scripts/generate_location_qr.py
+#
+# Each entry becomes a WhatsApp deep link whose prefilled text is:
+#   [LOC:<location>|<equipment>]
+# Workers only type the hazard after that prefix.
+
+locations:
+  - location: "Lab B"
+    equipment: "Machine 4"
+    area_code: "LAB-B-M4"
+    building: "Research Block"
+    floor: "2"
+    department: "Process Lab"
+    safety_zone: "yellow"
+    emergency_contact: "Lab Safety"
+    qr_id: "SNT-LAB-B-M4-001"
+
+  - location: "Production Floor"
+    equipment: "Hydraulic Press"
+    area_code: "PROD-HP-01"
+    building: "Plant 1"
+    floor: "1"
+    department: "Mechanical"
+    safety_zone: "orange"
+    qr_id: "SNT-PROD-HP-01"
+
+  - location: "Chemical Storage"
+    equipment: "Storage Cabinet A"
+    area_code: "CHEM-SA-01"
+    building: "Plant 1"
+    floor: "G"
+    department: "Lab Safety"
+    safety_zone: "red"
+    emergency_contact: "Lab Safety"
+    qr_id: "SNT-CHEM-SA-01"
+
+  - location: "Loading Bay A"
+    equipment: "Dock Leveler 2"
+    area_code: "LOAD-A-DL2"
+    building: "Warehouse"
+    floor: "G"
+    department: "Facilities"
+    qr_id: "SNT-LOAD-A-DL2"
+
+  - location: "Electrical Room"
+    equipment: "Panel B17"
+    area_code: "ELEC-B17"
+    building: "Plant 1"
+    floor: "G"
+    department: "Electrical Maintenance"
+    safety_zone: "red"
+    emergency_contact: "Electrical Maintenance"
+    qr_id: "SNT-ELEC-B17"
+    version: 1
+
+# Bump `version` (or set a new qr_id) when equipment is replaced so the old sticker is retired.
+# Example: version: 2 → SNT-ELEC-B17-V2 when qr_id is omitted.
+

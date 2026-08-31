@@ -1,0 +1,340 @@
+.ds-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  grid-template-rows: var(--header-height) 1fr;
+  min-height: 100vh;
+  background: var(--ink);
+}
+
+.ds-sidebar {
+  grid-row: 1 / span 2;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4) var(--space-3);
+  border-right: 1px solid var(--border);
+  background: var(--ink);
+}
+
+.ds-sidebar__brand {
+  padding: var(--space-2) var(--space-3) var(--space-5);
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+}
+
+.ds-sidebar__brand span {
+  display: block;
+  margin-top: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  color: var(--chalk-muted);
+  letter-spacing: 0.08em;
+}
+
+.ds-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ds-nav__link {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  color: var(--chalk-muted);
+  font-size: var(--font-size-sm);
+}
+
+.ds-nav__link:hover {
+  color: var(--chalk);
+  background: var(--panel);
+}
+
+.ds-nav__link[aria-current="page"] {
+  color: var(--chalk);
+  background: var(--panel);
+  border-color: var(--border);
+}
+
+.ds-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--border);
+  background: var(--ink);
+}
+
+.ds-header__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.ds-header__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.ds-notify {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--chalk);
+  cursor: pointer;
+}
+
+.ds-notify__count {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hazard-red);
+}
+
+.ds-profile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+.ds-profile__mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+}
+
+.ds-main {
+  min-width: 0;
+  padding: var(--space-5);
+  overflow: auto;
+}
+
+.ds-page-title {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+}
+
+.ds-page-lead {
+  margin: 0 0 var(--space-5);
+  color: var(--chalk-muted);
+  max-width: 64ch;
+}
+
+.ds-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.ds-grid--cards {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.ds-grid--split {
+  grid-template-columns: 1.4fr 1fr;
+}
+
+.ds-grid--metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ds-metric__value {
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xl);
+  font-weight: 500;
+}
+
+.ds-metric__label {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--chalk-muted);
+}
+
+.ds-feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ds-feed__item {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-size-sm);
+}
+
+.ds-feed__time {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--chalk-muted);
+}
+
+.ds-evidence {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-3);
+}
+
+.ds-evidence__item {
+  overflow: hidden;
+  background: var(--ink);
+}
+
+.ds-evidence__frame {
+  aspect-ratio: 4 / 3;
+  background: var(--border);
+}
+
+.ds-evidence__meta {
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+.ds-evidence__id {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--chalk-muted);
+}
+
+.ds-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  height: 140px;
+  padding-top: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.ds-chart__col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+  min-width: 0;
+}
+
+.ds-chart__bar {
+  width: 100%;
+  background: var(--chalk-muted);
+  border-radius: 1px 1px 0 0;
+}
+
+.ds-chart__bar--LOW {
+  background: var(--verified-teal);
+}
+
+.ds-chart__bar--MEDIUM {
+  background: var(--signal-amber);
+}
+
+.ds-chart__bar--HIGH {
+  background: var(--ember-orange);
+}
+
+.ds-chart__bar--CRITICAL {
+  background: var(--hazard-red);
+}
+
+.ds-chart__label {
+  margin-top: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--chalk-muted);
+  text-align: center;
+}
+
+.ds-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.ds-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  margin-top: var(--space-3);
+  color: var(--chalk-muted);
+  font-size: var(--font-size-sm);
+}
+
+@media (max-width: 1100px) {
+  .ds-grid--split,
+  .ds-grid--metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 860px) {
+  .ds-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto var(--header-height) 1fr;
+  }
+
+  .ds-sidebar {
+    grid-row: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-3);
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .ds-sidebar__brand {
+    padding: var(--space-2) var(--space-2) var(--space-2) 0;
+    white-space: nowrap;
+  }
+
+  .ds-sidebar__brand span {
+    display: none;
+  }
+
+  .ds-nav {
+    flex-direction: row;
+  }
+
+  .ds-nav__link {
+    white-space: nowrap;
+  }
+
+  .ds-grid--cards,
+  .ds-grid--split,
+  .ds-grid--metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .ds-header {
+    padding: 0 var(--space-3);
+  }
+
+  .ds-main {
+    padding: var(--space-4);
+  }
+}
