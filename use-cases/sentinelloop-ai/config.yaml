@@ -44,6 +44,12 @@ languages:
     - ta
     - en
 
+intake:
+  # Prompt 13 QR format was not in-repo; canonical prefix is SLQR (see parse_qr_prefix).
+  qr_prefix: SLQR
+  max_text_length: 4000
+  qr_field_max_length: 200
+
 risk:
   severity_min: 1
   severity_max: 5
