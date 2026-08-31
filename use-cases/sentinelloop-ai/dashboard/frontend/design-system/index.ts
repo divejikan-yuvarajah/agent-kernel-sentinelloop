@@ -28,6 +28,7 @@ export { ActivityFeed } from "./components/ActivityFeed";
 export { AnalyticsDashboard } from "./components/AnalyticsDashboard";
 export { AppShell } from "./components/AppShell";
 export { Badge } from "./components/Badge";
+export { ChannelBadge, channelLabel } from "./components/ChannelBadge";
 export { Button } from "./components/Button";
 export { Card } from "./components/Card";
 export { EvidenceViewer } from "./components/EvidenceViewer";

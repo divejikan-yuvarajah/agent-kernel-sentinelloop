@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 
 import {
   AppShell,
+  ChannelBadge,
   Badge,
   Button,
   EvidenceViewer,
@@ -101,8 +102,10 @@ export function IncidentDetailPage() {
       label: item.label ?? "Evidence",
       source: item.source ?? "unknown",
       timestamp: item.uploaded_at ?? "",
-      kind: item.has_image ? "image" : "file",
+      kind: item.has_image ? "image" : item.content_kind === "voice" || item.kind === "voice" ? "voice" : "file",
       stage: item.stage,
+      uploaded_by: item.uploaded_by,
+      channel: item.source,
     })) ?? [];
 
   return (
@@ -132,6 +135,10 @@ export function IncidentDetailPage() {
               ) : null}
               {detail.source === "QR_TAGGED" ? <Badge title="Location verified by QR scan">QR Tagged</Badge> : null}
               <SafetyStatusBadge status={detail.safety_status} />
+              <ChannelBadge
+                channel={detail.input_channel || detail.reporter.source_channel}
+                elapsed={detail.elapsed_time}
+              />
             </div>
             <p style={{ margin: "16px 0 0" }}>{detail.location}</p>
             {detail.assigned_team ? (
@@ -158,6 +165,13 @@ export function IncidentDetailPage() {
                 <p className="ds-metric__label">Translation</p>
                 <p style={{ margin: "4px 0 12px" }}>{detail.translated_text}</p>
                 <p className="ds-mono">Language: {detail.language ?? detail.reporter.language ?? "—"}</p>
+              </Panel>
+            ) : null}
+            {detail.voice_report ? (
+              <Panel title="🎤 Voice Report" style={{ marginBottom: 24 }}>
+                <p>Duration: {detail.voice_report.duration_seconds ?? "—"} seconds</p>
+                <p>Language: {detail.voice_report.language ?? detail.language ?? "—"}</p>
+                <p>Transcript: {detail.voice_report.transcript ? `"${detail.voice_report.transcript}"` : "—"}</p>
               </Panel>
             ) : null}
             {detail.equipment || detail.people_exposed != null ? (

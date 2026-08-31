@@ -61,6 +61,7 @@ function haystack(row: DemoIncident): string {
     row.reporter_name,
     row.original_text,
     row.translated_text,
+    row.input_channel,
   ]
     .filter(Boolean)
     .join(" ")
@@ -96,11 +97,14 @@ function toSummary(row: DemoIncident): IncidentSummary {
     reporter_name: row.reporter_name === "anonymous" ? "Anonymous" : row.reporter_name,
     duplicate_count: row.duplicate_count,
     loop_stage: row.loop_stage || loopStageFor(row.status),
-    source: row.qr ? "QR_TAGGED" : "whatsapp",
+    source: row.qr ? "QR_TAGGED" : row.input_channel || "whatsapp",
     location_verified: row.qr,
     qr_equipment: row.equipment,
     safety_status: row.risk_level === "CRITICAL" || row.risk_level === "HIGH" ? "Human Review Required" : "Validated",
     is_anonymous: row.reporter_name === "anonymous",
+    input_channel: row.input_channel || (row.reporter_id.startsWith("telegram:") ? "telegram" : "whatsapp"),
+    language: row.language,
+    message_type: row.message_type || "text",
   };
 }
 
@@ -123,6 +127,18 @@ export function fetchIncidents(params: Record<string, string | number | undefine
     .map(toSummary);
   if (risk && risk !== "ALL") {
     items = items.filter((row) => (row.risk_level || "").toUpperCase() === risk);
+  }
+  const channel = String(params.source_channel || params.channel || "").toLowerCase();
+  if (channel && channel !== "all") {
+    items = items.filter((row) => (row.input_channel || "").toLowerCase() === channel);
+  }
+  const language = String(params.language || "").toLowerCase();
+  if (language && language !== "all") {
+    items = items.filter((row) => (row.language || "").toLowerCase().startsWith(language.slice(0, 2)) || (row.language || "").toLowerCase() === language);
+  }
+  const messageType = String(params.message_type || "").toLowerCase();
+  if (messageType && messageType !== "all") {
+    items = items.filter((row) => (row.message_type || "text").toLowerCase() === messageType);
   }
   if (stage) {
     items = items.filter((row) => row.loop_stage === stage);
@@ -179,7 +195,7 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
     location: row.location,
     reporter: {
       reporter_id: row.reporter_name === "anonymous" ? "anonymous" : row.reporter_id,
-      source_channel: "whatsapp",
+      source_channel: row.input_channel || (row.reporter_id.startsWith("telegram:") ? "telegram" : "whatsapp"),
       language: row.language,
     },
     created_at: row.created_at,
@@ -205,6 +221,8 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
       uploaded_at: item.date,
       has_image: item.kind === "image",
       storage_available: true,
+      uploaded_by: "uploaded_by" in item ? String(item.uploaded_by || "") : undefined,
+      content_kind: item.kind,
     })),
     timeline,
     duplicates: {
@@ -217,11 +235,21 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
       })),
       duplicate_similarity_score: row.duplicate_count > 1 ? 0.86 : null,
     },
-    source: row.qr ? "QR_TAGGED" : "whatsapp",
+    source: row.qr ? "QR_TAGGED" : row.input_channel || (row.reporter_id.startsWith("telegram:") ? "telegram" : "whatsapp"),
     location_verified: row.qr,
     qr_equipment: row.equipment,
     location_confidence: row.qr ? 1 : null,
     is_anonymous: row.reporter_name === "anonymous",
+    input_channel: row.input_channel || (row.reporter_id.startsWith("telegram:") ? "telegram" : "whatsapp"),
+    voice_report:
+      row.message_type === "voice" || row.incident_id === "INC-2026-00422"
+        ? {
+            duration_seconds: row.voice_duration_seconds ?? 18,
+            language: row.language,
+            transcript: row.translated_text,
+            audio_format: "ogg",
+          }
+        : null,
     safety_status:
       row.guidance_status === "blocked"
         ? "Guardrail Blocked"
@@ -323,6 +351,13 @@ export function fetchAnalyticsSummary(): Promise<AnalyticsSummary> {
     ],
     repeated_hazard_locations: [{ label: "CNC Area", location: "CNC Area", count: 3, insight: null }],
     duplicate_detection_stats: { groups_checked: 41, duplicates_merged: 12, escalations: 3 },
+    reports_by_channel: [
+      { channel: "telegram", count: 104, percentage: 42 },
+      { channel: "whatsapp", count: 119, percentage: 48 },
+      { channel: "other", count: 24, percentage: 10 },
+    ],
+    telegram_message_types: { Text: 60, Image: 25, Voice: 15 },
+    telegram_languages: { Sinhala: 45, Tamil: 35, English: 20 },
     monthly_trend: monthlyTrend,
     category_share: categoryShare,
     resolved_this_month: kpis.resolvedThisMonth,
@@ -577,5 +612,23 @@ export function fetchComplianceExport(): Promise<GuardrailComplianceExport> {
     ai_spend_usd: 1.12,
     budget_ceiling_usd: 3,
     audit_note: "AI does not control safety-critical outcomes without validation.",
+  });
+}
+
+export function fetchTelegramHealth() {
+  return wait({
+    connected: true,
+    polling_active: true,
+    last_message_at: "2026-08-31T14:53:00+00:00",
+    last_message: "2 minutes ago",
+    errors: 0,
+    messages_today: 18,
+    active_sessions: 6,
+    voice_reports: 3,
+    image_reports: 5,
+    emergency_reports: 1,
+    text_reports: 10,
+    message_types: { Text: 60, Image: 25, Voice: 15 },
+    language_distribution: { Sinhala: 45, Tamil: 35, English: 20 },
   });
 }

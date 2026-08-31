@@ -102,6 +102,23 @@ export function AnalyticsPage() {
           <p className="ds-metric__value">{summary?.ai_detection_accuracy ?? "—"}</p>
         </Card>
       </div>
+      <Panel title="Reports by Channel" style={{ marginTop: 24 }}>
+        <div className="ds-share">
+          {(summary?.reports_by_channel ?? [
+            { channel: "telegram", count: 0, percentage: 42 },
+            { channel: "whatsapp", count: 0, percentage: 48 },
+            { channel: "other", count: 0, percentage: 10 },
+          ]).map((row) => (
+            <div key={row.channel} className="ds-share__row">
+              <span>{row.channel === "telegram" ? "Telegram" : row.channel === "whatsapp" ? "WhatsApp" : "Other"}</span>
+              <span className="ds-share__track">
+                <span className="ds-share__fill" style={{ width: `${Math.round(row.percentage)}%` }} />
+              </span>
+              <span className="ds-mono">{row.percentage}%</span>
+            </div>
+          ))}
+        </div>
+      </Panel>
       <Panel title="Worker analytics" style={{ marginTop: 24 }}>
         <p>Total reports: {summary?.total_incidents ?? 0}</p>
         <p>Anonymous reports: {summary?.anonymous_reports ?? 0}</p>

@@ -63,6 +63,19 @@ class NormalizedWhatsAppMessage(BaseModel):
     interactive_title: str | None = None
     supported: bool = True
     raw_timestamp: str | None = None
+    input_channel: str = "whatsapp"
+    emergency_bypass: bool = False
+    voice_used: bool = False
+    audio_format: str | None = None
+    transcription_available: bool = False
+    media_unavailable: bool = False
+    chat_id: str | None = None
+    telegram_user_id: str | None = None
+    username: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    language_code: str | None = None
+    voice_duration_seconds: float | None = None
 
 
 class ResolvedMedia(BaseModel):

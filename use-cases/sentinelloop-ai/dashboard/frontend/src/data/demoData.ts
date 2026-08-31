@@ -24,6 +24,7 @@ export const workers = [
   { id: "demo_worker_004", name: "Anonymous reporter", language: "English", role: "Floor crew", anonymous: true },
   { id: "demo_worker_005", name: "Ruwan Silva", language: "Sinhala", role: "Forklift driver", anonymous: false },
   { id: "demo_worker_006", name: "Meera Nadesan", language: "Tamil", role: "Quality inspector", anonymous: false },
+  { id: "demo_worker_007", name: "Kamal", language: "Sinhala", role: "Machine operator", anonymous: false },
 ];
 
 export const users = [
@@ -106,6 +107,9 @@ export type DemoIncident = {
   guidance: string;
   knowledge_base: string;
   guidance_status: "approved" | "blocked";
+  input_channel?: "telegram" | "whatsapp" | "slack" | "email";
+  message_type?: "text" | "image" | "voice";
+  voice_duration_seconds?: number;
 };
 
 export const incidents: DemoIncident[] = [
@@ -139,6 +143,38 @@ export const incidents: DemoIncident[] = [
     guidance: "Keep away from exposed wires, sparks, smoke, or damaged electrical equipment.",
     knowledge_base: "electrical_safety.md",
     guidance_status: "approved",
+  },
+  {
+    incident_id: "INC-2026-00422",
+    title: "Machine area smoke",
+    category: "fire/smoke",
+    location: "CNC Area",
+    status: "ASSIGNED",
+    risk_level: "HIGH",
+    risk_score: 16,
+    created_at: "2026-08-31T14:50:00+00:00",
+    assigned_officer: "A. Fernando",
+    assigned_team: "Emergency Response Team",
+    reporter_id: "telegram:48291033",
+    reporter_name: "Kamal",
+    language: "Sinhala",
+    original_text: "Machine area smoke coming",
+    translated_text: "Smoke is coming from the machine area",
+    equipment: "CNC-04",
+    people_exposed: 6,
+    active: true,
+    injury: false,
+    duplicate_count: 1,
+    qr: false,
+    loop_stage: "alert",
+    severity: 4,
+    likelihood: 4,
+    risk_explanation: "Active smoke at a machine area with workers nearby. Severity 4 × likelihood 4 = score 16 (High).",
+    guidance: "Move away from flames or heavy smoke. Do not re-enter until the area is cleared.",
+    knowledge_base: "fire_safety.md",
+    guidance_status: "approved",
+    input_channel: "telegram",
+    message_type: "text",
   },
   {
     incident_id: "INC-2026-00420",
@@ -882,6 +918,28 @@ export const evidenceRecords = [
     source: "Facilities · M. Perera",
     date: "2026-08-20",
     kind: "image" as const,
+  },
+  {
+    id: "EV-422-T",
+    incident_id: "INC-2026-00422",
+    stage: "report",
+    label: "Image Evidence",
+    source: "Telegram",
+    date: "2026-08-31T10:32:00+00:00",
+    kind: "image" as const,
+    channel: "telegram",
+    uploaded_by: "Kamal",
+  },
+  {
+    id: "EV-422-V",
+    incident_id: "INC-2026-00422",
+    stage: "report",
+    label: "Voice Report",
+    source: "Telegram",
+    date: "2026-08-31T10:32:00+00:00",
+    kind: "voice" as const,
+    channel: "telegram",
+    uploaded_by: "Kamal",
   },
 ];
 

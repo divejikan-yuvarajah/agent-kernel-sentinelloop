@@ -54,6 +54,8 @@ export type IncidentDetail = {
     uploaded_at: string | null;
     has_image: boolean;
     storage_available: boolean;
+    uploaded_by?: string | null;
+    content_kind?: string | null;
   }[];
   timeline: { timestamp: string | null; title: string; detail: string | null; actor: string | null }[];
   duplicates: {
@@ -99,6 +101,13 @@ export type IncidentDetail = {
   assigned_team?: string | null;
   severity?: number | null;
   likelihood?: number | null;
+  input_channel?: string | null;
+  voice_report?: {
+    duration_seconds: number | null;
+    language: string | null;
+    transcript: string | null;
+    audio_format: string | null;
+  } | null;
 };
 
 async function getJson<T>(path: string): Promise<T> {
@@ -283,4 +292,25 @@ export function fetchGuardrailConfig() {
 export function fetchComplianceExport() {
   if (isDemoMode()) return demo.fetchComplianceExport();
   return getJson<GuardrailComplianceExport>("/guardrails/compliance-export");
+}
+
+export type TelegramBotStatus = {
+  connected: boolean;
+  polling_active: boolean;
+  last_message_at: string | null;
+  last_message: string | null;
+  errors: number;
+  messages_today: number;
+  active_sessions: number;
+  voice_reports: number;
+  image_reports: number;
+  emergency_reports: number;
+  text_reports: number;
+  message_types: Record<string, number>;
+  language_distribution: Record<string, number>;
+};
+
+export function fetchTelegramHealth() {
+  if (isDemoMode()) return demo.fetchTelegramHealth();
+  return getJson<TelegramBotStatus>("/telegram/health");
 }

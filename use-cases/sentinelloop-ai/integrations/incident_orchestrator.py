@@ -16,6 +16,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from database.schemas import EvidenceCreate, EvidenceFile, IncidentCreate, IncidentUpdateCreate
+from integrations.telegram_handler import TelegramSendError, format_status_card, inline_keyboard
 from integrations.whatsapp import WhatsAppSendError, parse_action_id
 from integrations.whatsapp_handler import (
     UNSUPPORTED_WORKER_REPLY,
@@ -150,6 +151,7 @@ class IncidentOrchestrator:
         *,
         repository: Any | None = None,
         whatsapp: WhatsAppCloudTransport | None = None,
+        telegram: Any | None = None,
         coordination: Any | None = None,
         followup: Any | None = None,
         intake_fn: Any | None = None,
@@ -162,6 +164,7 @@ class IncidentOrchestrator:
     ) -> None:
         self.repository = repository
         self.whatsapp = whatsapp or WhatsAppCloudTransport()
+        self.telegram = telegram
         self.coordination = coordination
         self.followup = followup
         self.intake_fn = intake_fn
@@ -177,6 +180,7 @@ class IncidentOrchestrator:
         self._ref_seq = 0
         self._stats: dict[str, int] = {
             "incoming_whatsapp_reports": 0,
+            "incoming_telegram_reports": 0,
             "hazard_reports": 0,
             "non_hazard_messages": 0,
             "image_reports": 0,
@@ -195,6 +199,24 @@ class IncidentOrchestrator:
 
     def _trace(self, step: str) -> None:
         self.pipeline_trace.append(step)
+
+    def _channel(self, message: NormalizedWhatsAppMessage) -> str:
+        return (getattr(message, "input_channel", None) or "whatsapp").strip().lower() or "whatsapp"
+
+    def _outbound(self, message: NormalizedWhatsAppMessage) -> Any:
+        if self._channel(message) == "telegram":
+            if self.telegram is None:
+                from integrations.telegram_handler import TelegramTransport
+
+                self.telegram = TelegramTransport()
+            return self.telegram
+        return self.whatsapp
+
+    async def _ack(self, message: NormalizedWhatsAppMessage, text: str) -> dict[str, Any] | None:
+        try:
+            return await self._outbound(message).send_text_message(message.sender_id, text)
+        except (WhatsAppSendError, TelegramSendError):
+            return None
 
     def _intake(self) -> Any:
         if self.intake_fn is None:
@@ -255,8 +277,9 @@ class IncidentOrchestrator:
         if isinstance(message, dict):
             message = NormalizedWhatsAppMessage.model_validate(message)
         self.pipeline_trace = []
-        self._note("incoming_whatsapp_reports")
-        key = event_key("whatsapp", message.provider_message_id)
+        channel = self._channel(message)
+        self._note("incoming_telegram_reports" if channel == "telegram" else "incoming_whatsapp_reports")
+        key = event_key(channel, message.provider_message_id)
         cached = self.idempotency.get(key)
         if cached is not None:
             self._note("webhook_duplicates")
@@ -292,6 +315,18 @@ class IncidentOrchestrator:
         )
         return out
 
+    async def process_incoming_telegram_message(
+        self,
+        message: NormalizedWhatsAppMessage | dict[str, Any],
+        *,
+        session: Any | None = None,
+    ) -> OrchestrationResult:
+        if isinstance(message, dict):
+            message = NormalizedWhatsAppMessage.model_validate(message)
+        if not message.input_channel or message.input_channel == "whatsapp":
+            message.input_channel = "telegram"
+        return await self.process_incoming_whatsapp_message(message, session=session)
+
     async def _dispatch(self, message: NormalizedWhatsAppMessage, *, session: Any | None) -> OrchestrationResult:
         ak_session, store = self._load_session(message.sender_id, session=session)
         session_id = getattr(ak_session, "id", message.sender_id)
@@ -300,6 +335,10 @@ class IncidentOrchestrator:
             parsed = parse_action_id(message.interactive_action_id)
             if parsed and parsed.get("action") in {ACTION_YES, ACTION_STILL_EXISTS, ACTION_UNSURE}:
                 return await self._handle_verification(message, ak_session, store, parsed)
+
+        if getattr(message, "emergency_bypass", False):
+            self._trace("emergency_bypass")
+            return await self.process_new_report(message, session=ak_session, store=store)
 
         pending = bool(_cache_get(ak_session, NV_PENDING))
         index = dict(_cache_get(ak_session, NV_CLARIFICATION_INDEX) or {})
@@ -310,10 +349,7 @@ class IncidentOrchestrator:
             and index[str(reply_id)].get("status") == "completed"
         ):
             log.info("stale_clarification_ignored")
-            try:
-                await self.whatsapp.send_text_message(message.sender_id, STALE_REPLY)
-            except WhatsAppSendError:
-                pass
+            await self._ack(message, STALE_REPLY)
             return self._result(
                 message,
                 session_id=session_id,
@@ -322,10 +358,7 @@ class IncidentOrchestrator:
             )
         if not message.supported:
             if pending:
-                try:
-                    await self.whatsapp.send_text_message(message.sender_id, UNSUPPORTED_WORKER_REPLY)
-                except WhatsAppSendError:
-                    log.warning("whatsapp_unsupported_ack_failed")
+                await self._ack(message, UNSUPPORTED_WORKER_REPLY)
                 return self._result(
                     message,
                     session_id=session_id,
@@ -396,6 +429,20 @@ class IncidentOrchestrator:
             is_hazard = True
             intake_data["is_hazard_report"] = True
             intake_data["has_image"] = True
+        if getattr(message, "emergency_bypass", False):
+            is_hazard = True
+            intake_data["is_hazard_report"] = True
+            intake_data["skip_clarification"] = True
+        if getattr(message, "voice_used", False):
+            intake_data["voice_used"] = True
+            intake_data["audio_format"] = message.audio_format or "ogg"
+            intake_data["transcription_available"] = bool(message.transcription_available)
+        if getattr(message, "media_unavailable", False):
+            intake_data["media_unavailable"] = True
+        intake_data["input_channel"] = self._channel(message)
+        if message.latitude is not None:
+            intake_data["latitude"] = message.latitude
+            intake_data["longitude"] = message.longitude
         if not is_hazard:
             self._note("non_hazard_messages")
             return await self._handle_non_hazard(message, session, store, intake_data)
@@ -447,10 +494,7 @@ class IncidentOrchestrator:
             meta = index[reply_id]
             if isinstance(meta, dict) and meta.get("status") == "completed":
                 log.info("stale_clarification_ignored")
-                try:
-                    await self.whatsapp.send_text_message(message.sender_id, STALE_REPLY)
-                except WhatsAppSendError:
-                    pass
+                await self._ack(message, STALE_REPLY)
                 return self._result(
                     message,
                     session_id=getattr(session, "id", None),
@@ -460,10 +504,7 @@ class IncidentOrchestrator:
         elif reply_id and current_msg and reply_id != current_msg and reply_id not in index:
             pending_ids = [k for k, v in index.items() if isinstance(v, dict) and v.get("status") == "pending"]
             if len(pending_ids) > 1:
-                try:
-                    await self.whatsapp.send_text_message(message.sender_id, AMBIGUOUS_REPLY)
-                except WhatsAppSendError:
-                    pass
+                await self._ack(message, AMBIGUOUS_REPLY)
                 return self._result(
                     message,
                     session_id=getattr(session, "id", None),
@@ -475,10 +516,7 @@ class IncidentOrchestrator:
         previous = _as_dict(_cache_get(session, NV_DRAFT))
         duplicate_ctx = _as_dict(_cache_get(session, NV_DUPLICATE))
         if not message.supported:
-            try:
-                await self.whatsapp.send_text_message(message.sender_id, UNSUPPORTED_WORKER_REPLY)
-            except WhatsAppSendError:
-                pass
+            await self._ack(message, UNSUPPORTED_WORKER_REPLY)
             return self._result(
                 message,
                 session_id=getattr(session, "id", None),
@@ -561,6 +599,18 @@ class IncidentOrchestrator:
         persisted, persist_error = await self._ensure_canonical_incident(merged, message, session)
         merged.update(persisted)
         evidence_attached = await self.persist_initial_evidence(message, session, merged)
+        if getattr(message, "voice_used", False):
+            await self._audit(
+                merged,
+                "voice_report",
+                metadata={
+                    "voice_used": True,
+                    "audio_format": message.audio_format or "ogg",
+                    "transcription_available": bool(message.transcription_available),
+                    "duration_seconds": message.voice_duration_seconds,
+                    "input_channel": self._channel(message),
+                },
+            )
         if persist_error and not merged.get("incident_id"):
             return self._result(
                 message,
@@ -612,20 +662,45 @@ class IncidentOrchestrator:
             worker_text = guidance.worker_text() if hasattr(guidance, "worker_text") else ""
             if worker_text:
                 body = f"{worker_text}\n\n{ACK_LINE}"
-                try:
-                    await self.whatsapp.send_guidance(
-                        message.sender_id,
-                        body,
-                        reply_to_message_id=message.provider_message_id,
+                reply_markup = None
+                if self._channel(message) == "telegram":
+                    card = format_status_card(
+                        category=merged.get("hazard_category"),
+                        risk=merged.get("current_risk_level") or _as_dict(merged.get("risk")).get("level"),
+                        location=merged.get("location") or merged.get("qr_location"),
+                        team=merged.get("assigned_team"),
+                        status=to_display_status(merged.get("status")) or "Received",
+                        language=merged.get("language") or _cache_get(session, NV_LANGUAGE),
                     )
-                    self._trace("whatsapp_guidance")
+                    body = f"{card}\n\n{worker_text}"
+                    reply_markup = inline_keyboard(merged.get("incident_id"))
+                try:
+                    outbound = self._outbound(message)
+                    if reply_markup is not None:
+                        await outbound.send_text_message(
+                            message.sender_id,
+                            body,
+                            reply_to_message_id=message.provider_message_id,
+                            reply_markup=reply_markup,
+                        )
+                    else:
+                        await outbound.send_guidance(
+                            message.sender_id,
+                            body,
+                            reply_to_message_id=message.provider_message_id,
+                        )
+                    self._trace("telegram_guidance" if self._channel(message) == "telegram" else "whatsapp_guidance")
                     log.info("guidance_sent")
+                    if self._channel(message) == "telegram":
+                        log.info("telegram_guidance_sent")
                     guidance_sent = True
                     self._note("guidance_delivery_success")
-                except WhatsAppSendError:
+                except (WhatsAppSendError, TelegramSendError):
                     log.warning("guidance_send_failed")
+                    if self._channel(message) == "telegram":
+                        log.warning("telegram_delivery_failed")
                     self._note("guidance_delivery_failure")
-                    await self._audit(merged, "guidance_send_failed", message="whatsapp delivery failed")
+                    await self._audit(merged, "guidance_send_failed", message="worker channel delivery failed")
 
         coordination_completed = False
         if merged.get("incident_id") or merged.get("id"):
@@ -751,7 +826,7 @@ class IncidentOrchestrator:
                 "report",
                 metadata=EvidenceCreate(
                     evidence_type="before",
-                    source="whatsapp",
+                    source=blob.get("input_channel") or merged.get("input_channel") or "whatsapp",
                     caption_or_description=blob.get("caption") or merged.get("translated_text"),
                     external_message_id=mid,
                 ),
@@ -778,6 +853,7 @@ class IncidentOrchestrator:
                     "mime_type": message.media.mime_type,
                     "caption": message.caption,
                     "content": b"",
+                    "input_channel": getattr(message, "input_channel", None) or "whatsapp",
                 },
             )
             return
@@ -787,6 +863,7 @@ class IncidentOrchestrator:
             "mime_type": message.media.mime_type,
             "caption": message.caption,
             "content": content,
+            "input_channel": getattr(message, "input_channel", None) or "whatsapp",
         }
 
     async def _run_intake(self, message: NormalizedWhatsAppMessage, session: Any, store: Any) -> Any:
@@ -804,10 +881,15 @@ class IncidentOrchestrator:
                 "external_message_id": message.provider_message_id,
                 "has_image": True,
             }
+        message_type = "text"
+        if message.media:
+            message_type = "image"
+        if getattr(message, "voice_used", False):
+            message_type = "voice_transcript"
         return await self._intake()(
             message.sender_id,
             text,
-            message_type="image" if message.media else "text",
+            message_type=message_type,
             image_caption=message.caption if message.media else None,
             external_message_id=message.provider_message_id,
             session=session,
@@ -915,7 +997,7 @@ class IncidentOrchestrator:
                 IncidentCreate(
                     incident_ref=merged.get("incident_id") or self._next_ref(),
                     reporter_id=message.sender_id,
-                    source_channel="whatsapp",
+                    source_channel=self._channel(message),
                     session_id=str(getattr(session, "id", None) or message.sender_id),
                     detected_language=str(merged.get("language") or "") or None,
                     hazard_category=merged.get("hazard_category"),
@@ -1043,7 +1125,7 @@ class IncidentOrchestrator:
         else:
             previous_id = existing_id
             try:
-                response = await self.whatsapp.send_clarification(
+                response = await self._outbound(message).send_clarification(
                     message.sender_id,
                     str(question),
                     reply_to_message_id=message.provider_message_id,
@@ -1052,7 +1134,7 @@ class IncidentOrchestrator:
                 sent = True
                 log.info("clarification_sent")
                 self._note("clarifications")
-            except WhatsAppSendError:
+            except (WhatsAppSendError, TelegramSendError):
                 log.warning("clarification_send_failed")
                 outbound_id = f"clarification:{message.provider_message_id}"
             if previous_id and previous_id != outbound_id:
@@ -1102,10 +1184,7 @@ class IncidentOrchestrator:
         store: Any,
         intake_data: dict[str, Any],
     ) -> OrchestrationResult:
-        try:
-            await self.whatsapp.send_text_message(message.sender_id, NON_HAZARD_REPLY)
-        except WhatsAppSendError:
-            log.warning("non_hazard_ack_failed")
+        await self._ack(message, NON_HAZARD_REPLY)
         _store_session(store, session)
         return self._result(
             message,
@@ -1275,3 +1354,13 @@ async def process_incoming_whatsapp_message(
     elif orch is None:
         orch = get_incident_orchestrator()
     return await orch.process_incoming_whatsapp_message(message)
+
+
+async def process_incoming_telegram_message(
+    message: NormalizedWhatsAppMessage | dict[str, Any],
+    *,
+    orchestrator: IncidentOrchestrator | None = None,
+    **kwargs: Any,
+) -> OrchestrationResult:
+    orch = orchestrator or (IncidentOrchestrator(**kwargs) if kwargs else get_incident_orchestrator())
+    return await orch.process_incoming_telegram_message(message)

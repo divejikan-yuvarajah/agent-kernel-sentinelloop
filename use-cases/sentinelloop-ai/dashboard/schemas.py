@@ -32,6 +32,9 @@ class IncidentSummary(_Out):
     qr_equipment: str | None = None
     safety_status: str | None = None
     is_anonymous: bool = False
+    input_channel: str | None = None
+    assigned_team: str | None = None
+    reporter_name: str | None = None
 
 
 class IncidentListResponse(_Out):
@@ -67,6 +70,8 @@ class EvidenceItem(_Out):
     uploaded_at: datetime | None = None
     has_image: bool = False
     storage_available: bool = False
+    uploaded_by: str | None = None
+    content_kind: str | None = None
 
 
 class TimelineEvent(_Out):
@@ -88,6 +93,13 @@ class DuplicateIntelligence(_Out):
     duplicate_count: int = 0
     linked_incidents: list[LinkedIncident] = Field(default_factory=list)
     duplicate_similarity_score: float | None = None
+
+
+class VoiceReport(_Out):
+    duration_seconds: float | None = None
+    language: str | None = None
+    transcript: str | None = None
+    audio_format: str | None = "ogg"
 
 
 class IncidentDetail(_Out):
@@ -115,6 +127,30 @@ class IncidentDetail(_Out):
     is_anonymous: bool = False
     safety_status: str | None = None
     safety: IncidentSafetyPanel | None = None
+    input_channel: str | None = None
+    voice_report: VoiceReport | None = None
+
+
+class ChannelShare(_Out):
+    channel: str
+    count: int
+    percentage: float
+
+
+class TelegramBotStatus(_Out):
+    connected: bool = False
+    polling_active: bool = False
+    last_message_at: datetime | None = None
+    last_message: str | None = None
+    errors: int = 0
+    messages_today: int = 0
+    active_sessions: int = 0
+    voice_reports: int = 0
+    image_reports: int = 0
+    emergency_reports: int = 0
+    text_reports: int = 0
+    message_types: dict[str, float] = Field(default_factory=dict)
+    language_distribution: dict[str, float] = Field(default_factory=dict)
 
 
 class LoopStageCount(_Out):
@@ -166,6 +202,9 @@ class AnalyticsSummary(_Out):
     most_repeated_hazards: list[RepeatedHazardStat] = Field(default_factory=list)
     repeated_hazard_locations: list[RepeatedHazardStat] = Field(default_factory=list)
     duplicate_detection_stats: dict[str, int] = Field(default_factory=dict)
+    reports_by_channel: list[ChannelShare] = Field(default_factory=list)
+    telegram_message_types: dict[str, float] = Field(default_factory=dict)
+    telegram_languages: dict[str, float] = Field(default_factory=dict)
 
 
 class RecurringHazard(_Out):

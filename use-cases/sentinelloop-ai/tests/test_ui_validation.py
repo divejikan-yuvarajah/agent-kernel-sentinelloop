@@ -176,6 +176,7 @@ def test_horizon_demo_dataset_covers_command_center():
         "/reports",
         "/people",
         "/notifications",
+        "/telegram",
     ):
         assert path in app
     dashboard = (FRONTEND / "src" / "pages" / "DashboardPage.tsx").read_text(encoding="utf-8")

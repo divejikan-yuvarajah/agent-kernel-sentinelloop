@@ -17,6 +17,7 @@ from uuid import UUID
 from dashboard.schemas import (
     ActivityEvent,
     AnalyticsSummary,
+    ChannelShare,
     DuplicateIntelligence,
     EvidenceItem,
     IncidentDetail,
@@ -33,7 +34,9 @@ from dashboard.schemas import (
     RiskIntelligence,
     RouterBudget,
     RouterStatus,
+    TelegramBotStatus,
     TimelineEvent,
+    VoiceReport,
 )
 from database.models import Assignment, Incident, IncidentEvidence, IncidentUpdate, RiskAssessment
 from database.repository import IncidentRepository
@@ -394,6 +397,8 @@ def _safe_storage_available(reference: str | None) -> bool:
     lower = reference.lower()
     if "graph.facebook.com" in lower or "whatsapp" in lower:
         return False
+    if "api.telegram.org" in lower or "telegram" in lower:
+        return False
     return True
 
 
@@ -409,6 +414,8 @@ class DashboardReadService:
         status: str | None = None,
         risk_level: str | None = None,
         stage: str | None = None,
+        source_channel: str | None = None,
+        language: str | None = None,
         limit: int = 20,
         offset: int = 0,
         sort_by: str | None = None,
@@ -425,6 +432,16 @@ class DashboardReadService:
         stage_statuses = statuses_for_stage(stage)
         if stage_statuses is not None:
             incidents = [item for item in incidents if (item.status or "").upper() in stage_statuses]
+        if source_channel:
+            wanted = source_channel.strip().lower()
+            incidents = [item for item in incidents if (item.source_channel or "").strip().lower() == wanted]
+        if language:
+            wanted_lang = language.strip().lower()
+            incidents = [
+                item
+                for item in incidents
+                if (item.detected_language or "").strip().lower() in {wanted_lang, _language_alias(wanted_lang)}
+            ]
         keys = [self._repo.row_key(item) for item in incidents]
         assignments = _latest_by_incident(self._repo.list_assignments_for_incidents(keys))
         risks = _latest_by_incident(self._repo.list_risk_assessments_for_incidents(keys))
@@ -524,6 +541,8 @@ class DashboardReadService:
             location_confidence=1.0 if origin["location_verified"] else None,
             is_anonymous=bool(getattr(incident, "is_anonymous", False)),
             safety_status=status_label,
+            input_channel=incident.source_channel,
+            voice_report=_voice_report_from_updates(updates, incident),
             safety=build_safety_panel(
                 incident_id=incident.incident_ref,
                 risk_level=incident.current_risk_level,
@@ -634,6 +653,36 @@ class DashboardReadService:
             most_repeated_hazards=repeat_stats["hazards"],
             repeated_hazard_locations=repeat_stats["locations"],
             duplicate_detection_stats=duplicate_detection_stats(),
+            reports_by_channel=_channel_share(incidents),
+        )
+
+    def telegram_status(self) -> TelegramBotStatus:
+        from integrations.telegram_handler import telegram_health
+
+        health = telegram_health()
+        last = None
+        if health.last_message_at is not None:
+            delta = _utcnow() - health.last_message_at
+            minutes = max(0, int(delta.total_seconds() // 60))
+            last = "just now" if minutes < 1 else f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+        total_types = max(health.text_reports + health.image_reports + health.voice_reports, 1)
+        return TelegramBotStatus(
+            connected=health.connected,
+            polling_active=health.polling_active,
+            last_message_at=health.last_message_at,
+            last_message=last,
+            errors=health.errors,
+            messages_today=health.messages_today,
+            active_sessions=health.active_sessions,
+            voice_reports=health.voice_reports,
+            image_reports=health.image_reports,
+            emergency_reports=health.emergency_reports,
+            text_reports=health.text_reports,
+            message_types={
+                "Text": round(100 * health.text_reports / total_types, 1),
+                "Image": round(100 * health.image_reports / total_types, 1),
+                "Voice": round(100 * health.voice_reports / total_types, 1),
+            },
         )
 
     def recurring_hazards(self, *, window_days: int = 30, threshold: int = 3) -> RecurringResponse:
@@ -812,6 +861,7 @@ class DashboardReadService:
             qr_equipment=origin["qr_equipment"],
             safety_status=safety_status_for_incident(risk_level=incident.current_risk_level, status=incident.status),
             is_anonymous=bool(getattr(incident, "is_anonymous", False)),
+            input_channel=incident.source_channel,
         )
 
     def _risk_intelligence(self, incident: Incident, assessment: RiskAssessment | None) -> RiskIntelligence:
@@ -862,6 +912,8 @@ class DashboardReadService:
             uploaded_at=row.created_at,
             has_image=is_image,
             storage_available=_safe_storage_available(row.storage_reference),
+            uploaded_by=None,
+            content_kind="image" if is_image else ("voice" if "audio" in kind or "voice" in kind else "file"),
         )
 
     def _timeline(
@@ -1071,6 +1123,40 @@ def _qr_location_stats(incidents: list[Incident]) -> dict[str, Any]:
         )
     top.sort(key=lambda row: (-row.count, row.location))
     return {"tagged": tagged, "top": top[:8]}
+
+
+def _language_alias(value: str) -> str:
+    aliases = {"sinhala": "si", "si": "sinhala", "tamil": "ta", "ta": "tamil", "english": "en", "en": "english"}
+    return aliases.get(value, value)
+
+
+def _channel_share(incidents: list[Incident]) -> list[ChannelShare]:
+    counts: dict[str, int] = {}
+    for incident in incidents:
+        key = (incident.source_channel or "other").strip().lower() or "other"
+        if key not in {"telegram", "whatsapp"}:
+            key = "other"
+        counts[key] = counts.get(key, 0) + 1
+    total = len(incidents) or 1
+    order = ("telegram", "whatsapp", "other")
+    return [
+        ChannelShare(channel=name, count=counts.get(name, 0), percentage=round(100 * counts.get(name, 0) / total, 1))
+        for name in order
+    ]
+
+
+def _voice_report_from_updates(updates: list[IncidentUpdate], incident: Incident) -> VoiceReport | None:
+    for update in updates:
+        meta = update.metadata or {}
+        if not meta.get("voice_used") and (update.update_type or "") != "voice_report":
+            continue
+        return VoiceReport(
+            duration_seconds=_as_float(meta.get("duration_seconds")),
+            language=incident.detected_language,
+            transcript=redact_text(incident.hazard_description or incident.original_message_text),
+            audio_format=str(meta.get("audio_format") or "ogg"),
+        )
+    return None
 
 
 def _budget(ceiling: Decimal | None, spent: Decimal) -> RouterBudget:

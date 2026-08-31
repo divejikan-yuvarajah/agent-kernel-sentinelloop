@@ -28,6 +28,7 @@ const GROUPS = [
     label: "Intelligence",
     links: [
       { to: "/analytics", label: "Analytics" },
+      { to: "/telegram", label: "Telegram Bot" },
       { to: "/reports", label: "Reports" },
       { to: "/knowledge", label: "Knowledge Base" },
       { to: "/notifications", label: "Alerts" },

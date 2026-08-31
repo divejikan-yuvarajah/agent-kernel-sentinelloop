@@ -35,6 +35,9 @@ export type IncidentSummary = {
   qr_equipment?: string | null;
   safety_status?: string | null;
   is_anonymous?: boolean;
+  input_channel?: string | null;
+  language?: string | null;
+  message_type?: string | null;
 };
 
 export type LoopStage = {
@@ -127,6 +130,9 @@ export type AnalyticsSummary = {
   most_repeated_hazards?: RepeatedHazardStat[];
   repeated_hazard_locations?: RepeatedHazardStat[];
   duplicate_detection_stats?: Record<string, number>;
+  reports_by_channel?: { channel: string; count: number; percentage: number }[];
+  telegram_message_types?: Record<string, number>;
+  telegram_languages?: Record<string, number>;
   monthly_trend?: { label: string; value: number }[];
   category_share?: { label: string; percent: number }[];
   resolved_this_month?: number;
@@ -156,8 +162,10 @@ export type EvidenceItem = {
   label: string;
   source: string;
   timestamp: string;
-  kind: "image" | "file";
+  kind: "image" | "file" | "voice";
   stage?: string | null;
+  uploaded_by?: string | null;
+  channel?: string | null;
 };
 
 export type AnalyticsPoint = {

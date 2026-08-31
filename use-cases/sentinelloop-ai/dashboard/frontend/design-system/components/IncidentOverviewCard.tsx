@@ -51,6 +51,19 @@ export function IncidentOverviewCard({ incident, onOpen, loading = false }: Prop
           {incident.source === "QR_TAGGED" ? (
             <Badge title="Location verified by QR scan">QR Tagged</Badge>
           ) : null}
+          {incident.input_channel ? (
+            <Badge title={`Reported via ${incident.input_channel}`}>
+              {incident.input_channel === "telegram"
+                ? "📱 Telegram"
+                : incident.input_channel === "whatsapp"
+                  ? "🟢 WhatsApp"
+                  : incident.input_channel === "slack"
+                    ? "💬 Slack"
+                    : incident.input_channel === "email"
+                      ? "📧 Email"
+                      : incident.input_channel}
+            </Badge>
+          ) : null}
           {incident.safety_status ? (
             <Badge title="Responsible AI safety status">{incident.safety_status}</Badge>
           ) : null}

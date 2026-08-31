@@ -17,6 +17,7 @@ import { ReportsPage } from "./pages/ReportsPage";
 import { ReviewQueuePage } from "./pages/ReviewQueuePage";
 import { SafetyCenterPage } from "./pages/SafetyCenterPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { TelegramBotPage } from "./pages/TelegramBotPage";
 
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage").then((module) => ({ default: module.AnalyticsPage })));
 const DesignSystemPage = lazy(() =>
@@ -40,6 +41,7 @@ export function App() {
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/telegram" element={<TelegramBotPage />} />
         <Route path="/safety" element={<SafetyCenterPage />} />
         <Route path="/safety/review" element={<ReviewQueuePage />} />
         <Route path="/safety/debug" element={<GuardrailDebugPage />} />

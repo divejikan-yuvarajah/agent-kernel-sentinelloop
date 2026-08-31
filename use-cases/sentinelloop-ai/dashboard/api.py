@@ -28,6 +28,7 @@ from dashboard.schemas import (
     RecurringResponse,
     ReviewQueueResponse,
     RouterStatus,
+    TelegramBotStatus,
 )
 from dashboard.service import DashboardReadService
 
@@ -102,6 +103,14 @@ class DashboardHandler(RESTRequestHandler):
                 default=None,
                 description="Loop-ring stage filter: report, understand, assess, alert, act, verify, learn.",
             ),
+            source_channel: str | None = Query(
+                default=None,
+                description="Inbound channel filter: telegram, whatsapp, slack, email.",
+            ),
+            language: str | None = Query(
+                default=None,
+                description="Detected worker language filter: si, ta, en, Sinhala, Tamil, English.",
+            ),
             limit: int = Query(default=20, ge=1, le=100, description="Page size."),
             offset: int = Query(default=0, ge=0, description="Number of matching rows to skip."),
             sort_by: str | None = Query(
@@ -116,6 +125,8 @@ class DashboardHandler(RESTRequestHandler):
                     status=status,
                     risk_level=risk_level,
                     stage=stage,
+                    source_channel=source_channel,
+                    language=language,
                     limit=limit,
                     offset=offset,
                     sort_by=sort_by,
@@ -241,6 +252,19 @@ class DashboardHandler(RESTRequestHandler):
                 raise HTTPException(status_code=500, detail="internal dashboard failure") from None
 
         @router.get(
+            "/telegram/health",
+            response_model=TelegramBotStatus,
+            summary="Telegram bot monitoring",
+            description="Read-only Telegram transport health: polling, last message, errors, and volume.",
+        )
+        async def telegram_health() -> TelegramBotStatus:
+            try:
+                return await asyncio.to_thread(self._reader().telegram_status)
+            except Exception:
+                log.exception("dashboard telegram_health failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
+        @router.get(
             "/router/status",
             response_model=RouterStatus,
             summary="AI model router transparency",
@@ -347,6 +371,7 @@ class DashboardHandler(RESTRequestHandler):
             "/incidents/{incident_id}/audit-export",
             "/analytics/summary",
             "/analytics/recurring",
+            "/telegram/health",
             "/router/status",
             "/guardrails/status",
             "/guardrails/review-queue",

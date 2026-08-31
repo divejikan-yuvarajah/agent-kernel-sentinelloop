@@ -22,6 +22,7 @@ from integrations.slack_handler import (
     SlackPostError,
     extract_slack_file,
 )
+from integrations.telegram_handler import SESSION_PREFIX, TelegramSendError
 from integrations.whatsapp import (
     ACTION_STILL_EXISTS,
     ACTION_UNSURE,
@@ -313,11 +314,13 @@ class FollowupService:
         self,
         *,
         whatsapp: WhatsAppHandler | None = None,
+        telegram: Any | None = None,
         slack: SlackHandler | None = None,
         repository: Any | None = None,
         store: MemoryFollowupStore | None = None,
     ) -> None:
         self.whatsapp = whatsapp or WhatsAppHandler()
+        self.telegram = telegram
         self.slack = slack or SlackHandler()
         self.repository = repository
         self.store = store or MemoryFollowupStore()
@@ -327,6 +330,16 @@ class FollowupService:
         if found:
             return found
         return FollowupRecord(incident_id=incident_id)
+
+    def _is_telegram_worker(self, identity: str | None) -> bool:
+        return bool(identity) and str(identity).startswith(SESSION_PREFIX)
+
+    def _telegram_transport(self) -> Any:
+        if self.telegram is None:
+            from integrations.telegram_handler import TelegramTransport
+
+            self.telegram = TelegramTransport()
+        return self.telegram
 
     def _event_seen(self, record: FollowupRecord, event_id: str | None) -> bool:
         return bool(event_id) and event_id in record.processed_events
@@ -493,12 +506,14 @@ class FollowupService:
             },
         ]
         try:
-            if self.whatsapp.interactive_actions_supported:
+            if self._is_telegram_worker(record.worker_phone):
+                await self._telegram_transport().send_verification_prompt(record.worker_phone, body, buttons)
+            elif self.whatsapp.interactive_actions_supported:
                 await self.whatsapp.send_verification_prompt(record.worker_phone, body, buttons)
             else:
                 fallback = body + "\n\n" + (CLARIFICATION_PROMPT.get(lang) or CLARIFICATION_PROMPT["en"])
                 await self.whatsapp.send_worker_text(record.worker_phone, fallback)
-        except WhatsAppSendError:
+        except (WhatsAppSendError, TelegramSendError):
             log.warning("worker_verification_delivery_failed incident=%s", incident_id)
             return FollowupResult(
                 incident_id=incident_id,
@@ -586,11 +601,13 @@ class FollowupService:
             log.info("worker_verification_ambiguous incident=%s", record.incident_id)
             lang = _language(record.worker_language)
             if record.worker_phone:
+                prompt = CLARIFICATION_PROMPT.get(lang) or CLARIFICATION_PROMPT["en"]
                 try:
-                    await self.whatsapp.send_worker_text(
-                        record.worker_phone, CLARIFICATION_PROMPT.get(lang) or CLARIFICATION_PROMPT["en"]
-                    )
-                except WhatsAppSendError:
+                    if self._is_telegram_worker(record.worker_phone):
+                        await self._telegram_transport().send_worker_text(record.worker_phone, prompt)
+                    else:
+                        await self.whatsapp.send_worker_text(record.worker_phone, prompt)
+                except (WhatsAppSendError, TelegramSendError):
                     pass
             return FollowupResult(
                 incident_id=record.incident_id,

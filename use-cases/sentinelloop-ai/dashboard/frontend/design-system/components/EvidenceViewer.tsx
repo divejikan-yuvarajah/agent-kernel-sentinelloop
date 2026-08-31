@@ -25,7 +25,17 @@ export function EvidenceViewer({ items }: Props) {
             <p className="ds-mono" style={{ margin: "8px 0 0", fontSize: "var(--font-size-xs)", color: "var(--chalk-muted)" }}>
               {item.timestamp}
             </p>
-            <p style={{ margin: "4px 0 0", fontSize: "var(--font-size-xs)", color: "var(--chalk-muted)" }}>{item.source}</p>
+            <p style={{ margin: "4px 0 0", fontSize: "var(--font-size-xs)", color: "var(--chalk-muted)" }}>
+              Source: {item.channel || item.source}
+            </p>
+            {item.kind === "voice" ? (
+              <p style={{ margin: "4px 0 0", fontSize: "var(--font-size-xs)", color: "var(--chalk-muted)" }}>Type: Voice Evidence</p>
+            ) : item.kind === "image" ? (
+              <p style={{ margin: "4px 0 0", fontSize: "var(--font-size-xs)", color: "var(--chalk-muted)" }}>Type: Image Evidence</p>
+            ) : null}
+            {item.uploaded_by ? (
+              <p style={{ margin: "4px 0 0", fontSize: "var(--font-size-xs)", color: "var(--chalk-muted)" }}>Uploader: {item.uploaded_by}</p>
+            ) : null}
           </div>
         </Card>
       ))}

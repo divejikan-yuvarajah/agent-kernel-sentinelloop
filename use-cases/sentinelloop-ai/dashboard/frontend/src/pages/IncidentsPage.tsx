@@ -9,6 +9,7 @@ import {
   SelectDropdown,
   StatusIndicator,
   TableRow,
+  ChannelBadge,
 } from "@ds/index";
 import { normalizeRisk } from "@ds/colors";
 import type { IncidentSummary } from "@ds/types";
@@ -28,6 +29,10 @@ export function IncidentsPage() {
   const [demo] = useDemoMode();
   const [query, setQuery] = useState("");
   const [risk, setRisk] = useState("ALL");
+  const [channel, setChannel] = useState("ALL");
+  const [messageType, setMessageType] = useState("ALL");
+  const [language, setLanguage] = useState("ALL");
+  const [date, setDate] = useState("");
   const [rows, setRows] = useState<IncidentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +44,9 @@ export function IncidentsPage() {
       limit: 50,
       sort_by: "newest",
       risk_level: risk === "ALL" ? undefined : risk,
+      source_channel: channel === "ALL" ? undefined : channel,
+      language: language === "ALL" ? undefined : language,
+      message_type: messageType === "ALL" ? undefined : messageType,
     })
       .then((payload) => {
         if (cancelled) return;
@@ -54,7 +62,7 @@ export function IncidentsPage() {
     return () => {
       cancelled = true;
     };
-  }, [risk, demo]);
+  }, [risk, channel, messageType, language, demo]);
 
   const visible = rows.filter((item) => {
     const haystack = [
@@ -70,7 +78,9 @@ export function IncidentsPage() {
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
-    return haystack.includes(query.toLowerCase());
+    const matchesQuery = haystack.includes(query.toLowerCase());
+    const matchesDate = !date || (item.created_at || "").startsWith(date);
+    return matchesQuery && matchesDate;
   });
 
   return (
@@ -99,6 +109,44 @@ export function IncidentsPage() {
             { value: "LOW", label: "Low" },
           ]}
         />
+        <SelectDropdown
+          label="Channel"
+          name="channel"
+          value={channel}
+          onChange={(event) => setChannel(event.target.value)}
+          options={[
+            { value: "ALL", label: "All channels" },
+            { value: "telegram", label: "Telegram" },
+            { value: "whatsapp", label: "WhatsApp" },
+            { value: "slack", label: "Slack" },
+            { value: "email", label: "Email" },
+          ]}
+        />
+        <SelectDropdown
+          label="Message Type"
+          name="message_type"
+          value={messageType}
+          onChange={(event) => setMessageType(event.target.value)}
+          options={[
+            { value: "ALL", label: "All types" },
+            { value: "text", label: "Text" },
+            { value: "image", label: "Image" },
+            { value: "voice", label: "Voice" },
+          ]}
+        />
+        <SelectDropdown
+          label="Language"
+          name="language"
+          value={language}
+          onChange={(event) => setLanguage(event.target.value)}
+          options={[
+            { value: "ALL", label: "All languages" },
+            { value: "Sinhala", label: "Sinhala" },
+            { value: "Tamil", label: "Tamil" },
+            { value: "English", label: "English" },
+          ]}
+        />
+        <InputField label="Date" name="date" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
       </div>
       {error ? (
         <p className="ds-empty" role="alert">
@@ -137,6 +185,7 @@ export function IncidentsPage() {
                   <th>Category</th>
                   <th>Location</th>
                   <th>Reported by</th>
+                  <th>Channel</th>
                   <th>Risk</th>
                   <th>Status</th>
                   <th>Assigned team</th>
@@ -160,6 +209,7 @@ export function IncidentsPage() {
                       incident.category ?? "—",
                       incident.location ?? "—",
                       incident.reporter_name || (incident.is_anonymous ? "Anonymous" : "Worker"),
+                      <ChannelBadge key="channel" channel={incident.input_channel} elapsed={incident.elapsed_time} />,
                       <RiskIndicator
                         key="risk"
                         level={normalizeRisk(incident.risk_level ?? "MEDIUM")}
