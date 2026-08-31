@@ -8,6 +8,7 @@ the SPEC column names.
 
 from __future__ import annotations
 
+import json
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 _LIVE_INCIDENT_MARKERS = frozenset({"reported_date", "incident_id", "risk_level", "category"})
@@ -47,8 +48,10 @@ def normalize_incident_row(row: dict) -> dict:
         "duplicate_count": row.get("duplicate_count") or 0,
         "created_at": row.get("reported_date"),
         "resolved_at": row.get("resolved_date"),
+        "closed_at": row.get("resolved_date") if str(row.get("status") or "").upper() == "CLOSED" else None,
         "original_message_text": description,
         "site_id": row.get("equipment_involved"),
+        "is_anonymous": bool(row.get("is_anonymous") or False),
     }
 
 
@@ -84,19 +87,57 @@ def normalize_assignment_row(row: dict) -> dict:
     }
 
 
+def parse_update_envelope(message: object) -> dict | None:
+    """Decode a demo/live JSON envelope stored in incident_updates.message."""
+    payload: object = message
+    if isinstance(message, str):
+        text = message.strip()
+        if not text.startswith("{"):
+            return None
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            return None
+    if not isinstance(payload, dict):
+        return None
+    if not any(key in payload for key in ("update_type", "demo_key", "metadata")):
+        return None
+    return payload
+
+
 def normalize_update_row(row: dict) -> dict:
     if "update_id" not in row and "timestamp" not in row:
         return row
+    message = row.get("message")
+    meta = row.get("metadata") if isinstance(row.get("metadata"), dict) else None
+    update_type = row.get("update_type") or "timeline"
+    previous = row.get("previous_status")
+    new_status = row.get("status") or row.get("new_status")
+    actor_type = row.get("actor_type")
+    actor_ref = row.get("updated_by") or row.get("actor_reference")
+    decoded = parse_update_envelope(message)
+    if decoded is not None:
+        update_type = decoded.get("update_type") or update_type
+        previous = decoded.get("previous_status") or previous
+        new_status = decoded.get("new_status") or new_status
+        actor_type = decoded.get("actor_type") or actor_type
+        actor_ref = decoded.get("actor_reference") or actor_ref
+        inner_meta = decoded.get("metadata")
+        if isinstance(inner_meta, dict):
+            meta = {**(meta or {}), **inner_meta, "demo_key": decoded.get("demo_key")}
+        elif decoded.get("demo_key"):
+            meta = {**(meta or {}), "demo_key": decoded.get("demo_key")}
+        message = decoded.get("message") or message
     return {
         "id": coerce_uuid(row.get("update_id") or row.get("id")),
         "incident_id": coerce_uuid(row.get("incident_id")),
-        "update_type": row.get("update_type") or "timeline",
-        "previous_status": row.get("previous_status"),
-        "new_status": row.get("status") or row.get("new_status"),
-        "actor_type": row.get("actor_type"),
-        "actor_reference": row.get("updated_by") or row.get("actor_reference"),
-        "message": row.get("message"),
-        "metadata": row.get("metadata"),
+        "update_type": update_type,
+        "previous_status": previous,
+        "new_status": new_status,
+        "actor_type": actor_type,
+        "actor_reference": actor_ref,
+        "message": message,
+        "metadata": meta,
         "created_at": row.get("timestamp") or row.get("created_at"),
     }
 

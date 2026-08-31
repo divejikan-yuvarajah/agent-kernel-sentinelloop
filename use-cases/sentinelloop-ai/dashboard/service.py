@@ -37,6 +37,7 @@ from dashboard.schemas import (
 )
 from database.models import Assignment, Incident, IncidentEvidence, IncidentUpdate, RiskAssessment
 from database.repository import IncidentRepository
+from database.schema_map import parse_update_envelope
 from database.schemas import IncidentFilters
 from tools.duplicate_tools import duplicate_detection_stats
 from tools.lifecycle import to_display_status
@@ -69,25 +70,57 @@ _ROLE_AGENT = {"role_fast": "intake_agent", "role_reasoning": "risk_agent", "rol
 _TIMELINE_TITLES = {
     "incident_draft_started": "Report received",
     "incident_created": "Report received",
+    "intake_completed": "AI classified the report",
+    "risk_assessed": "Risk assessment generated",
     "evidence_added": "Evidence attached",
+    "evidence_uploaded": "Evidence attached",
     "status_transition": "Status updated",
     "slack_coordination_completed": "Officer assigned",
     "incident_assigned": "Officer assigned",
+    "incident_accepted": "Officer accepted",
+    "escalation_sent": "Incident escalated",
+    "guidance_sent": "Guidance sent to worker",
+    "guidance_generated": "Guidance generated",
+    "guidance_fallback": "Unsafe AI instruction blocked",
     "guidance_send_failed": "Worker guidance delayed",
     "slack_coordination_failed": "Coordination failed",
     "duplicate_report_linked": "AI merged reports",
     "duplicate_threshold_reached": "Priority increased",
+    "whatsapp_inbound": "Worker message received",
+    "whatsapp_outbound": "Reply sent to worker",
+    "incident_resolved": "Incident resolved",
+    "incident_closed": "Incident closed",
+    "incident_reopened": "Incident reopened",
+    "worker_verification_confirmed": "Worker confirmed the fix",
+    "supervisor_review": "Supervisor review recorded",
+    "system_note": "System note",
 }
 
 _ACTIVITY_KINDS = {
     "incident_draft_started": "New report",
     "incident_created": "New report",
+    "intake_completed": "AI intake",
+    "risk_assessed": "Risk assessed",
     "evidence_added": "Evidence",
+    "evidence_uploaded": "Evidence",
     "status_transition": "Status",
     "slack_coordination_completed": "Officer action",
     "incident_assigned": "Officer action",
+    "incident_accepted": "Officer action",
+    "escalation_sent": "Escalated",
     "duplicate_report_linked": "Duplicate report",
     "duplicate_threshold_reached": "Priority increase",
+    "whatsapp_inbound": "Worker report",
+    "whatsapp_outbound": "Guidance sent",
+    "guidance_sent": "Guidance sent",
+    "guidance_generated": "Guidance sent",
+    "guidance_fallback": "Guardrail blocked",
+    "incident_resolved": "Resolved",
+    "incident_closed": "Closed",
+    "incident_reopened": "Reopened",
+    "worker_verification_confirmed": "Worker confirmed",
+    "supervisor_review": "Supervisor review",
+    "system_note": "System note",
 }
 
 
@@ -107,6 +140,64 @@ def redact_text(value: str | None) -> str | None:
     if not value:
         return value
     return _PHONE_RE.sub("[redacted]", value)
+
+
+def _is_json_blob(value: str | None) -> bool:
+    text = (value or "").strip()
+    return text.startswith("{") and text.endswith("}")
+
+
+def unpack_update(update: IncidentUpdate) -> dict[str, Any]:
+    """Return display fields, decoding live JSON envelopes stored in `message`."""
+    update_type = update.update_type or "timeline"
+    message = update.message
+    meta = dict(update.metadata or {}) if isinstance(update.metadata, dict) else {}
+    previous = update.previous_status
+    new_status = update.new_status
+    decoded = parse_update_envelope(message)
+    if decoded is not None:
+        update_type = str(decoded.get("update_type") or update_type)
+        inner = decoded.get("message")
+        if isinstance(inner, str) and inner.strip():
+            message = inner
+        previous = decoded.get("previous_status") or previous
+        new_status = decoded.get("new_status") or new_status
+        inner_meta = decoded.get("metadata")
+        if isinstance(inner_meta, dict):
+            meta = {**meta, **inner_meta}
+        if decoded.get("demo_key"):
+            meta.setdefault("demo_key", decoded.get("demo_key"))
+    if isinstance(message, str) and _is_json_blob(message):
+        message = None
+    return {
+        "update_type": update_type,
+        "message": message,
+        "metadata": meta,
+        "previous_status": previous,
+        "new_status": new_status,
+    }
+
+
+def _activity_from_update(update: IncidentUpdate, incident_ref: str | None) -> ActivityEvent:
+    fields = unpack_update(update)
+    update_type = str(fields["update_type"])
+    kind = _ACTIVITY_KINDS.get(update_type, "System event")
+    summary = redact_text(fields["message"] if isinstance(fields["message"], str) else None)
+    if not summary:
+        previous = fields["previous_status"]
+        new_status = fields["new_status"]
+        if previous and new_status:
+            left = to_display_status(str(previous)) or previous
+            right = to_display_status(str(new_status)) or new_status
+            summary = f"{left} → {right}"
+        else:
+            summary = _TIMELINE_TITLES.get(update_type) or kind
+    return ActivityEvent(
+        timestamp=update.created_at,
+        kind=kind,
+        summary=summary,
+        incident_id=incident_ref,
+    )
 
 
 def mask_reporter(reporter_id: str, *, is_anonymous: bool = False) -> str:
@@ -518,16 +609,9 @@ class DashboardReadService:
                 )
             )
         updates = self._repo.list_recent_updates(limit=12)
-        refs = {item.id: item.incident_ref for item in incidents}
-        activity = [
-            ActivityEvent(
-                timestamp=row.created_at,
-                kind=_ACTIVITY_KINDS.get(row.update_type, "System event"),
-                summary=redact_text(row.message) or _timeline_title(row),
-                incident_id=refs.get(row.incident_id),
-            )
-            for row in updates
-        ]
+        refs = {str(item.id): item.incident_ref for item in incidents}
+        refs.update({item.incident_ref: item.incident_ref for item in incidents})
+        activity = [_activity_from_update(row, refs.get(str(row.incident_id))) for row in updates]
         qr_stats = _qr_location_stats(incidents)
         repeat_stats = _repeated_hazard_stats(incidents)
         return AnalyticsSummary(
@@ -816,11 +900,18 @@ class DashboardReadService:
                 )
             )
         for update in updates:
+            fields = unpack_update(update)
+            title = _timeline_title_for(str(fields["update_type"]), fields.get("new_status"))
+            detail = redact_text(fields["message"] if isinstance(fields["message"], str) else None)
+            if not detail and fields.get("previous_status") and fields.get("new_status"):
+                previous = to_display_status(str(fields["previous_status"])) or fields["previous_status"]
+                nxt = to_display_status(str(fields["new_status"])) or fields["new_status"]
+                detail = f"{previous} → {nxt}"
             events.append(
                 TimelineEvent(
                     timestamp=update.created_at,
-                    title=_timeline_title(update),
-                    detail=redact_text(update.message) or _status_detail(update),
+                    title=title,
+                    detail=detail,
                     actor=update.actor_type,
                 )
             )
@@ -845,10 +936,15 @@ class DashboardReadService:
 
 
 def _timeline_title(update: IncidentUpdate) -> str:
-    if update.update_type in _TIMELINE_TITLES:
-        return _TIMELINE_TITLES[update.update_type]
-    if update.update_type == "status_transition" and update.new_status:
-        display = to_display_status(update.new_status) or update.new_status
+    fields = unpack_update(update)
+    return _timeline_title_for(str(fields["update_type"]), fields.get("new_status"))
+
+
+def _timeline_title_for(update_type: str, new_status: object) -> str:
+    if update_type in _TIMELINE_TITLES:
+        return _TIMELINE_TITLES[update_type]
+    if update_type == "status_transition" and new_status:
+        display = to_display_status(str(new_status)) or str(new_status)
         mapping = {
             "Validating": "AI classification completed",
             "Assessed": "Risk assessment generated",
@@ -859,7 +955,7 @@ def _timeline_title(update: IncidentUpdate) -> str:
             "Closed": "Incident closed",
         }
         return mapping.get(display, f"Status: {display}")
-    return update.update_type.replace("_", " ").capitalize()
+    return update_type.replace("_", " ").capitalize()
 
 
 def _status_detail(update: IncidentUpdate) -> str | None:

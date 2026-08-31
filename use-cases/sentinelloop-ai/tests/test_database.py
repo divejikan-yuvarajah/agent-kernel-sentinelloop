@@ -42,8 +42,12 @@ class FakeQuery:
         self.payload = payload
         return self
 
+    def delete(self):
+        self.op = "delete"
+        return self
+
     def select(self, *_cols):
-        if self.op != "update":
+        if self.op not in {"update", "delete"}:
             self.op = "select"
         return self
 
@@ -167,6 +171,10 @@ class FakeBackend:
                 row.update(query.payload)
                 updated.append(dict(row))
             return FakeResponse(updated)
+        if query.op == "delete":
+            ids = {id(row) for row in matched}
+            self.tables[query.table][:] = [row for row in rows if id(row) not in ids]
+            return FakeResponse(list(matched))
         if query.order_by:
             column, desc = query.order_by
             matched = sorted(matched, key=lambda r: r.get(column) or "", reverse=bool(desc))

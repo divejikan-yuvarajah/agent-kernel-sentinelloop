@@ -200,3 +200,95 @@ def test_duplicate_provider_event_is_not_text_keyed():
     assert first is not None and second is not None
     assert first.provider_message_id != second.provider_message_id
     assert first.text == second.text
+
+
+def test_same_message_id_processed_once(mock_model_router):
+    import json
+
+    from agentkernel.core.session.in_memory import InMemorySessionStore
+
+    from agents.intake_agent import process_intake
+    from tests.conftest import run
+    from tools.model_router import ModelCallResult
+
+    mock_model_router.response = ModelCallResult(
+        content=json.dumps(
+            {
+                "language": "en",
+                "translated_text": "The electrical panel is sparking.",
+                "is_hazard_report": True,
+                "language_confidence": "high",
+                "hazard_confidence": "high",
+                "needs_clarification": False,
+            }
+        ),
+        model="mock/free",
+        role="role_fast",
+        paid=False,
+    )
+    store = InMemorySessionStore()
+    first = run(
+        process_intake(
+            "94771234567",
+            "The electrical panel is sparking.",
+            session_store=store,
+            call_model_fn=mock_model_router,
+            external_message_id="wamid.retry",
+        )
+    )
+    second = run(
+        process_intake(
+            "94771234567",
+            "The electrical panel is sparking.",
+            session_store=store,
+            call_model_fn=mock_model_router,
+            external_message_id="wamid.retry",
+        )
+    )
+    assert first.external_message_id == "wamid.retry"
+    assert second.external_message_id == "wamid.retry"
+    assert len(mock_model_router.calls) == 1
+
+
+def test_image_evidence_normalized_and_linked_to_incident():
+    from tests.conftest import FakeRepository, run
+
+    message = {
+        "id": "wamid.img-evidence",
+        "from": "94771234567",
+        "type": "image",
+        "image": {"id": "MEDIA-EV", "mime_type": "image/jpeg", "caption": "oil leak near machine 4"},
+    }
+    normalized = normalize_incoming_message(message)
+    assert normalized is not None
+    assert normalized.message_type == "image"
+    assert normalized.media is not None
+    assert normalized.media.media_id == "MEDIA-EV"
+    repo = FakeRepository()
+    incident_id = "INC-IMG"
+    stored = repo.add_evidence(
+        b"\xff\xd8fake",
+        incident_id,
+        "report",
+        metadata={"external_message_id": normalized.provider_message_id},
+        filename="photo.jpg",
+        content_type="image/jpeg",
+    )
+    assert stored["incident_id"] == incident_id
+    assert repo.evidence
+    assert repo.evidence[0][1] == incident_id
+    assert repo.evidence[0][2] == "report"
+
+
+def test_reply_to_clarification_extracts_context():
+    message = {
+        "id": "wamid.reply",
+        "from": "9477",
+        "type": "text",
+        "text": {"body": "Packing Area 3"},
+        "context": {"id": "wamid.question"},
+    }
+    normalized = normalize_incoming_message(message)
+    assert extract_reply_context(message) == "wamid.question"
+    assert normalized is not None
+    assert normalized.reply_to_message_id == "wamid.question"

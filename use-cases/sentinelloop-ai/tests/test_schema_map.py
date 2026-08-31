@@ -26,6 +26,7 @@ def test_live_incident_row_maps_to_spec_model():
                 "reporter_id": "whatsapp:+94770000000",
                 "reporter_language": "en",
                 "duplicate_count": 2,
+                "is_anonymous": True,
             }
         )
     )
@@ -35,6 +36,7 @@ def test_live_incident_row_maps_to_spec_model():
     assert incident.hazard_description == "Oil on floor near press"
     assert incident.current_risk_level == "HIGH"
     assert incident.source_channel == "whatsapp"
+    assert incident.is_anonymous is True
 
 
 def test_spec_incident_row_is_unchanged():
@@ -87,6 +89,40 @@ def test_related_live_rows_validate():
         )
     )
     assert update.update_type == "timeline"
+    encoded = IncidentUpdate.model_validate(
+        normalize_update_row(
+            {
+                "update_id": "44444444-4444-4444-4444-444444444445",
+                "incident_id": "SL-2026-000042",
+                "message": (
+                    '{"demo_key":"demo:guidance","update_type":"guidance_sent",'
+                    '"message":"Keep away from sparks.","metadata":{"knowledge_base_file":"electrical_safety.md"}}'
+                ),
+                "timestamp": "2026-08-31T10:03:00+00:00",
+                "updated_by": "guidance_agent",
+            }
+        )
+    )
+    assert encoded.update_type == "guidance_sent"
+    assert encoded.message == "Keep away from sparks."
+    assert (encoded.metadata or {}).get("knowledge_base_file") == "electrical_safety.md"
+    as_object = IncidentUpdate.model_validate(
+        normalize_update_row(
+            {
+                "update_id": "44444444-4444-4444-4444-444444444446",
+                "incident_id": "SL-2026-000042",
+                "message": {
+                    "demo_key": "demo:whatsapp",
+                    "update_type": "whatsapp_inbound",
+                    "message": "Crack appearing in the loading-bay beam",
+                },
+                "timestamp": "2026-08-31T10:04:00+00:00",
+                "updated_by": "worker",
+            }
+        )
+    )
+    assert as_object.update_type == "whatsapp_inbound"
+    assert as_object.message == "Crack appearing in the loading-bay beam"
     risk = RiskAssessment.model_validate(
         normalize_risk_row(
             {

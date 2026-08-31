@@ -667,6 +667,49 @@ def test_successful_call_appends_recent_calls(tmp_path: Path):
     run(router.aclose())
 
 
+def test_openrouter_budget_ceiling_blocks_paid_when_ledger_exceeds_limit(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_BUDGET_CEILING_USD", "0.01")
+    fake = FakeOpenRouter(
+        [
+            api_model(FREE_QWEN, "0", "0", 8000),
+            api_model(PAID_NEMO, "0.000000019", "0.00000003", 131072),
+        ]
+    )
+    fake.chat_status[FREE_QWEN] = 500
+    router = make_router(tmp_path, fake, budget=Decimal("0.01"))
+    run(router.ensure_catalog())
+    router._cumulative = Decimal("0.02")
+    result = run(router.call_model("role_fast", MESSAGES))
+    assert result.paid is False
+    assert result.budget_limited is True
+    assert all(call["model"] != PAID_NEMO for call in fake.chat_calls)
+    run(router.aclose())
+
+
+def test_budget_fallback_returns_clean_response_when_paid_blocked(tmp_path: Path):
+    fake = FakeOpenRouter(
+        [
+            api_model(FREE_QWEN, "0", "0", 8000),
+            api_model(PAID_NEMO, "0.000000019", "0.00000003", 131072),
+        ]
+    )
+    fake.chat_body[FREE_QWEN] = {
+        "id": "gen-fallback",
+        "model": FREE_QWEN,
+        "choices": [
+            {"finish_reason": "stop", "message": {"role": "assistant", "content": "Stay clear of the hazard."}}
+        ],
+        "usage": {"prompt_tokens": 8, "completion_tokens": 6, "total_tokens": 14},
+    }
+    router = make_router(tmp_path, fake, budget=Decimal("0"))
+    result = run(router.call_model("role_fast", MESSAGES))
+    assert result.paid is False
+    assert result.content
+    assert "Stay clear of the hazard." in result.content
+    assert result.error is None or result.budget_limited is True
+    run(router.aclose())
+
+
 @pytest.mark.skipif(os.environ.get("SENTINELLOOP_LIVE_OPENROUTER") != "1", reason="opt-in live OpenRouter smoke test")
 def test_live_openrouter_smoke():
     """Opt-in: SENTINELLOOP_LIVE_OPENROUTER=1. May call a free model."""

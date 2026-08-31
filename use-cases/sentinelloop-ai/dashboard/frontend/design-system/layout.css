@@ -179,11 +179,29 @@
 
 .ds-feed__item {
   display: grid;
-  grid-template-columns: 96px 1fr;
+  grid-template-columns: 96px minmax(0, 1fr);
   gap: var(--space-3);
   padding: var(--space-3) 0;
   border-bottom: 1px solid var(--border);
   font-size: var(--font-size-sm);
+}
+
+.ds-feed__body {
+  min-width: 0;
+}
+
+.ds-feed__ref {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--chalk-muted);
+}
+
+.ds-feed__summary {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .ds-feed__time {

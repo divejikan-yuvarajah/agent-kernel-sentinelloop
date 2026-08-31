@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -275,6 +276,22 @@ def guidance_from_updates(updates: list[Any]) -> dict[str, Any]:
             continue
         if meta.get("knowledge_base_file") or meta.get("hallucination_check"):
             return dict(meta)
-        if getattr(update, "update_type", None) in {"guidance_generated", "guidance_fallback"}:
+        envelope = None
+        message = getattr(update, "message", None)
+        if isinstance(message, str) and message.strip().startswith("{"):
+            try:
+                parsed = json.loads(message)
+                if isinstance(parsed, dict):
+                    envelope = parsed
+                    inner = parsed.get("metadata")
+                    if isinstance(inner, dict) and (
+                        inner.get("knowledge_base_file") or inner.get("hallucination_check")
+                    ):
+                        return dict(inner)
+            except json.JSONDecodeError:
+                envelope = None
+        if getattr(update, "update_type", None) in {"guidance_generated", "guidance_fallback", "guidance_sent"}:
             return dict(meta)
+        if envelope and envelope.get("update_type") in {"guidance_generated", "guidance_fallback", "guidance_sent"}:
+            return dict(envelope.get("metadata") or {})
     return {}

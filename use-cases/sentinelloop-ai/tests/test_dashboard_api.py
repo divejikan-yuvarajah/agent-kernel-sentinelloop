@@ -201,6 +201,67 @@ def test_analytics_and_recurring():
     assert chemical["recommendation"]
 
 
+def test_live_feed_decodes_json_envelopes():
+    backend = FakeBackend()
+    repo = IncidentRepository(backend, storage_bucket="evidence")
+    created = repo.create_incident(_create_payload(incident_ref="DEMO-HORIZON-009", status="ASSESSING"))
+    repo.add_update(
+        IncidentUpdateCreate(
+            incident_id=created.id,
+            update_type="timeline",
+            message=json.dumps(
+                {
+                    "demo_key": "demo_horizon_incident_009:wa_0",
+                    "update_type": "whatsapp_inbound",
+                    "message": "Crack appearing in the loading-bay beam",
+                    "actor_type": "worker",
+                    "metadata": {"channel": "whatsapp"},
+                }
+            ),
+        )
+    )
+    repo.add_update(
+        IncidentUpdateCreate(
+            incident_id=created.id,
+            update_type="timeline",
+            message=json.dumps(
+                {
+                    "demo_key": "demo_horizon_incident_009:lifecycle_0",
+                    "update_type": "status_transition",
+                    "message": "New → Validating",
+                    "previous_status": "REPORTED",
+                    "new_status": "ASSESSING",
+                }
+            ),
+        )
+    )
+    repo.add_update(
+        IncidentUpdateCreate(
+            incident_id=created.id,
+            update_type="timeline",
+            message=json.dumps(
+                {
+                    "update_type": "guidance_fallback",
+                    "message": "Invented instruction blocked; knowledge-base line released instead.",
+                    "metadata": {"hallucination_check": "Blocked"},
+                }
+            ),
+        )
+    )
+    client = _app(repo)
+    data = client.get("/api/analytics/summary").json()
+    events = data["recent_activity"]
+    assert events
+    assert not any(str(item["summary"]).lstrip().startswith("{") for item in events)
+    kinds = {item["kind"] for item in events}
+    summaries = {item["summary"] for item in events}
+    assert "Worker report" in kinds
+    assert "Guardrail blocked" in kinds
+    assert "Status" in kinds
+    assert "Crack appearing in the loading-bay beam" in summaries
+    assert "Invented instruction blocked; knowledge-base line released instead." in summaries
+
+
 def test_router_status_hides_secrets(tmp_path, monkeypatch):
     backend = FakeBackend()
     repo = IncidentRepository(backend, storage_bucket="evidence")
