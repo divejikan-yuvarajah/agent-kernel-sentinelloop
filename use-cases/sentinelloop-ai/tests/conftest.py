@@ -14,6 +14,7 @@ from uuid import uuid4
 import pytest
 
 from agents.prevention_agent import reset_prevention_stats
+from guardrails.emergency_bypass import reset_emergency_stats
 from guardrails.events import reset_guardrail_events
 from tools.duplicate_tools import reset_duplicate_detection_stats
 from tools.forecast_tools import reset_forecast_stats
@@ -33,12 +34,14 @@ def _isolate_guardrail_and_duplicate_state():
     reset_forecast_stats()
     reset_prevention_stats()
     reset_vision_stats()
+    reset_emergency_stats()
     yield
     reset_guardrail_events()
     reset_duplicate_detection_stats()
     reset_forecast_stats()
     reset_prevention_stats()
     reset_vision_stats()
+    reset_emergency_stats()
 
 
 class FakeRepository:
@@ -63,6 +66,22 @@ class FakeRepository:
 
     def list_incidents(self, filters=None):
         return list(self.rows)
+
+    def list_all_incidents(self, filters=None):
+        return list(self.rows)
+
+    def list_recent_updates(self, *, limit=20):
+        return list(self.updates)[-limit:]
+
+    def list_updates_for_incident(self, incident_id):
+        matched = []
+        for update in self.updates:
+            ident = getattr(update, "incident_id", None)
+            if ident is None and isinstance(update, dict):
+                ident = update.get("incident_id")
+            if str(ident) == str(incident_id):
+                matched.append(update)
+        return matched
 
     def get_incident(self, incident_id):
         for row in self.rows:

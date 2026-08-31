@@ -3,8 +3,7 @@ import { useMemo, useState } from "react";
 import { AppShell, Card, InputField, StatusIndicator } from "@ds/index";
 
 import { incidents, users, workers } from "../data/demoData";
-import { avatarFor, incidentThumbnail } from "../data/demoImages";
-import { EvidenceImage } from "../components/EvidenceImage";
+import { avatarFor } from "../data/demoImages";
 import { useDemoMode } from "../demo/useDemoMode";
 
 export function PeoplePage() {
@@ -92,16 +91,9 @@ export function PeoplePage() {
                 <p className="ds-empty">No matching incidents, equipment, or workers.</p>
               ) : (
                 incidentHits.slice(0, 8).map((row) => (
-                  <p key={row.incident_id} style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                    <EvidenceImage
-                      src={incidentThumbnail(row.incident_id, row.category, row.location)}
-                      alt=""
-                      className="ds-thumb"
-                    />
-                    <span>
-                      <span className="ds-mono">{row.incident_id}</span> · {row.category} · {row.location}
-                      {row.equipment ? ` · ${row.equipment}` : ""}
-                    </span>
+                  <p key={row.incident_id}>
+                    <span className="ds-mono">{row.incident_id}</span> · {row.category} · {row.location}
+                    {row.equipment ? ` · ${row.equipment}` : ""}
                   </p>
                 ))
               )}

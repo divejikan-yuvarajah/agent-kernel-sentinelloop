@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse
 from dashboard.schemas import (
     AnalyticsSummary,
     AuditExport,
+    EmergencyCommandCenter,
     GuardrailComplianceExport,
     GuardrailConfigView,
     GuardrailDebugEvent,
@@ -338,6 +339,21 @@ class DashboardHandler(RESTRequestHandler):
                 raise HTTPException(status_code=500, detail="internal dashboard failure") from None
 
         @router.get(
+            "/emergencies",
+            response_model=EmergencyCommandCenter,
+            summary="Emergency Command Center",
+            description="Read-only active emergencies, response metrics, timeline, and history.",
+        )
+        async def emergencies() -> EmergencyCommandCenter:
+            try:
+                return await asyncio.to_thread(self._reader().emergency_command_center)
+            except HTTPException:
+                raise
+            except Exception:
+                log.exception("dashboard emergencies failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
+        @router.get(
             "/telegram/health",
             response_model=TelegramBotStatus,
             summary="Telegram bot monitoring",
@@ -458,6 +474,7 @@ class DashboardHandler(RESTRequestHandler):
             "/analytics/summary",
             "/analytics/recurring",
             "/analytics/predictions",
+            "/emergencies",
             "/telegram/health",
             "/router/status",
             "/guardrails/status",

@@ -441,7 +441,7 @@ def test_emergency_skip_clarification():
             default=_incident(skip_clarification=True, needs_clarification=True, location=None, people_exposed=None),
         )
     )
-    result = run(orch.process_incoming_whatsapp_message(_msg(text="Panel is on fire now.")))
+    result = run(orch.process_incoming_whatsapp_message(_msg(text="Panel needs inspection at bay 3.")))
     assert result.clarification_required is False
     assert result.risk_completed is True
     assert result.guidance_sent is True
@@ -552,8 +552,8 @@ def test_duplicate_image_attaches_to_canonical():
             _msg(
                 provider_message_id="wamid.dupimg",
                 message_type="image",
-                text="chemical leaking here",
-                caption="chemical leaking here",
+                text="oil leaking here",
+                caption="oil leaking here",
                 media=WhatsAppMedia(media_id="MEDIA4", mime_type="image/jpeg", content=b"\xff\xd8chem"),
             )
         )

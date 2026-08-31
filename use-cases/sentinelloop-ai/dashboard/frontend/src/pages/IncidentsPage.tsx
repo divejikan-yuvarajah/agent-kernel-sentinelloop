@@ -179,7 +179,7 @@ export function IncidentsPage() {
         <p className="ds-empty">No active incidents. All safety issues are currently resolved.</p>
       ) : (
         <>
-          <div style={{ overflowX: "auto" }}>
+          <div className="ds-table-wrap">
             <table className="ds-table">
               <thead>
                 <tr>

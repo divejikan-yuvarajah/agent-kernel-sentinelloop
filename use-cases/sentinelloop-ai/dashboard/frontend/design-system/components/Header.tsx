@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 
+import { Icon } from "./Icon";
 import { StatusIndicator } from "./StatusIndicator";
 
 type Props = {
@@ -12,6 +13,8 @@ type Props = {
   openIncidentCount?: number;
   demo?: boolean;
   notifyHref?: string;
+  navOpen?: boolean;
+  onMenuClick?: () => void;
 };
 
 export function Header({
@@ -24,20 +27,29 @@ export function Header({
   openIncidentCount,
   demo = false,
   notifyHref = "/notifications",
+  navOpen = false,
+  onMenuClick,
 }: Props) {
   const hasAlerts = notificationCount > 0;
   const padded = openIncidentCount === undefined ? null : String(openIncidentCount).padStart(2, "0");
   return (
     <header className="ds-header">
-      <div>
+      <div className="ds-header__lead">
+        {onMenuClick ? (
+          <button
+            type="button"
+            className="ds-header__menu"
+            aria-label={navOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={navOpen}
+            onClick={onMenuClick}
+          >
+            <Icon name={navOpen ? "close" : "menu"} />
+          </button>
+        ) : null}
         {brand ? (
-          <p className="ds-brand ds-display" style={{ margin: 0 }}>
-            {brand}
-          </p>
+          <p className="ds-brand ds-display ds-header__title">{brand}</p>
         ) : (
-          <p className="ds-page-title" style={{ margin: 0, fontSize: "var(--font-size-lg)" }}>
-            {title}
-          </p>
+          <p className="ds-header__title">{title}</p>
         )}
       </div>
       <div className="ds-header__status">
@@ -85,4 +97,3 @@ export function Header({
     </header>
   );
 }
-

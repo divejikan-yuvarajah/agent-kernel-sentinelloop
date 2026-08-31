@@ -3,8 +3,6 @@ import { useEffect, useState } from "react";
 import { AppShell, Card, Panel } from "@ds/index";
 
 import { fetchAnalyticsSummary, fetchTelegramHealth, type TelegramBotStatus } from "../api/client";
-import { demoImages } from "../data/demoImages";
-import { EvidenceImage } from "../components/EvidenceImage";
 import { useDemoMode } from "../demo/useDemoMode";
 
 function ShareRows({ items }: { items: { label: string; percent: number }[] }) {
@@ -52,12 +50,6 @@ export function TelegramBotPage() {
         </p>
       ) : (
         <>
-          <Panel title="Worker Evidence" style={{ marginBottom: 24 }}>
-            <p>Reported by: Kamal</p>
-            <p>Channel: 📱 Telegram Image</p>
-            <p className="ds-mono">Uploaded: 10:32 AM · AI Processing: Completed</p>
-            <EvidenceImage src={demoImages.evidence["EV-422-T"].src} alt="Telegram worker photo" ratio="16/9" />
-          </Panel>
           <Panel title="Telegram Bot Status" style={{ marginBottom: 24 }}>
             <p>Connected {health?.connected ? "✓" : "—"}</p>
             <p>Polling Active {health?.polling_active ? "✓" : "—"}</p>

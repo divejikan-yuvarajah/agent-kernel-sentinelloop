@@ -374,6 +374,7 @@ class SentinelLoopWhatsAppHandler(_KernelWhatsAppHandler):  # type: ignore[misc]
         orchestrator: Any | None = None,
         transport: WhatsAppCloudTransport | None = None,
         skip_kernel_init: bool = False,
+        emergency_fn: Any | None = None,
     ) -> None:
         if not skip_kernel_init and _KernelWhatsAppHandler is not object:
             super().__init__()
@@ -381,6 +382,9 @@ class SentinelLoopWhatsAppHandler(_KernelWhatsAppHandler):  # type: ignore[misc]
             self._log = log
         self._transport = transport or WhatsAppCloudTransport()
         self._orchestrator = orchestrator
+        from guardrails.emergency_bypass import is_emergency_trigger
+
+        self._emergency_fn = emergency_fn or is_emergency_trigger
 
     async def _handle_message(self, message: dict, value: dict):
         return await self.handle_incoming_webhook_message(message, value)
@@ -395,6 +399,10 @@ class SentinelLoopWhatsAppHandler(_KernelWhatsAppHandler):  # type: ignore[misc]
         if normalized is None:
             return None
         log.info("whatsapp_inbound_received type=%s", normalized.message_type)
+        raw = normalized.text or normalized.caption or ""
+        if self._emergency_fn(raw):
+            normalized.emergency_bypass = True
+            log.info("whatsapp_emergency_bypass")
         if not normalized.supported:
             log.info("whatsapp_unsupported_type type=%s", normalized.message_type)
             try:

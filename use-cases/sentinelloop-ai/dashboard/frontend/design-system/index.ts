@@ -35,6 +35,8 @@ export { Button } from "./components/Button";
 export { Card } from "./components/Card";
 export { EvidenceViewer } from "./components/EvidenceViewer";
 export { Header } from "./components/Header";
+export { Icon } from "./components/Icon";
+export type { IconName } from "./components/Icon";
 export { IncidentOverviewCard } from "./components/IncidentOverviewCard";
 export { IncidentTimeline } from "./components/IncidentTimeline";
 export { InputField } from "./components/InputField";

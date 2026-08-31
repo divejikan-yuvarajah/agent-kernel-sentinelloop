@@ -6,6 +6,7 @@ export const tokens = {
     signalAmber: "#E8A33D",
     emberOrange: "#C9642E",
     hazardRed: "#D64545",
+    signalRed: "#FF2A2A",
     verifiedTeal: "#3FA796",
   },
   font: {

@@ -1,8 +1,6 @@
 import { AppShell, Button, Card, Panel } from "@ds/index";
 
 import { auditLogs, kpis, monthlyReports, organization } from "../data/demoData";
-import { demoImages } from "../data/demoImages";
-import { EvidenceImage } from "../components/EvidenceImage";
 import { useDemoMode } from "../demo/useDemoMode";
 
 function downloadReport() {
@@ -35,7 +33,6 @@ export function ReportsPage() {
       {demo ? (
         <>
           <Panel title="Monthly Safety Report · August 2026">
-            <EvidenceImage src={demoImages.reports.august} alt="Monthly safety report preview" ratio="16/9" />
             <p>Generated: 31 Aug 2026</p>
             <p>Total incidents: {kpis.totalIncidents}</p>
             <p>Critical: {kpis.criticalIncidents}</p>

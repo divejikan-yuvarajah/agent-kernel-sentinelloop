@@ -4,6 +4,8 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { CoordinationPage } from "./pages/CoordinationPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DuplicatesPage } from "./pages/DuplicatesPage";
+import { EmergencyHistoryPage } from "./pages/EmergencyHistoryPage";
+import { EmergencyPage } from "./pages/EmergencyPage";
 import { EvidencePage } from "./pages/EvidencePage";
 import { FollowUpPage } from "./pages/FollowUpPage";
 import { ForecastPage } from "./pages/ForecastPage";
@@ -30,6 +32,8 @@ export function App() {
     <Suspense fallback={<p className="ds-empty">Loading…</p>}>
       <Routes>
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/emergency" element={<EmergencyPage />} />
+        <Route path="/emergency/history" element={<EmergencyHistoryPage />} />
         <Route path="/incidents" element={<IncidentsPage />} />
         <Route path="/incidents/:incidentId" element={<IncidentDetailPage />} />
         <Route path="/evidence" element={<EvidencePage />} />

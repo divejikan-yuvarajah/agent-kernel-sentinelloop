@@ -19,6 +19,7 @@ from dashboard.schemas import (
     AuditAiDecision,
     AuditAssignmentChange,
     AuditCoordinationEvent,
+    AuditEmergencyBypass,
     AuditExport,
     AuditExtractedInformation,
     AuditGuidanceItem,
@@ -533,6 +534,42 @@ def _vision_suggestion(incident: Incident, updates: list[IncidentUpdate]) -> Aud
     )
 
 
+def _emergency_bypass(incident: Incident, updates: list[IncidentUpdate]) -> AuditEmergencyBypass | None:
+    bypass_meta: dict[str, Any] = {}
+    enrichment = False
+    response_ms: float | None = None
+    for update in updates:
+        meta = _meta(update)
+        kind = (update.update_type or "").lower()
+        if kind in {"emergency_bypass", "emergency_repeat"} or meta.get("bypass_used"):
+            bypass_meta = {**bypass_meta, **meta}
+        if kind == "emergency_enrichment_completed" or str(meta.get("later_enrichment") or "").lower() == "completed":
+            enrichment = True
+        raw_ms = meta.get("response_time_ms")
+        if raw_ms is not None:
+            try:
+                response_ms = float(raw_ms)
+            except (TypeError, ValueError):
+                pass
+    category = (incident.hazard_category or "").strip().lower()
+    if not bypass_meta and category != "unspecified-emergency":
+        return None
+    seconds = None
+    if response_ms is not None:
+        seconds = f"{response_ms / 1000.0:.1f} seconds"
+    return AuditEmergencyBypass(
+        detected=True,
+        reason="Emergency keyword detected",
+        trigger_keyword=str(bypass_meta.get("trigger_keyword") or "") or None,
+        ai_triage="Skipped initially",
+        response_time=seconds,
+        later_enrichment="Completed" if enrichment else str(bypass_meta.get("later_enrichment") or "Pending"),
+        detection_time=str(bypass_meta.get("detection_time") or "") or None,
+        bypass_used=True,
+        normal_ai_delayed=True,
+    )
+
+
 def build_audit_export(
     *,
     incident: Incident,
@@ -583,6 +620,7 @@ def build_audit_export(
         extracted_information=_extracted(incident, origin),
         ai_decision=_ai_decision(incident, assessment, ordered),
         vision_suggestion=_vision_suggestion(incident, ordered),
+        emergency_bypass=_emergency_bypass(incident, ordered),
         risk_analysis=_risk_analysis(incident, assessment),
         guidance_history=_guidance(ordered),
         coordination_history=_coordination(ordered),

@@ -110,9 +110,45 @@ export type DemoIncident = {
   input_channel?: "telegram" | "whatsapp" | "slack" | "email";
   message_type?: "text" | "image" | "voice";
   voice_duration_seconds?: number;
+  emergency?: boolean;
+  emergency_trigger?: string;
 };
 
 export const incidents: DemoIncident[] = [
+  {
+    incident_id: "INC-00421",
+    title: "Active workshop fire",
+    category: "unspecified-emergency",
+    location: "Electrical Room",
+    status: "OPEN",
+    risk_level: "CRITICAL",
+    risk_score: 25,
+    created_at: "2026-08-31T10:32:00+00:00",
+    assigned_officer: "A. Fernando",
+    assigned_team: "Emergency Response Team",
+    reporter_id: "whatsapp:demo_worker_003",
+    reporter_name: "James Cole",
+    language: "English",
+    original_text: "Fire now 🔥",
+    translated_text: "Fire now",
+    equipment: "Panel B17",
+    people_exposed: 4,
+    active: true,
+    injury: false,
+    duplicate_count: 0,
+    qr: false,
+    loop_stage: "alert",
+    severity: 5,
+    likelihood: 5,
+    risk_explanation: "Emergency keyword trigger — bypassed normal triage",
+    guidance: "Move to a safe location and wait for assistance.",
+    knowledge_base: "fire_safety.md",
+    guidance_status: "approved",
+    input_channel: "whatsapp",
+    message_type: "text",
+    emergency: true,
+    emergency_trigger: "🔥",
+  },
   {
     incident_id: "INC-2026-00421",
     title: "Electrical panel sparking",

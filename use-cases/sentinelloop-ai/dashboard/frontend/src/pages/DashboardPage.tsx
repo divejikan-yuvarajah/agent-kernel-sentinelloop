@@ -18,7 +18,7 @@ import type { AnalyticsSummary, IncidentSummary, LoopStage, RecurringHazard, Rou
 
 import { fetchAnalyticsSummary, fetchIncidents, fetchPredictions, fetchRecurring, fetchRouterStatus, requestInspection } from "../api/client";
 import { organization } from "../data/demoData";
-import { incidentThumbnail, locationImage, recentEvidenceFeed, locationRiskDemo } from "../data/demoImages";
+import { incidentThumbnail, recentEvidenceFeed, locationRiskDemo } from "../data/demoImages";
 import { EvidenceImage } from "../components/EvidenceImage";
 import { useDemoMode } from "../demo/useDemoMode";
 
@@ -67,7 +67,7 @@ export function DashboardPage() {
         if (cancelled) return;
         setIncidents(list.items);
         setSummary(analytics);
-        setRecurring(repeats.items.map((item) => ({ ...item, imageSrc: locationImage(item.location) })));
+        setRecurring(repeats.items);
         setRouter(routerStatus);
         setPredictions(forecast);
         setError(null);
@@ -96,9 +96,6 @@ export function DashboardPage() {
   );
   const trend = summary?.monthly_trend ?? [];
   const trendMax = Math.max(...trend.map((point) => point.value), 1);
-  const watchedLocations = locationRiskDemo.filter(
-    (site) => !recurring.some((item) => item.location === site.location),
-  );
   const kpis = [
     { label: "Total incidents", value: String(summary?.total_incidents ?? 0) },
     { label: "Open incidents", value: String(openCount) },
@@ -106,6 +103,11 @@ export function DashboardPage() {
     { label: "Resolved this month", value: String(summary?.resolved_this_month ?? summary?.resolved_today ?? 0) },
     { label: "Average response", value: summary?.avg_response_time ?? "—" },
     { label: "AI detection accuracy", value: summary?.ai_detection_accuracy ?? "—" },
+  ];
+  const emergencyKpis = [
+    { label: "Emergency Alerts Today", value: String(summary?.emergency_alerts_today ?? (demo ? 12 : 0)) },
+    { label: "Average Response Time", value: summary?.emergency_avg_response_time ?? (demo ? "1.8 seconds" : "—") },
+    { label: "Active Critical Incidents", value: String(summary?.active_critical_emergencies ?? summary?.critical_incidents ?? 0) },
   ];
 
   async function scheduleInspection(item: PredictionItem) {
@@ -152,6 +154,18 @@ export function DashboardPage() {
       <div className="ds-kpi">
         {kpis.map((item) => (
           <Card key={item.label} variant="analytics-card" loading={loading}>
+            {loading ? null : (
+              <>
+                <p className="ds-metric__label">{item.label}</p>
+                <p className="ds-metric__value">{item.value}</p>
+              </>
+            )}
+          </Card>
+        ))}
+      </div>
+      <div className="ds-grid ds-grid--metrics-3" style={{ marginBottom: 24 }}>
+        {emergencyKpis.map((item) => (
+          <Card key={item.label} className="ds-emergency-card" variant="analytics-card" loading={loading}>
             {loading ? null : (
               <>
                 <p className="ds-metric__label">{item.label}</p>
@@ -360,24 +374,7 @@ export function DashboardPage() {
           )}
         </Panel>
         <Panel title="Learn · recurring hazards" titleTooltip="We learn recurring problems.">
-          <div className="ds-learn-fill">
-            <RecurringHazardsWidget items={recurring.slice(0, watchedLocations.length ? 2 : 4)} loading={loading} dense />
-            {!loading && watchedLocations.length > 0 ? (
-              <ul className="ds-learn-watch" aria-label="Other watched locations">
-                {watchedLocations.map((site) => (
-                  <li key={site.location}>
-                    <EvidenceImage src={site.src} alt={site.location} ratio="1/1" />
-                    <span>
-                      <strong>{site.location}</strong>
-                      <span className="ds-mono">
-                        {site.active} active · {site.risk}
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
+          <RecurringHazardsWidget items={recurring.slice(0, 4)} loading={loading} dense />
         </Panel>
       </div>
     </AppShell>

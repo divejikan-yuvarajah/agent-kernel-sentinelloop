@@ -248,6 +248,9 @@ class AnalyticsSummary(_Out):
     telegram_message_types: dict[str, float] = Field(default_factory=dict)
     telegram_languages: dict[str, float] = Field(default_factory=dict)
     vision_analytics: VisionAnalytics = Field(default_factory=VisionAnalytics)
+    emergency_alerts_today: int = 0
+    emergency_avg_response_time: str | None = None
+    active_critical_emergencies: int = 0
 
 
 class RecurringHazard(_Out):
@@ -489,6 +492,55 @@ class AuditVisionSuggestion(_Out):
     suggestion_only: bool = True
 
 
+class AuditEmergencyBypass(_Out):
+    detected: bool = False
+    reason: str | None = None
+    trigger_keyword: str | None = None
+    ai_triage: str | None = None
+    response_time: str | None = None
+    later_enrichment: str | None = None
+    detection_time: str | None = None
+    bypass_used: bool = False
+    normal_ai_delayed: bool = False
+
+
+class EmergencyActiveCard(_Out):
+    incident_id: str
+    location: str | None = None
+    time: str | None = None
+    response: str = "Team Notified"
+    lifecycle: str | None = None
+    channel: str | None = None
+    trigger: str | None = None
+
+
+class EmergencyTimelineEvent(_Out):
+    time: str | None = None
+    event: str
+
+
+class EmergencyHistoryRow(_Out):
+    incident_id: str
+    trigger: str | None = None
+    channel: str | None = None
+    detection_time: str | None = None
+    response_time: str | None = None
+    resolution: str | None = None
+
+
+class EmergencyMetrics(_Out):
+    emergency_alerts_today: int = 0
+    average_response_time: str | None = None
+    active_critical_incidents: int = 0
+
+
+class EmergencyCommandCenter(_Out):
+    metrics: EmergencyMetrics = Field(default_factory=EmergencyMetrics)
+    active: list[EmergencyActiveCard] = Field(default_factory=list)
+    timeline: list[EmergencyTimelineEvent] = Field(default_factory=list)
+    history: list[EmergencyHistoryRow] = Field(default_factory=list)
+
+
 class AuditExport(_Out):
     """Inspector-ready explainable-AI packet for one incident. Read-only."""
 
@@ -504,6 +556,7 @@ class AuditExport(_Out):
     incident_timeline: list[AuditTimelineEvent] = Field(default_factory=list)
     resolution: AuditResolution
     vision_suggestion: AuditVisionSuggestion | None = None
+    emergency_bypass: AuditEmergencyBypass | None = None
     audit_metadata: AuditMetadata
 
 

@@ -19,6 +19,11 @@ from dashboard.schemas import (
     AnalyticsSummary,
     ChannelShare,
     DuplicateIntelligence,
+    EmergencyActiveCard,
+    EmergencyCommandCenter,
+    EmergencyHistoryRow,
+    EmergencyMetrics,
+    EmergencyTimelineEvent,
     EvidenceItem,
     IncidentDetail,
     IncidentListResponse,
@@ -106,6 +111,12 @@ _TIMELINE_TITLES = {
     "whatsapp_inbound": "Worker message received",
     "vision_suggestion": "Vision AI analyzed image",
     "vision_override": "Human overrode vision suggestion",
+    "emergency_bypass": "Emergency keyword detected",
+    "emergency_repeat": "Repeated emergency message attached",
+    "emergency_slack_alert": "Slack alert sent",
+    "emergency_worker_notified": "Worker notified",
+    "emergency_enrichment_completed": "AI enrichment completed",
+    "emergency_enrichment_failed": "AI enrichment unavailable",
     "whatsapp_outbound": "Reply sent to worker",
     "incident_resolved": "Incident resolved",
     "incident_closed": "Incident closed",
@@ -370,6 +381,66 @@ def _is_open(incident: Incident) -> bool:
 
 def _is_critical(incident: Incident) -> bool:
     return normalize_risk_level(incident.current_risk_level) == "CRITICAL"
+
+
+def _emergency_lifecycle(incident: Incident) -> str:
+    status = (to_display_status(incident.status) or incident.status or "").strip()
+    mapping = {
+        "New": "Emergency Detected",
+        "Validating": "Emergency Detected",
+        "Assessed": "Critical Review",
+        "Assigned": "Assigned",
+        "Accepted": "Assigned",
+        "In Progress": "Assigned",
+        "Awaiting Verification": "Assigned",
+        "Resolved": "Resolved",
+        "Closed": "Resolved",
+    }
+    return mapping.get(status, "Critical Review")
+
+
+def _stats_active_cards(records: list[Any]) -> list[EmergencyActiveCard]:
+    cards: list[EmergencyActiveCard] = []
+    for row in records:
+        if getattr(row, "lifecycle", "") in {"Resolved", "Closed"}:
+            continue
+        stamp = str(getattr(row, "detection_time", "") or "")
+        clock = None
+        if "T" in stamp:
+            try:
+                clock = datetime.fromisoformat(stamp.replace("Z", "+00:00")).strftime("%I:%M %p").lstrip("0")
+            except ValueError:
+                clock = stamp
+        cards.append(
+            EmergencyActiveCard(
+                incident_id=row.incident_ref,
+                location=row.location,
+                time=clock,
+                response="Team Notified",
+                lifecycle=row.lifecycle,
+                channel=row.channel,
+                trigger=row.trigger_keyword,
+            )
+        )
+    return cards
+
+
+def _stats_history_rows(records: list[Any]) -> list[EmergencyHistoryRow]:
+    rows: list[EmergencyHistoryRow] = []
+    for row in records:
+        ms = getattr(row, "response_time_ms", None)
+        response = f"{float(ms) / 1000.0:.1f} seconds" if ms is not None else None
+        rows.append(
+            EmergencyHistoryRow(
+                incident_id=row.incident_ref,
+                trigger=row.trigger_keyword,
+                channel=row.channel,
+                detection_time=row.detection_time,
+                response_time=response,
+                resolution=row.lifecycle,
+            )
+        )
+    return rows
 
 
 def _parse_sort(sort_by: str | None, sort_order: str | None) -> tuple[str, str]:
@@ -651,6 +722,16 @@ class DashboardReadService:
         activity = [_activity_from_update(row, refs.get(str(row.incident_id))) for row in updates]
         qr_stats = _qr_location_stats(incidents)
         repeat_stats = _repeated_hazard_stats(incidents)
+        from guardrails.emergency_bypass import emergency_stats
+
+        emergency_snapshot = emergency_stats()
+        live = self._emergency_from_repository(incidents, vision_updates)
+        if live["alerts_today"] > emergency_snapshot["emergency_alerts_today"]:
+            emergency_snapshot["emergency_alerts_today"] = live["alerts_today"]
+        if live["active_critical"] > emergency_snapshot["active_critical_incidents"]:
+            emergency_snapshot["active_critical_incidents"] = live["active_critical"]
+        if live["average_response_time"] and not emergency_snapshot["average_response_time"]:
+            emergency_snapshot["average_response_time"] = live["average_response_time"]
         return AnalyticsSummary(
             total_incidents=total,
             open_incidents=open_n,
@@ -673,6 +754,9 @@ class DashboardReadService:
             duplicate_detection_stats=duplicate_detection_stats(),
             reports_by_channel=_channel_share(incidents),
             vision_analytics=_vision_analytics(incidents, vision_updates),
+            emergency_alerts_today=int(emergency_snapshot["emergency_alerts_today"]),
+            emergency_avg_response_time=emergency_snapshot["average_response_time"],
+            active_critical_emergencies=int(emergency_snapshot["active_critical_incidents"]),
         )
 
     def telegram_status(self) -> TelegramBotStatus:
@@ -703,6 +787,115 @@ class DashboardReadService:
                 "Voice": round(100 * health.voice_reports / total_types, 1),
             },
         )
+
+    def emergency_command_center(self) -> EmergencyCommandCenter:
+        incidents = self._repo.list_all_incidents()
+        updates = self._repo.list_recent_updates(limit=400)
+        from guardrails.emergency_bypass import emergency_stats
+
+        snapshot = emergency_stats()
+        live = self._emergency_from_repository(incidents, updates)
+        alerts = max(int(snapshot["emergency_alerts_today"]), live["alerts_today"])
+        active_critical = max(int(snapshot["active_critical_incidents"]), live["active_critical"])
+        avg = snapshot["average_response_time"] or live["average_response_time"]
+        return EmergencyCommandCenter(
+            metrics=EmergencyMetrics(
+                emergency_alerts_today=alerts,
+                average_response_time=avg,
+                active_critical_incidents=active_critical,
+            ),
+            active=live["active"] or _stats_active_cards(snapshot["records"]),
+            timeline=live["timeline"],
+            history=live["history"] or _stats_history_rows(snapshot["records"]),
+        )
+
+    def _emergency_from_repository(self, incidents: list[Incident], updates: list[IncidentUpdate]) -> dict[str, Any]:
+        by_id: dict[str, Incident] = {}
+        for incident in incidents:
+            by_id[str(incident.id)] = incident
+            by_id[incident.incident_ref] = incident
+        bypass_ids: dict[str, dict[str, Any]] = {}
+        timeline: list[EmergencyTimelineEvent] = []
+        response_ms: list[float] = []
+        today = _utcnow().date()
+        alerts_today = 0
+        for update in updates:
+            fields = unpack_update(update)
+            kind = str(fields["update_type"] or "")
+            meta = fields.get("metadata") if isinstance(fields.get("metadata"), dict) else {}
+            incident = by_id.get(str(update.incident_id))
+            stamp = _aware(update.created_at)
+            clock = stamp.strftime("%H:%M:%S") if stamp else None
+            title = _TIMELINE_TITLES.get(kind)
+            if title:
+                timeline.append(EmergencyTimelineEvent(time=clock, event=title))
+            if kind == "emergency_bypass" or meta.get("bypass_used"):
+                ident = incident.incident_ref if incident is not None else str(update.incident_id)
+                bypass_ids[ident] = {"incident": incident, "meta": meta, "update": update}
+                if stamp is not None and stamp.date() == today:
+                    alerts_today += 1
+                raw_ms = meta.get("response_time_ms")
+                if raw_ms is not None:
+                    try:
+                        response_ms.append(float(raw_ms))
+                    except (TypeError, ValueError):
+                        pass
+        for incident in incidents:
+            if (incident.hazard_category or "").lower() == "unspecified-emergency":
+                bypass_ids.setdefault(incident.incident_ref, {"incident": incident, "meta": {}, "update": None})
+        active: list[EmergencyActiveCard] = []
+        history: list[EmergencyHistoryRow] = []
+        active_critical = 0
+        for ident, payload in bypass_ids.items():
+            incident = payload.get("incident")
+            meta = payload.get("meta") or {}
+            if incident is None:
+                continue
+            open_row = _is_open(incident) or (incident.status or "").upper() not in CLOSED_STATUSES
+            lifecycle = _emergency_lifecycle(incident)
+            if _is_critical(incident) and open_row:
+                active_critical += 1
+            created = _aware(incident.created_at)
+            card = EmergencyActiveCard(
+                incident_id=incident.incident_ref,
+                location=incident.location,
+                time=created.strftime("%I:%M %p").lstrip("0") if created else None,
+                response="Team Notified",
+                lifecycle=lifecycle,
+                channel=incident.source_channel,
+                trigger=str(meta.get("trigger_keyword") or "") or None,
+            )
+            if open_row and lifecycle != "Resolved":
+                active.append(card)
+            ms = meta.get("response_time_ms")
+            response_label = None
+            if ms is not None:
+                try:
+                    response_label = f"{float(ms) / 1000.0:.1f} seconds"
+                except (TypeError, ValueError):
+                    response_label = None
+            history.append(
+                EmergencyHistoryRow(
+                    incident_id=incident.incident_ref,
+                    trigger=str(meta.get("trigger_keyword") or "") or None,
+                    channel=incident.source_channel,
+                    detection_time=created.isoformat() if created else str(meta.get("detection_time") or "") or None,
+                    response_time=response_label,
+                    resolution=lifecycle,
+                )
+            )
+        avg = None
+        if response_ms:
+            avg = f"{(sum(response_ms) / len(response_ms)) / 1000.0:.1f} seconds"
+        timeline.sort(key=lambda item: item.time or "")
+        return {
+            "alerts_today": alerts_today or len(bypass_ids),
+            "active_critical": active_critical,
+            "average_response_time": avg,
+            "active": active,
+            "timeline": timeline[-12:],
+            "history": history,
+        }
 
     def recurring_hazards(self, *, window_days: int = 30, threshold: int = 3) -> RecurringResponse:
         incidents = self._repo.list_all_incidents()

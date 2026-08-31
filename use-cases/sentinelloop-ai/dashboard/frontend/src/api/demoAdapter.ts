@@ -11,7 +11,7 @@ import type {
   PredictionsResponse,
 } from "@ds/types";
 
-import type { AuditExport, IncidentDetail, IncidentListResponse } from "./client";
+import type { AuditExport, EmergencyCommandCenter, IncidentDetail, IncidentListResponse } from "./client";
 import {
   activity,
   categoryShare,
@@ -165,8 +165,16 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
     (item) => item.incident_id !== row.incident_id && item.category === row.category && item.location === row.location,
   );
   const ev = evidenceRecords.filter((item) => item.incident_id === row.incident_id);
-  const timeline = [
-    { timestamp: clockFrom(row.created_at, 0), title: "Worker uploaded image", detail: row.input_channel || "image", actor: "worker" },
+  const timeline = row.emergency
+    ? [
+        { timestamp: "10:32:01", title: "Emergency keyword detected", detail: row.emergency_trigger || "🔥", actor: "emergency_bypass" },
+        { timestamp: "10:32:02", title: "Critical incident created", detail: row.incident_id, actor: "repository" },
+        { timestamp: "10:32:03", title: "Slack alert sent", detail: "Emergency Response Channel", actor: "slack" },
+        { timestamp: "10:32:04", title: "Worker notified", detail: "Fixed safety reply", actor: "whatsapp" },
+        { timestamp: "10:34:20", title: "AI enrichment completed", detail: row.category, actor: "intake_agent" },
+      ]
+    : [
+        { timestamp: clockFrom(row.created_at, 0), title: "Worker uploaded image", detail: row.input_channel || "image", actor: "worker" },
     { timestamp: clockFrom(row.created_at, 1), title: "Vision AI analyzed image", detail: "role_vision", actor: "incident_agent" },
     {
       timestamp: clockFrom(row.created_at, 1),
@@ -394,6 +402,9 @@ export function fetchAnalyticsSummary(): Promise<AnalyticsSummary> {
     anonymous_reports: kpis.anonymousReports,
     average_detection: kpis.averageDetection,
     average_assignment: kpis.averageAssignment,
+    emergency_alerts_today: 12,
+    emergency_avg_response_time: "1.8 seconds",
+    active_critical_emergencies: 4,
     vision_analytics: {
       images_analyzed: 142,
       high_confidence_detections: 87,
@@ -674,6 +685,19 @@ export function fetchAuditExport(id: string): Promise<AuditExport> {
       changed_by: null,
       suggestion_only: true,
     },
+    emergency_bypass: row.emergency
+      ? {
+          detected: true,
+          reason: "Emergency keyword detected",
+          trigger_keyword: row.emergency_trigger || "🔥",
+          ai_triage: "Skipped initially",
+          response_time: "1.4 seconds",
+          later_enrichment: "Completed",
+          detection_time: row.created_at,
+          bypass_used: true,
+          normal_ai_delayed: true,
+        }
+      : null,
     resolution: {
       status: row.status,
       resolution_message: row.status === "CLOSED" ? "Worker confirmed the area is safe." : null,
@@ -788,6 +812,46 @@ export function fetchComplianceExport(): Promise<GuardrailComplianceExport> {
     ai_spend_usd: 1.12,
     budget_ceiling_usd: 3,
     audit_note: "AI does not control safety-critical outcomes without validation.",
+  });
+}
+
+export function fetchEmergencies(): Promise<EmergencyCommandCenter> {
+  const emergencyRows = incidents.filter((row) => row.emergency || row.category === "unspecified-emergency" || row.risk_level === "CRITICAL");
+  const featured = incidents.find((row) => row.incident_id === "INC-00421") || emergencyRows[0];
+  return wait({
+    metrics: {
+      emergency_alerts_today: 12,
+      average_response_time: "1.8 seconds",
+      active_critical_incidents: 4,
+    },
+    active: featured
+      ? [
+          {
+            incident_id: featured.incident_id,
+            location: featured.location,
+            time: "10:32 AM",
+            response: "Team Notified",
+            lifecycle: "Critical Review",
+            channel: featured.input_channel || "whatsapp",
+            trigger: featured.emergency_trigger || "🔥",
+          },
+        ]
+      : [],
+    timeline: [
+      { time: "10:32:01", event: "Emergency keyword detected" },
+      { time: "10:32:02", event: "Critical incident created" },
+      { time: "10:32:03", event: "Slack alert sent" },
+      { time: "10:32:04", event: "Worker notified" },
+      { time: "10:34:20", event: "AI enrichment completed" },
+    ],
+    history: emergencyRows.slice(0, 8).map((row) => ({
+      incident_id: row.incident_id,
+      trigger: row.emergency_trigger || (row.emergency ? "SOS" : "🔥"),
+      channel: row.input_channel || "whatsapp",
+      detection_time: row.created_at,
+      response_time: "1.4 seconds",
+      resolution: row.status === "CLOSED" || row.status === "RESOLVED" ? "Resolved" : "Critical Review",
+    })),
   });
 }
 

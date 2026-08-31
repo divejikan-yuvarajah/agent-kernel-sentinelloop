@@ -208,6 +208,9 @@ export type AnalyticsSummary = {
       total_images: number;
     }[];
   };
+  emergency_alerts_today?: number;
+  emergency_avg_response_time?: string | null;
+  active_critical_emergencies?: number;
 };
 
 export type TimelineEvent = {

@@ -6,8 +6,11 @@ coordination → repository. Does not re-implement agent logic.
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import logging
+import time
+from datetime import datetime, timezone
 from inspect import isawaitable
 from pathlib import Path
 from typing import Any
@@ -16,6 +19,22 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from database.schemas import EvidenceCreate, EvidenceFile, IncidentCreate, IncidentUpdateCreate
+from guardrails.emergency_bypass import (
+    attach_emergency_message,
+    detect_emergency,
+    emergency_audit_payload,
+    format_emergency_slack_alert,
+    is_emergency_trigger,
+    mark_emergency_enrichment,
+    record_emergency_alert,
+    worker_emergency_reply,
+)
+from guardrails.emergency_keywords import (
+    DUPLICATE_WINDOW_SECONDS,
+    EMERGENCY_CATEGORY,
+    EMERGENCY_RISK_LEVEL,
+)
+from integrations.slack_handler import SlackHandler, SlackPostError
 from integrations.telegram_handler import TelegramSendError, format_status_card, inline_keyboard
 from integrations.whatsapp import WhatsAppSendError, parse_action_id
 from integrations.whatsapp_handler import (
@@ -23,6 +42,7 @@ from integrations.whatsapp_handler import (
     NormalizedWhatsAppMessage,
     WhatsAppCloudTransport,
 )
+from tools.assignment_tools import load_team_destinations
 from tools.duplicate_tools import DuplicateResult, check_duplicate_incident, handle_duplicate_match
 from tools.idempotency import EventIdempotencyStore, event_key
 from tools.lifecycle import (
@@ -48,6 +68,7 @@ NV_PENDING_MEDIA = "pending_media"
 NV_CLARIFICATION_INDEX = "clarification_message_index"
 NV_LANGUAGE = "detected_language"
 NV_STAGE = "workflow_stage"
+NV_EMERGENCY = "emergency_incident"
 NV_ORCH_RESULT = "last_orchestration_result"
 NV_VERIFICATION = "pending_worker_verification"
 NV_LAST_RESULT = "last_intake_result"
@@ -93,6 +114,9 @@ def _as_dict(value: Any) -> dict[str, Any]:
         data = dump()
         if isinstance(data, dict):
             return data
+    raw = getattr(value, "__dict__", None)
+    if isinstance(raw, dict):
+        return {key: item for key, item in raw.items() if not key.startswith("_")}
     return {}
 
 
@@ -161,6 +185,8 @@ class IncidentOrchestrator:
         guidance_fn: Any | None = None,
         session_store: Any | None = None,
         idempotency: EventIdempotencyStore | None = None,
+        slack: SlackHandler | None = None,
+        emergency_fn: Any | None = None,
     ) -> None:
         self.repository = repository
         self.whatsapp = whatsapp or WhatsAppCloudTransport()
@@ -174,10 +200,15 @@ class IncidentOrchestrator:
         self.guidance_fn = guidance_fn
         self.session_store = session_store
         self.idempotency = idempotency or EventIdempotencyStore()
+        self.slack = slack
+        self.emergency_fn = emergency_fn or is_emergency_trigger
         self.pipeline_trace: list[str] = []
         self._pending_media: dict[str, dict[str, Any]] = {}
         self._processed_evidence: set[str] = set()
         self._ref_seq = 0
+        self._emergency_open: dict[str, dict[str, Any]] = {}
+        self._emergency_tasks: list[asyncio.Task[Any]] = []
+        self._worker_retry_queue: list[dict[str, Any]] = []
         self._stats: dict[str, int] = {
             "incoming_whatsapp_reports": 0,
             "incoming_telegram_reports": 0,
@@ -336,9 +367,11 @@ class IncidentOrchestrator:
             if parsed and parsed.get("action") in {ACTION_YES, ACTION_STILL_EXISTS, ACTION_UNSURE}:
                 return await self._handle_verification(message, ak_session, store, parsed)
 
-        if getattr(message, "emergency_bypass", False):
+        raw = message.text or message.caption or ""
+        if getattr(message, "emergency_bypass", False) or self.emergency_fn(raw):
+            message.emergency_bypass = True
             self._trace("emergency_bypass")
-            return await self.process_new_report(message, session=ak_session, store=store)
+            return await self.process_emergency_report(message, session=ak_session, store=store)
 
         pending = bool(_cache_get(ak_session, NV_PENDING))
         index = dict(_cache_get(ak_session, NV_CLARIFICATION_INDEX) or {})
@@ -411,6 +444,328 @@ class IncidentOrchestrator:
             incident_id=parsed.get("incident_id"),
             canonical_incident_id=parsed.get("incident_id"),
         )
+
+    def _slack(self) -> SlackHandler:
+        if self.slack is None:
+            self.slack = SlackHandler(destinations=load_team_destinations())
+        return self.slack
+
+    def _open_emergency(self, sender_id: str) -> dict[str, Any] | None:
+        row = self._emergency_open.get(sender_id)
+        if not row:
+            return None
+        opened = row.get("opened_at")
+        if not isinstance(opened, datetime):
+            return None
+        age = (datetime.now(timezone.utc) - opened).total_seconds()
+        if age > DUPLICATE_WINDOW_SECONDS:
+            return None
+        return row
+
+    async def wait_for_emergency_enrichment(self) -> None:
+        pending = [task for task in self._emergency_tasks if not task.done()]
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+    async def process_emergency_report(
+        self,
+        message: NormalizedWhatsAppMessage,
+        *,
+        session: Any,
+        store: Any,
+    ) -> OrchestrationResult:
+        """Immediate human-response path. No LLM until Slack and worker reply complete."""
+        started = time.perf_counter()
+        raw = message.text or message.caption or ""
+        match = detect_emergency(raw)
+        self._trace("emergency_detection")
+        detection_time = datetime.now(timezone.utc).isoformat()
+        channel = self._channel(message)
+        location = match.possible_location
+        language = match.language or _cache_get(session, NV_LANGUAGE) or "en"
+        existing = self._open_emergency(message.sender_id)
+        repeated = existing is not None
+
+        merged: dict[str, Any] = {
+            "raw_text": raw,
+            "translated_text": raw,
+            "language": language,
+            "is_hazard_report": True,
+            "skip_clarification": True,
+            "hazard_category": EMERGENCY_CATEGORY,
+            "current_risk_level": EMERGENCY_RISK_LEVEL,
+            "location": location,
+            "possible_location": location,
+            "emergency_bypass": True,
+            "input_channel": channel,
+            "session_id": getattr(session, "id", None) or message.sender_id,
+        }
+        if existing:
+            merged["id"] = existing.get("id")
+            merged["incident_id"] = existing.get("incident_id")
+            merged["incident_ref"] = existing.get("incident_id")
+            attach_emergency_message(str(existing.get("incident_id")), raw)
+            await self._audit(
+                merged,
+                "emergency_repeat",
+                message=raw,
+                metadata=emergency_audit_payload(
+                    triggered=True,
+                    trigger_keyword=match.trigger_keyword,
+                    detection_time=detection_time,
+                    possible_location=location,
+                    repeated=True,
+                ),
+            )
+            self._trace("emergency_repeat")
+        else:
+            created = await self._create_emergency_incident(merged, message, session)
+            merged.update(created)
+            self._trace("emergency_incident_created")
+            self._emergency_open[message.sender_id] = {
+                "id": merged.get("id"),
+                "incident_id": merged.get("incident_id"),
+                "opened_at": datetime.now(timezone.utc),
+            }
+            _cache_set(session, NV_CANONICAL, merged.get("incident_id"))
+            _cache_set(session, NV_CANONICAL_UUID, str(merged.get("id")) if merged.get("id") else None)
+            _cache_set(session, NV_EMERGENCY, True)
+            _cache_set(session, NV_LANGUAGE, language)
+
+        slack_ok = await self._send_emergency_slack(
+            source=channel,
+            message_text=raw,
+            incident_ref=str(merged.get("incident_id") or ""),
+            location=location,
+        )
+        self._trace("emergency_slack_alert")
+        if slack_ok:
+            await self._audit(
+                merged,
+                "emergency_slack_alert",
+                message="Emergency Response Channel notified",
+                metadata={"channel": "Emergency Response Channel", "ok": True},
+            )
+
+        reply = worker_emergency_reply(language)
+        worker_ok = await self._send_emergency_worker_reply(message, reply)
+        self._trace("emergency_worker_reply")
+        response_ms = (time.perf_counter() - started) * 1000
+        if worker_ok:
+            await self._audit(
+                merged,
+                "emergency_worker_notified",
+                message="Fixed emergency reply sent",
+                metadata={"delivery": "sent", "response_time_ms": response_ms},
+            )
+        else:
+            self._worker_retry_queue.append(
+                {"to": message.sender_id, "text": reply, "channel": channel, "incident_id": merged.get("incident_id")}
+            )
+            await self._retry_emergency_worker_reply(message, reply)
+            await self._audit(
+                merged,
+                "emergency_worker_notified",
+                message="Worker notification queued for retry",
+                metadata={"delivery": "retry", "response_time_ms": response_ms},
+            )
+
+        if not repeated:
+            await self._audit(
+                merged,
+                "emergency_bypass",
+                message="Emergency keyword detected",
+                new_status="Emergency Detected",
+                metadata=emergency_audit_payload(
+                    triggered=True,
+                    trigger_keyword=match.trigger_keyword,
+                    detection_time=detection_time,
+                    response_time_ms=response_ms,
+                    possible_location=location,
+                ),
+            )
+            record_emergency_alert(
+                incident_ref=str(merged.get("incident_id") or ""),
+                incident_uuid=str(merged.get("id")) if merged.get("id") else None,
+                trigger_keyword=match.trigger_keyword,
+                channel=channel,
+                detection_time=detection_time,
+                response_time_ms=response_ms,
+                location=location,
+                message=raw,
+            )
+
+        _store_session(store, session)
+        if not repeated:
+            task = asyncio.create_task(
+                self._enrich_emergency_incident(message, session, store, dict(merged)),
+                name=f"emergency-enrich:{merged.get('incident_id')}",
+            )
+            self._emergency_tasks.append(task)
+
+        return self._result(
+            message,
+            session_id=getattr(session, "id", None),
+            incident_id=merged.get("incident_id"),
+            canonical_incident_id=merged.get("incident_id"),
+            is_hazard_report=True,
+            status="Emergency Detected",
+            guidance_sent=bool(worker_ok),
+        )
+
+    async def _create_emergency_incident(
+        self,
+        merged: dict[str, Any],
+        message: NormalizedWhatsAppMessage,
+        session: Any,
+    ) -> dict[str, Any]:
+        ref = merged.get("incident_id") or self._next_ref()
+        payload = IncidentCreate(
+            incident_ref=ref,
+            reporter_id=message.sender_id,
+            source_channel=self._channel(message),
+            session_id=str(getattr(session, "id", None) or message.sender_id),
+            detected_language=str(merged.get("language") or "") or None,
+            hazard_category=EMERGENCY_CATEGORY,
+            hazard_description=merged.get("raw_text"),
+            location=merged.get("location"),
+            hazard_currently_active=True,
+            status=to_repository_status(STATUS_NEW),
+            current_risk_level=EMERGENCY_RISK_LEVEL,
+            original_message_id=message.provider_message_id,
+            original_message_text=merged.get("raw_text"),
+        )
+        if self.repository is None:
+            merged["incident_id"] = ref
+            merged["incident_ref"] = ref
+            merged["status"] = STATUS_NEW
+            return merged
+        try:
+            created = self.repository.create_incident(payload)
+            mapping = _as_dict(created)
+            merged["id"] = mapping.get("id") or getattr(created, "id", None)
+            merged["incident_id"] = mapping.get("incident_ref") or getattr(created, "incident_ref", None) or ref
+            merged["incident_ref"] = merged["incident_id"]
+            merged["status"] = STATUS_NEW
+            return merged
+        except Exception:
+            log.warning("emergency_incident_create_failed")
+            merged["incident_id"] = ref
+            merged["incident_ref"] = ref
+            merged["error"] = "repository_create_failed"
+            return merged
+
+    async def _send_emergency_slack(
+        self,
+        *,
+        source: str,
+        message_text: str,
+        incident_ref: str,
+        location: str | None,
+    ) -> bool:
+        text = format_emergency_slack_alert(
+            source=source,
+            message=message_text,
+            incident_ref=incident_ref,
+            location=location,
+        )
+        try:
+            slack = self._slack()
+            channel = slack.channel_for_team("Emergency Response Team")
+            if not channel:
+                import os
+
+                channel = (os.environ.get("SLACK_CHANNEL_EMERGENCY_RESPONSE") or "").strip() or None
+            if not channel:
+                log.warning("emergency_slack_channel_missing")
+                return False
+            await slack.post_incident_message(
+                channel=channel,
+                blocks=[{"type": "section", "text": {"type": "mrkdwn", "text": text}}],
+                text=text,
+            )
+            return True
+        except SlackPostError:
+            log.warning("emergency_slack_unavailable")
+            return False
+        except Exception:
+            log.warning("emergency_slack_unavailable")
+            return False
+
+    async def _send_emergency_worker_reply(self, message: NormalizedWhatsAppMessage, text: str) -> bool:
+        try:
+            await self._outbound(message).send_text_message(message.sender_id, text)
+            return True
+        except (WhatsAppSendError, TelegramSendError):
+            log.warning("emergency_worker_reply_failed")
+            return False
+
+    async def _retry_emergency_worker_reply(self, message: NormalizedWhatsAppMessage, text: str) -> bool:
+        try:
+            await self._outbound(message).send_text_message(message.sender_id, text)
+            if self._worker_retry_queue:
+                self._worker_retry_queue.pop()
+            return True
+        except (WhatsAppSendError, TelegramSendError):
+            log.warning("emergency_worker_reply_retry_failed")
+            return False
+
+    async def _enrich_emergency_incident(
+        self,
+        message: NormalizedWhatsAppMessage,
+        session: Any,
+        store: Any,
+        seeded: dict[str, Any],
+    ) -> None:
+        try:
+            intake = await self._run_intake(message, session, store)
+            self._trace("intake_agent")
+            intake_data = _as_dict(intake)
+            intake_data["is_hazard_report"] = True
+            intake_data["skip_clarification"] = True
+            intake_data["emergency_bypass"] = True
+            intake_data["input_channel"] = self._channel(message)
+            if seeded.get("location") and not intake_data.get("location"):
+                intake_data["location"] = seeded.get("location")
+            canonical = {
+                "id": seeded.get("id"),
+                "incident_id": seeded.get("incident_id"),
+                "incident_ref": seeded.get("incident_id"),
+                "duplicate_detected": False,
+            }
+            _cache_set(session, NV_CANONICAL, seeded.get("incident_id"))
+            _cache_set(session, NV_CANONICAL_UUID, str(seeded.get("id")) if seeded.get("id") else None)
+            incident = await self._run_incident_agent(intake_data, session=session, canonical=canonical)
+            self._trace("incident_agent")
+            merged = {
+                **intake_data,
+                **_as_dict(incident),
+                **canonical,
+                "skip_clarification": True,
+                "emergency_bypass": True,
+            }
+            if not merged.get("location"):
+                merged["location"] = seeded.get("location") or merged.get("possible_location")
+            _cache_set(session, NV_DRAFT, _session_draft(merged))
+            _store_session(store, session)
+            await self._enrich_repository(merged)
+            await self._audit(
+                merged,
+                "emergency_enrichment_completed",
+                message="AI enrichment completed",
+                new_status="Critical Review",
+                metadata={"normal_ai_delayed": True, "bypass_used": True},
+            )
+            mark_emergency_enrichment(str(merged.get("incident_id") or ""))
+            await self.run_risk_guidance_coordination(message, session, store, merged, False)
+        except Exception:
+            log.exception("emergency_enrichment_failed")
+            await self._audit(
+                seeded,
+                "emergency_enrichment_failed",
+                message="AI enrichment unavailable; emergency response already completed",
+                metadata={"normal_ai_delayed": True, "bypass_used": True},
+            )
 
     async def process_new_report(
         self,

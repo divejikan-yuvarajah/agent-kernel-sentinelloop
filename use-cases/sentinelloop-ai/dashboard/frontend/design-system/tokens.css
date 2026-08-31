@@ -8,6 +8,7 @@
   --signal-amber: #e8a33d;
   --ember-orange: #c9642e;
   --hazard-red: #d64545;
+  --signal-red: #ff2a2a;
   --verified-teal: #3fa796;
 
   --chalk-muted: #b7b5ae;
@@ -56,8 +57,10 @@
   --status-verified: var(--verified-teal);
   --status-resolved: var(--verified-teal);
 
-  --sidebar-width: 240px;
+  --sidebar-width: 248px;
+  --sidebar-collapsed: 72px;
   --header-height: 56px;
+  --panel-elevated: #2e343c;
 }
 
 @media (prefers-reduced-motion: reduce) {

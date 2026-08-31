@@ -3,8 +3,6 @@ import { Link } from "react-router-dom";
 import { AppShell, Badge, Panel } from "@ds/index";
 
 import { slackThread } from "../data/demoData";
-import { incidentThumbnail } from "../data/demoImages";
-import { EvidenceImage } from "../components/EvidenceImage";
 import { useDemoMode } from "../demo/useDemoMode";
 
 export function CoordinationPage() {
@@ -16,7 +14,6 @@ export function CoordinationPage() {
       </p>
       {demo ? (
         <Panel title={`Channel ${slackThread.channel}`}>
-          <EvidenceImage src={incidentThumbnail(slackThread.incident)} alt="Assigned electrical hazard" ratio="16/9" />
           <p>
             Incident:{" "}
             <Link to={`/incidents/${slackThread.incident}`}>{slackThread.incident}</Link>

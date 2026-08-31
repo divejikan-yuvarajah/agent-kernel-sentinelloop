@@ -316,6 +316,17 @@ export type AuditExport = {
     changed_by: string | null;
     suggestion_only: boolean;
   } | null;
+  emergency_bypass?: {
+    detected: boolean;
+    reason: string | null;
+    trigger_keyword: string | null;
+    ai_triage: string | null;
+    response_time: string | null;
+    later_enrichment: string | null;
+    detection_time: string | null;
+    bypass_used: boolean;
+    normal_ai_delayed: boolean;
+  } | null;
   resolution: {
     status: string | null;
     resolution_message: string | null;
@@ -366,6 +377,37 @@ export function fetchGuardrailConfig() {
 export function fetchComplianceExport() {
   if (isDemoMode()) return demo.fetchComplianceExport();
   return getJson<GuardrailComplianceExport>("/guardrails/compliance-export");
+}
+
+export type EmergencyCommandCenter = {
+  metrics: {
+    emergency_alerts_today: number;
+    average_response_time: string | null;
+    active_critical_incidents: number;
+  };
+  active: {
+    incident_id: string;
+    location: string | null;
+    time: string | null;
+    response: string;
+    lifecycle: string | null;
+    channel: string | null;
+    trigger: string | null;
+  }[];
+  timeline: { time: string | null; event: string }[];
+  history: {
+    incident_id: string;
+    trigger: string | null;
+    channel: string | null;
+    detection_time: string | null;
+    response_time: string | null;
+    resolution: string | null;
+  }[];
+};
+
+export function fetchEmergencies() {
+  if (isDemoMode()) return demo.fetchEmergencies();
+  return getJson<EmergencyCommandCenter>("/emergencies");
 }
 
 export type TelegramBotStatus = {

@@ -127,6 +127,20 @@ export function AuditTrailView({ audit, onDownload }: Props) {
         </section>
       ) : null}
 
+      {audit.emergency_bypass ? (
+        <section className="ds-audit-step">
+          <h3>Emergency Bypass</h3>
+          <dl className="ds-audit-dl">
+            <Pair label="Detected" value={audit.emergency_bypass.detected ? "Yes" : "No"} />
+            <Pair label="Reason" value={audit.emergency_bypass.reason} />
+            <Pair label="Trigger" value={audit.emergency_bypass.trigger_keyword} />
+            <Pair label="AI triage" value={audit.emergency_bypass.ai_triage} />
+            <Pair label="Response time" value={audit.emergency_bypass.response_time} />
+            <Pair label="Later enrichment" value={audit.emergency_bypass.later_enrichment} />
+          </dl>
+        </section>
+      ) : null}
+
       <section className="ds-audit-step">
         <h3>5. Safety guidance</h3>
         {audit.guidance_history.length === 0 ? (

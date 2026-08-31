@@ -224,3 +224,28 @@ def test_vision_intelligence_surfaces_on_dashboard_incident_analytics_and_audit(
     assert "ds-confidence--high" in layout
     assert "ds-confidence--medium" in layout
     assert "ds-confidence--low" in layout
+
+
+def test_emergency_command_center_surfaces_on_dashboard_and_audit():
+    dashboard = (FRONTEND / "src" / "pages" / "DashboardPage.tsx").read_text(encoding="utf-8")
+    assert "Emergency Alerts Today" in dashboard
+    assert "Average Response Time" in dashboard
+    assert "Active Critical Incidents" in dashboard
+    command = (FRONTEND / "src" / "pages" / "EmergencyPage.tsx").read_text(encoding="utf-8")
+    assert "Emergency Command Center" in command
+    assert "Active Emergency" in command
+    assert "Emergency Response History" in command
+    assert "Detection Time" in command
+    history = (FRONTEND / "src" / "pages" / "EmergencyHistoryPage.tsx").read_text(encoding="utf-8")
+    assert "Emergency Response History" in history
+    sidebar = (FRONTEND / "design-system" / "components" / "Sidebar.tsx").read_text(encoding="utf-8")
+    assert "Emergency Command Center" in sidebar
+    audit = (FRONTEND / "src" / "components" / "AuditTrailView.tsx").read_text(encoding="utf-8")
+    assert "Emergency Bypass" in audit
+    assert "AI triage" in audit
+    tokens = (FRONTEND / "design-system" / "tokens.css").read_text(encoding="utf-8")
+    assert "--signal-red" in tokens
+    layout = (FRONTEND / "design-system" / "layout.css").read_text(encoding="utf-8")
+    assert "ds-emergency-card" in layout
+    assert "ds-shell--collapsed" in layout
+    assert "overscroll-behavior: contain" in layout

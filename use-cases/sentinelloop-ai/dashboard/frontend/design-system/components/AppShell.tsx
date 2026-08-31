@@ -1,10 +1,13 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 
 import { useDemoMode } from "@/demo/useDemoMode";
 import { notifications, organization } from "@/data/demoData";
 
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
+
+const COLLAPSED_KEY = "sentinelloop.sidebarCollapsed";
 
 type Props = {
   title: string;
@@ -15,6 +18,14 @@ type Props = {
   openIncidentCount?: number;
 };
 
+function readCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function AppShell({
   title,
   operationalStatus,
@@ -24,10 +35,50 @@ export function AppShell({
   openIncidentCount,
 }: Props) {
   const [demo] = useDemoMode();
+  const location = useLocation();
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [navOpen, setNavOpen] = useState(false);
   const alerts = notificationCount ?? (demo ? notifications.length : 0);
+
+  useEffect(() => {
+    setNavOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!navOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNavOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navOpen]);
+
+  const toggleCollapsed = () => {
+    setCollapsed((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        /* private mode */
+      }
+      return next;
+    });
+  };
+
+  const shellClass = [
+    "ds-shell",
+    collapsed ? "ds-shell--collapsed" : "",
+    navOpen ? "ds-shell--nav-open" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className="ds-shell">
-      <Sidebar />
+    <div className={shellClass}>
+      {navOpen ? (
+        <button type="button" className="ds-shell__backdrop" aria-label="Close navigation" onClick={() => setNavOpen(false)} />
+      ) : null}
+      <Sidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} onNavigate={() => setNavOpen(false)} />
       <Header
         title={title}
         operationalStatus={operationalStatus}
@@ -38,6 +89,8 @@ export function AppShell({
         openIncidentCount={openIncidentCount}
         demo={demo}
         notifyHref="/notifications"
+        navOpen={navOpen}
+        onMenuClick={() => setNavOpen((open) => !open)}
       />
       <main className="ds-main">{children}</main>
     </div>

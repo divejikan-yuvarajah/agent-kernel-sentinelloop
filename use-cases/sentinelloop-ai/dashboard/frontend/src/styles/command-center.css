@@ -554,12 +554,6 @@
     grid-template-columns: 1fr 1fr;
   }
 
-  .ds-header {
-    flex-wrap: wrap;
-    height: auto;
-    padding: var(--space-2) var(--space-3);
-  }
-
   .ds-dash-learn .ds-grid--cards,
   .ds-recurring--fill > li,
   .ds-learn-watch {
