@@ -1,0 +1,3 @@
+# Reserved for future SQL / Supabase migrations.
+
+# Do not add schema files in the scaffold phase.

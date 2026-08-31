@@ -1,0 +1,141 @@
+# Agent Kernel configuration (AKConfig). Unknown top-level keys are ignored
+# (extra=ignore). SentinelLoop policy keys below are documentation for later
+# application loading. SPEC.md remains the authoritative rule definition.
+
+session:
+  type: in_memory
+  cache:
+    size: 256
+
+api:
+  host: 0.0.0.0
+  port: 8000
+
+whatsapp:
+  agent: intake_agent
+  api_version: v24.0
+
+slack:
+  agent: coordination_agent
+  agent_acknowledgement: ""
+
+multimodal:
+  enabled: true
+  storage_type: in_memory
+
+test:
+  mode: fuzzy
+
+logging:
+  ak:
+    level: INFO
+  system:
+    level: INFO
+
+# --- SentinelLoop application scaffold (not AKConfig fields) ---
+
+project:
+  name: SentinelLoop AI
+  environment: development
+
+languages:
+  supported:
+    - si
+    - ta
+    - en
+
+risk:
+  severity_min: 1
+  severity_max: 5
+  likelihood_min: 1
+  likelihood_max: 5
+  levels:
+    low:
+      min: 1
+      max: 4
+    medium:
+      min: 5
+      max: 9
+    high:
+      min: 10
+      max: 16
+    critical:
+      min: 17
+      max: 25
+  rules:
+    injury_minimum: high
+    active_danger_categories:
+      - electrical
+      - fire
+      - chemical
+    active_danger_minimum: critical
+    exposure_threshold: 5
+    exposure_bump_levels: 1
+
+features:
+  whatsapp: true
+  slack: true
+  multimodal_images: true
+  voice_reports: false
+  worker_verification: true
+  dashboard: true
+  semantic_duplicate_detection: false
+  slack_interactions: false
+  voice_transcription: false
+  visual_hazard_analysis: false
+  analytics_dashboard: false
+
+storage:
+  provider: supabase
+
+guidance:
+  retrieval_only: true
+
+# OpenRouter catalog pricing.prompt / pricing.completion are USD per token
+# (live GET /models snapshot 2026-08-31). Website cards show per-million;
+# do not treat API values as per-1K. Paid IDs below were the cheapest
+# text-capable models in that snapshot; live catalog pricing always wins.
+models:
+  timeout_seconds: 30
+  max_attempts: 6
+  max_free_attempts: 3
+  per_model_retries: 1
+  circuit_failures: 3
+  circuit_cooldown_seconds: 60
+  roles:
+    role_fast:
+      # intake / translation / extraction — high volume, low stakes
+      preferred_family_order:
+        - qwen
+        - gemini
+        - deepseek
+      paid_fallbacks:
+        - mistralai/mistral-nemo          # ~1.9e-8 + 3e-8 / token, 131k ctx
+        - inclusionai/ling-3.0-flash      # ~2.1e-8 + 6.3e-8 / token, 262k ctx
+        - meta-llama/llama-3.1-8b-instruct # ~5e-8 + 8e-8 / token, multilingual
+      temperature: 0.3
+      max_tokens: 512
+    role_reasoning:
+      # risk_agent severity/likelihood estimates only — not risk arithmetic
+      preferred_family_order:
+        - qwen
+        - gemini
+        - deepseek
+      paid_fallbacks:
+        - qwen/qwen3-30b-a3b-instruct-2507 # stronger cheap Qwen, 262k ctx
+        - openai/gpt-oss-20b               # ~3e-8 + 1.3e-7 / token (snapshot; live catalog wins)
+        - qwen/qwen3.7-flash               # cheap Qwen, 1M ctx
+      temperature: 0.1
+      max_tokens: 1024
+    role_guidance:
+      # guidance_agent rephrase/summarize of already-retrieved approved text
+      preferred_family_order:
+        - qwen
+        - gemini
+        - deepseek
+      paid_fallbacks:
+        - qwen/qwen3.7-flash
+        - mistralai/mistral-nemo
+        - meta-llama/llama-3.1-8b-instruct
+      temperature: 0.2
+      max_tokens: 768
