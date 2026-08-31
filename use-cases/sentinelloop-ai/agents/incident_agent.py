@@ -22,6 +22,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from tools.model_router import ModelCallResult, call_model
 from tools.qr_tags import SOURCE_QR_TAGGED
+from tools.vision_tools import (
+    TEXT_CONFIDENCE_LOW,
+    classify_hazard_image,
+    should_run_vision,
+)
 
 log = logging.getLogger("sentinelloop.incident")
 
@@ -285,6 +290,14 @@ class IncidentAnalysis(BaseModel):
     translated_text: str | None = None
     language: str | None = None
     clarification_history: list[str] = Field(default_factory=list)
+    vision_hazard_category: str | None = None
+    vision_confidence: float | None = None
+    vision_observations: list[str] = Field(default_factory=list)
+    vision_model_used: str | None = None
+    vision_timestamp: str | None = None
+    vision_override: bool = False
+    override_reason: str | None = None
+    category_source: str | None = None
 
 
 def redact_phone(phone: str) -> str:
@@ -335,6 +348,102 @@ def _as_bool(value: Any) -> bool | None:
     if text in {"false", "no", "0"}:
         return False
     return None
+
+
+def detect_explicit_text_category(text: str | None) -> str | None:
+    """Worker-stated category beats vision. Conservative keyword match only."""
+    if not text or not str(text).strip():
+        return None
+    blob = str(text)
+    cues: tuple[tuple[str, re.Pattern[str]], ...] = (
+        (
+            "electrical",
+            re.compile(
+                r"\b(electrical|electric(?:al)?\s+(?:wires?|cables?|panel)|exposed (?:live )?(?:wires?|cables?)|(?:wires?|cables?) (?:is |are )?(?:broken|exposed)|live wires?|sparking|sparks)\b",
+                re.I,
+            ),
+        ),
+        (
+            "chemical",
+            re.compile(r"\b(chemical|acid|solvent).{0,28}\b(spill|leak|drum|leakage)\b", re.I),
+        ),
+        ("slip/trip", re.compile(r"\b(slip|trip|oil (?:on )?(?:the )?floor|liquid on (?:the )?floor)\b", re.I)),
+        ("fire/smoke", re.compile(r"\b(on fire|heavy smoke|flames?|burning)\b", re.I)),
+        ("missing PPE", re.compile(r"\b(no (ppe|helmet|goggles|gloves)|without (ppe|helmet|goggles))\b", re.I)),
+        ("structural", re.compile(r"\b(scaffold|collapse|ceiling (crack|falling))\b", re.I)),
+    )
+    found: list[str] = []
+    for category, pattern in cues:
+        match = pattern.search(blob)
+        if match and not _negated_around(blob, match.start(), match.end()):
+            found.append(category)
+    if len(found) != 1:
+        return None
+    return found[0]
+
+
+def _image_payload(mapping: dict[str, Any]) -> str | None:
+    for key in ("image_url_or_base64", "image_url", "media_url", "storage_url"):
+        value = mapping.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    raw = mapping.get("image_bytes") or mapping.get("media_content")
+    if isinstance(raw, (bytes, bytearray)) and raw:
+        import base64
+
+        mime = str(mapping.get("image_mime_type") or mapping.get("mime_type") or "image/jpeg")
+        return f"data:{mime};base64,{base64.b64encode(bytes(raw)).decode('ascii')}"
+    return None
+
+
+async def _apply_vision_suggestion(
+    result: IncidentAnalysis,
+    mapping: dict[str, Any],
+    *,
+    explicit_category: str | None,
+    call_model_fn: CallModelFn | None,
+    source_text: str,
+) -> IncidentAnalysis:
+    payload = _image_payload(mapping)
+    if not should_run_vision(
+        has_image=result.has_image,
+        hazard_category=result.hazard_category,
+        text_confidence=float(result.confidence.hazard_category or 0),
+        explicit_text_category=explicit_category,
+        image_payload=payload,
+    ):
+        return result
+    vision = await classify_hazard_image(
+        payload or "",
+        mime_type=str(mapping.get("image_mime_type") or mapping.get("mime_type") or "") or None,
+        filename=str(mapping.get("image_filename") or "") or None,
+        call_model_fn=call_model_fn,
+    )
+    result.vision_hazard_category = vision.get("hazard_category")
+    result.vision_confidence = vision.get("confidence")
+    result.vision_observations = list(vision.get("observations") or [])
+    result.vision_model_used = vision.get("model_used")
+    result.vision_timestamp = vision.get("timestamp")
+    if vision.get("rejected"):
+        return result
+    if explicit_category:
+        result.category_source = "worker_text"
+        return result
+    existing = result.hazard_category
+    existing_conf = float(result.confidence.hazard_category or 0)
+    if existing and existing_conf >= TEXT_CONFIDENCE_LOW:
+        result.category_source = result.category_source or "extracted_fields"
+        return result
+    suggested = vision.get("hazard_category")
+    if suggested:
+        result.hazard_category = suggested
+        result.category_source = "vision_suggestion"
+        result.classification_reason = (
+            result.classification_reason
+            or "Vision suggestion used because category was missing or text confidence was low."
+        )
+        log.info("incident_vision_category_filled category=%s", suggested)
+    return result
 
 
 def _first_non_null(*values: Any) -> Any:
@@ -811,6 +920,18 @@ async def analyze_incident(
             empty.confidence.equipment_involved = 1.0
         if prev:
             empty = merge_with_previous_incident(empty, prev)
+        explicit = detect_explicit_text_category(rule_text)
+        if explicit:
+            empty.hazard_category = explicit
+            empty.category_source = "worker_text"
+            empty.confidence.hazard_category = max(empty.confidence.hazard_category, 0.92)
+        empty = await _apply_vision_suggestion(
+            empty,
+            mapping,
+            explicit_category=explicit,
+            call_model_fn=call_model_fn,
+            source_text=rule_text,
+        )
         result = _finalize(
             empty,
             previous_history=list(empty.clarification_history),
@@ -877,6 +998,19 @@ async def analyze_incident(
         result.translated_text = mapping.get("translated_text") or text
         result.language = mapping.get("language")
         result.incident_id = incident_id or mapping.get("incident_id")
+        explicit = detect_explicit_text_category(rule_text or text)
+        if explicit:
+            result.hazard_category = explicit
+            result.category_source = "worker_text"
+            result.confidence.hazard_category = max(result.confidence.hazard_category, 0.92)
+        result = await _apply_vision_suggestion(
+            result,
+            mapping,
+            explicit_category=explicit,
+            call_model_fn=call_model_fn,
+            source_text=rule_text or text,
+        )
+        result = _finalize(result, previous_history=list(result.clarification_history), source_text=rule_text or text)
         _write_session(session, result)
         log.info("incident_analysis_completed fallback=true latency_ms=%s", int((time.monotonic() - started) * 1000))
         return result
@@ -931,6 +1065,20 @@ async def analyze_incident(
             qr_equipment,
             result.confidence,
         )
+    explicit = detect_explicit_text_category(rule_text or text)
+    if explicit:
+        result.hazard_category = explicit
+        result.category_source = "worker_text"
+        result.confidence.hazard_category = max(result.confidence.hazard_category, 0.92)
+    elif result.hazard_category:
+        result.category_source = result.category_source or "extracted_fields"
+    result = await _apply_vision_suggestion(
+        result,
+        mapping,
+        explicit_category=explicit,
+        call_model_fn=call_model_fn or router,
+        source_text=rule_text or text,
+    )
     result = _finalize(result, previous_history=list(result.clarification_history), source_text=rule_text)
     _write_session(session, result)
     log.info(

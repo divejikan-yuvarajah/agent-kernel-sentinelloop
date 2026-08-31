@@ -202,3 +202,25 @@ def test_horizon_demo_dataset_covers_command_center():
     assert "Safety Prediction Heatmap" in analytics
     coordination = (FRONTEND / "src" / "pages" / "CoordinationPage.tsx").read_text(encoding="utf-8")
     assert "inspection_request" in coordination
+
+
+def test_vision_intelligence_surfaces_on_dashboard_incident_analytics_and_audit():
+    dashboard = (FRONTEND / "src" / "pages" / "DashboardPage.tsx").read_text(encoding="utf-8")
+    assert "AI Vision Insights" in dashboard
+    assert "Images analyzed" in dashboard
+    assert "High confidence detections" in dashboard
+    detail = (FRONTEND / "src" / "pages" / "IncidentDetailPage.tsx").read_text(encoding="utf-8")
+    assert "AI Image Analysis" in detail
+    assert "High Confidence" in detail
+    assert "Before / After Safety Comparison" in detail
+    assert "Original Evidence" in detail
+    analytics = (FRONTEND / "src" / "pages" / "AnalyticsPage.tsx").read_text(encoding="utf-8")
+    assert "Hazard Detection By Image" in analytics
+    assert "Confidence Distribution" in analytics
+    assert "Free Vision Models" in analytics
+    audit = (FRONTEND / "src" / "components" / "AuditTrailView.tsx").read_text(encoding="utf-8")
+    assert "AI Vision Suggestion" in audit
+    layout = (FRONTEND / "design-system" / "layout.css").read_text(encoding="utf-8")
+    assert "ds-confidence--high" in layout
+    assert "ds-confidence--medium" in layout
+    assert "ds-confidence--low" in layout

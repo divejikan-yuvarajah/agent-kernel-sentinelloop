@@ -99,6 +99,34 @@ export function AuditTrailView({ audit, onDownload }: Props) {
         ) : null}
       </section>
 
+      {audit.vision_suggestion ? (
+        <section className="ds-audit-step">
+          <h3>AI Vision Suggestion</h3>
+          <dl className="ds-audit-dl">
+            <Pair label="Category" value={audit.vision_suggestion.category} />
+            <Pair
+              label="Confidence"
+              value={
+                audit.vision_suggestion.confidence != null
+                  ? String(audit.vision_suggestion.confidence)
+                  : null
+              }
+            />
+            <Pair label="Final Decision" value={audit.vision_suggestion.final_decision} />
+            <Pair label="Override" value={audit.vision_suggestion.override ? "Yes" : "No"} />
+            <Pair label="Override reason" value={audit.vision_suggestion.override_reason} />
+            <Pair label="Changed by" value={audit.vision_suggestion.changed_by} />
+          </dl>
+          <p>Observations:</p>
+          <ul>
+            {(audit.vision_suggestion.observations || []).map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+          <p className="ds-mono">Suggestion only. Human text and deterministic rules remain higher priority.</p>
+        </section>
+      ) : null}
+
       <section className="ds-audit-step">
         <h3>5. Safety guidance</h3>
         {audit.guidance_history.length === 0 ? (

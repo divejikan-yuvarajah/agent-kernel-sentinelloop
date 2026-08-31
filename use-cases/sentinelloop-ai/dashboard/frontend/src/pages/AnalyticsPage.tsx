@@ -221,10 +221,57 @@ export function AnalyticsPage() {
               </p>
               <p className="ds-mono">
                 {cell.risk} · {cell.active} active
+                {cell.electrical_images ? ` · Electrical images: ${cell.electrical_images}` : ""}
+                {cell.machine_images ? ` · Machine images: ${cell.machine_images}` : ""}
               </p>
             </article>
           ))}
         </div>
+      </Panel>
+      <Panel title="Hazard Detection By Image" style={{ marginTop: 24 }}>
+        <div className="ds-share">
+          {(summary?.vision_analytics?.hazard_detection_by_image ?? []).map((row) => (
+            <div key={row.label} className="ds-share__row">
+              <span>{row.label}</span>
+              <span className="ds-share__track">
+                <span className="ds-share__fill" style={{ width: `${Math.round(row.percent)}%` }} />
+              </span>
+              <span className="ds-mono">{row.percent}%</span>
+            </div>
+          ))}
+        </div>
+      </Panel>
+      <Panel title="Confidence Distribution" style={{ marginTop: 24 }}>
+        <div className="ds-share">
+          {Object.entries(summary?.vision_analytics?.confidence_distribution ?? {}).map(([label, value]) => (
+            <div key={label} className="ds-share__row">
+              <span>{label} confidence</span>
+              <span className="ds-share__track">
+                <span className="ds-share__fill" style={{ width: `${Math.round(Number(value))}%` }} />
+              </span>
+              <span className="ds-mono">{value}%</span>
+            </div>
+          ))}
+        </div>
+      </Panel>
+      <Panel title="Vision model usage" style={{ marginTop: 24 }}>
+        <p>Free Vision Models: {summary?.vision_analytics?.model_usage?.free_percent ?? 0}%</p>
+        <p>Paid Fallback: {summary?.vision_analytics?.model_usage?.paid_percent ?? 0}%</p>
+        <p>
+          Average Cost: ${Number(summary?.vision_analytics?.model_usage?.average_cost_usd ?? 0).toFixed(3)}/image
+        </p>
+      </Panel>
+      <Panel title="Vision location heatmap" style={{ marginTop: 24 }}>
+        {(summary?.vision_analytics?.location_heatmap ?? []).map((cell) => (
+          <article key={cell.location}>
+            <p>
+              <strong>{cell.location}</strong>
+            </p>
+            <p className="ds-mono">
+              Electrical images: {cell.electrical_images} · Machine images: {cell.machine_images} · Risk: {cell.risk}
+            </p>
+          </article>
+        ))}
       </Panel>
       <Panel title="Safety intelligence timeline" style={{ marginTop: 24 }}>
         {timeline.length === 0 ? (

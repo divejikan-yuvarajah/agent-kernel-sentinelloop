@@ -161,6 +161,28 @@ export function DashboardPage() {
           </Card>
         ))}
       </div>
+      <Panel title="AI Vision Insights" titleTooltip="Suggestion only. Humans remain in control.">
+        <div className="ds-grid ds-grid--metrics">
+          <Card variant="analytics-card">
+            <p className="ds-metric__label">Images analyzed</p>
+            <p className="ds-metric__value">{summary?.vision_analytics?.images_analyzed ?? (demo ? 142 : 0)}</p>
+          </Card>
+          <Card variant="analytics-card">
+            <p className="ds-metric__label">High confidence detections</p>
+            <p className="ds-metric__value">{summary?.vision_analytics?.high_confidence_detections ?? (demo ? 87 : 0)}</p>
+          </Card>
+          <Card variant="analytics-card">
+            <p className="ds-metric__label">Human overrides</p>
+            <p className="ds-metric__value">{summary?.vision_analytics?.human_overrides ?? (demo ? 12 : 0)}</p>
+          </Card>
+          <Card variant="analytics-card">
+            <p className="ds-metric__label">Average confidence</p>
+            <p className="ds-metric__value">
+              {Math.round(((summary?.vision_analytics?.average_confidence ?? (demo ? 0.84 : 0)) * 100))}%
+            </p>
+          </Card>
+        </div>
+      </Panel>
       <div className="ds-grid ds-grid--split" style={{ marginBottom: "var(--space-5)" }}>
         <Panel title="Latest Critical Hazard">
           {(() => {

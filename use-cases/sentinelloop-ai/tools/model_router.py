@@ -34,7 +34,8 @@ CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 ROLE_FAST = "role_fast"
 ROLE_REASONING = "role_reasoning"
 ROLE_GUIDANCE = "role_guidance"
-REQUIRED_ROLES = (ROLE_FAST, ROLE_REASONING, ROLE_GUIDANCE)
+ROLE_VISION = "role_vision"
+REQUIRED_ROLES = (ROLE_FAST, ROLE_REASONING, ROLE_GUIDANCE, ROLE_VISION)
 FAMILY_ORDER = ("qwen", "gemini", "deepseek")
 
 _BLOCKED_KWARGS = frozenset(
@@ -71,11 +72,13 @@ _DEFAULT_MAX_TOKENS = {
     ROLE_FAST: 512,
     ROLE_REASONING: 1024,
     ROLE_GUIDANCE: 768,
+    ROLE_VISION: 384,
 }
 _DEFAULT_TEMPERATURE = {
     ROLE_FAST: 0.3,
     ROLE_REASONING: 0.1,
     ROLE_GUIDANCE: 0.2,
+    ROLE_VISION: 0.1,
 }
 
 _ZERO = Decimal("0")
@@ -133,6 +136,10 @@ class CatalogModel(BaseModel):
         if "lyria" in lowered or "content-safety" in lowered:
             return False
         return True
+
+    def supports_vision(self) -> bool:
+        ins = {m.lower() for m in self.input_modalities}
+        return "image" in ins and self.supports_text_chat()
 
 
 class ModelCallResult(BaseModel):
@@ -247,6 +254,30 @@ def _sanitize_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in kwargs.items() if key in _ALLOWED_KWARGS}
 
 
+def _architecture_modalities(entry: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """Read OpenRouter architecture fields. Live GET /models uses architecture.input_modalities."""
+    arch_raw = entry.get("architecture")
+    arch: dict[str, Any] = arch_raw if isinstance(arch_raw, dict) else {}
+    ins = arch.get("input_modalities") if isinstance(arch.get("input_modalities"), list) else None
+    outs = arch.get("output_modalities") if isinstance(arch.get("output_modalities"), list) else None
+    if ins is None and isinstance(entry.get("input_modalities"), list):
+        ins = entry.get("input_modalities")
+    if outs is None and isinstance(entry.get("output_modalities"), list):
+        outs = entry.get("output_modalities")
+    modality = arch.get("modality")
+    if not isinstance(modality, str):
+        modality = arch.get("modality_string") if isinstance(arch.get("modality_string"), str) else None
+    if ins is None and isinstance(modality, str) and "->" in modality:
+        left, _, right = modality.partition("->")
+        ins = [part.strip().lower() for part in left.replace("+", " ").replace(",", " ").split() if part.strip()]
+        outs = [part.strip().lower() for part in right.replace("+", " ").replace(",", " ").split() if part.strip()]
+    ins = [str(item) for item in (ins or ["text"])]
+    outs = [str(item) for item in (outs or ["text"])]
+    if isinstance(modality, str) and "image" in modality.lower() and "image" not in {item.lower() for item in ins}:
+        ins.append("image")
+    return ins, outs
+
+
 def catalog_model_from_api(entry: dict[str, Any]) -> CatalogModel | None:
     model_id = entry.get("id")
     if not isinstance(model_id, str) or not model_id:
@@ -254,14 +285,7 @@ def catalog_model_from_api(entry: dict[str, Any]) -> CatalogModel | None:
         return None
     pricing_raw = entry.get("pricing")
     pricing: dict[str, Any] = pricing_raw if isinstance(pricing_raw, dict) else {}
-    arch_raw = entry.get("architecture")
-    arch: dict[str, Any] = arch_raw if isinstance(arch_raw, dict) else {}
-    ins = arch.get("input_modalities") or ["text"]
-    outs = arch.get("output_modalities") or ["text"]
-    if not isinstance(ins, list):
-        ins = ["text"]
-    if not isinstance(outs, list):
-        outs = ["text"]
+    ins, outs = _architecture_modalities(entry)
     ctx = entry.get("context_length")
     context_length = int(ctx) if isinstance(ctx, int) else None
     created = entry.get("created")
@@ -534,9 +558,12 @@ class ModelRouter:
         log.info("[model-router] Budget ceiling → %s  Spend so far → %s", ceiling, self._cumulative)
 
     def _eligible_free(self, role: str, modalities: set[str]) -> list[CatalogModel]:
+        require_vision = self._requires_vision(role, modalities)
         out = []
         for model in self._catalog.values():
             if not model.is_free or not model.supports_text_chat():
+                continue
+            if require_vision and not model.supports_vision():
                 continue
             if not self._compatible(model, modalities):
                 continue
@@ -568,15 +595,47 @@ class ModelRouter:
 
     def _role_generation_defaults(self, role: str) -> tuple[float, int]:
         cfg = self._roles_config.get(role) or {}
-        temperature = cfg.get("temperature", _DEFAULT_TEMPERATURE[role])
-        max_tokens = cfg.get("max_tokens", _DEFAULT_MAX_TOKENS[role])
+        temperature = cfg.get("temperature", _DEFAULT_TEMPERATURE.get(role, 0.2))
+        max_tokens = cfg.get("max_tokens", _DEFAULT_MAX_TOKENS.get(role, 512))
         return float(temperature), int(max_tokens)
+
+    def _requires_vision(self, role: str, modalities: set[str]) -> bool:
+        return role == ROLE_VISION or "image" in modalities
+
+    def _preferred_vision_model(self) -> CatalogModel | None:
+        pref = (os.environ.get("VISION_MODEL_PREFERENCE") or "").strip()
+        if not pref:
+            return None
+        model = self._catalog.get(pref)
+        if model is None or not model.supports_vision():
+            return None
+        return model
+
+    def _vision_timeout(self) -> float:
+        raw = os.environ.get("VISION_TIMEOUT")
+        if raw is None or str(raw).strip() == "":
+            return self._timeout
+        try:
+            value = float(str(raw).strip())
+        except ValueError:
+            return self._timeout
+        return value if value > 0 else self._timeout
+
+    def _vision_max_cost(self) -> Decimal | None:
+        try:
+            return _decimal_env("VISION_MAX_COST")
+        except ModelRouterConfigError:
+            return None
 
     def _free_chain(self, role: str, modalities: set[str] | None = None) -> list[CatalogModel]:
         modalities = modalities or {"text"}
         free = self._eligible_free(role, modalities)
         ordered: list[CatalogModel] = []
         seen: set[str] = set()
+        preferred = self._preferred_vision_model() if role == ROLE_VISION else None
+        if preferred is not None and preferred.is_free and preferred.id not in seen:
+            ordered.append(preferred)
+            seen.add(preferred.id)
         for family in self._family_order(role):
             group = [m for m in free if _family(m) == family]
             for model in self._sort_family(group):
@@ -595,7 +654,14 @@ class ModelRouter:
 
     def _paid_chain(self, role: str, modalities: set[str]) -> list[CatalogModel]:
         configured = list((self._roles_config.get(role) or {}).get("paid_fallbacks") or [])
+        require_vision = self._requires_vision(role, modalities)
         found: list[CatalogModel] = []
+        seen: set[str] = set()
+        preferred = self._preferred_vision_model() if role == ROLE_VISION else None
+        if preferred is not None and preferred.is_paid and preferred.id not in seen:
+            if preferred.supports_vision() and self._compatible(preferred, modalities):
+                found.append(preferred)
+                seen.add(preferred.id)
         for model_id in configured:
             if not isinstance(model_id, str):
                 continue
@@ -612,10 +678,47 @@ class ModelRouter:
                 continue
             if not model.supports_text_chat() or not self._compatible(model, modalities):
                 continue
+            if require_vision and not model.supports_vision():
+                continue
+            if model.id in seen:
+                continue
             found.append(model)
+            seen.add(model.id)
+        if require_vision:
+            extras = [
+                model
+                for model in self._catalog.values()
+                if model.is_paid
+                and model.supports_vision()
+                and model.id not in seen
+                and self._compatible(model, modalities)
+            ]
+            extras.sort(key=lambda m: (m.combined_price, -(m.context_length or 0), m.id))
+            for model in extras:
+                found.append(model)
+                seen.add(model.id)
         # Eligibility from config; runtime prefers cheapest combined token price.
-        found.sort(key=lambda m: (m.combined_price, -(m.context_length or 0), m.id))
-        return found
+        # Configured order is preserved first (cheap vision extras already sorted).
+        configured_ids = {item for item in configured if isinstance(item, str)}
+        configured_found = [
+            m for m in found if m.id in configured_ids or (preferred is not None and m.id == preferred.id)
+        ]
+        extra_found = [m for m in found if m not in configured_found]
+        extra_found.sort(key=lambda m: (m.combined_price, -(m.context_length or 0), m.id))
+        configured_found.sort(key=lambda m: (m.combined_price, -(m.context_length or 0), m.id))
+        if preferred is not None and preferred in configured_found:
+            configured_found = [preferred] + [m for m in configured_found if m.id != preferred.id]
+        ordered = configured_found + extra_found
+        if not ordered:
+            for model_id in configured:
+                if not isinstance(model_id, str):
+                    continue
+                model = self._catalog.get(model_id)
+                if model is None or not model.is_paid or not model.supports_text_chat():
+                    continue
+                ordered.append(model)
+            ordered.sort(key=lambda m: (m.combined_price, -(m.context_length or 0), m.id))
+        return ordered
 
     def _on_circuit(self, model_id: str) -> bool:
         state = self._circuit.get(model_id)
@@ -664,6 +767,7 @@ class ModelRouter:
 
         result = await self._try_chain(role, messages, gen, free, attempted, limit=self._max_free_attempts)
         if result is not None:
+            self._log_vision_outcome(role, result, attempted, budget_limited=False)
             return result
         attempts = len(attempted)
 
@@ -672,7 +776,7 @@ class ModelRouter:
             for model in paid:
                 if attempts >= self._max_attempts:
                     break
-                allowed, _projected = await self._preflight_paid(model, messages, gen)
+                allowed, _projected = await self._preflight_paid(model, messages, gen, role=role)
                 if not allowed:
                     budget_limited = True
                     validate_model_budget(
@@ -681,23 +785,31 @@ class ModelRouter:
                         ceiling=self._budget_ceiling,
                     )
                     log.info("[model-router] paid fallback=%s refused (budget)", model.id)
+                    if role == ROLE_VISION:
+                        log.info("vision_budget_blocked model=%s", model.id)
                     continue
                 attempts += 1
                 call = await self._complete(role, model, messages, gen, paid=True)
                 attempted.append(model.id)
                 if call is None:
+                    if role == ROLE_VISION:
+                        log.info("vision_model_fallback from=%s", model.id)
                     continue
                 if call.paid:
-                    return call.model_copy(update={"attempted_models": attempted, "fallback_used": True})
+                    out = call.model_copy(update={"attempted_models": attempted, "fallback_used": True})
+                    self._log_vision_outcome(role, out, attempted, budget_limited=False)
+                    return out
         elif self._ledger_corrupt:
             budget_limited = True
 
         retry_free = await self._try_chain(role, messages, gen, free, attempted, budget_limited=True)
         if retry_free is not None:
-            return retry_free.model_copy(update={"budget_limited": True, "fallback_used": True})
+            out = retry_free.model_copy(update={"budget_limited": True, "fallback_used": True})
+            self._log_vision_outcome(role, out, attempted, budget_limited=True)
+            return out
 
         log.error("[model-router] no model capacity role=%s attempted=%s", role, attempted)
-        return ModelCallResult(
+        empty = ModelCallResult(
             content=None,
             model=None,
             role=role,
@@ -708,6 +820,8 @@ class ModelRouter:
             error="no_capacity",
             message="No eligible OpenRouter model could serve this request. Preserve the incident and use deterministic/human paths.",
         )
+        self._log_vision_outcome(role, empty, attempted, budget_limited=budget_limited)
+        return empty
 
     async def _try_chain(
         self,
@@ -732,6 +846,8 @@ class ModelRouter:
             call = await self._complete(role, model, messages, gen, paid=False)
             attempted.append(model.id)
             if call is None:
+                if role == ROLE_VISION:
+                    log.info("vision_model_fallback from=%s", model.id)
                 continue
             call.attempted_models = list(attempted)
             call.fallback_used = len(attempted) > 1 or budget_limited
@@ -757,10 +873,12 @@ class ModelRouter:
                 if not ok:
                     return None
             try:
+                timeout = self._vision_timeout() if role == ROLE_VISION else self._timeout
                 response = await self._client.post(
                     CHAT_URL,
                     headers=self._headers(),
                     json={"model": model.id, "messages": messages, **gen},
+                    timeout=timeout,
                 )
             except httpx.TimeoutException:
                 last_error = "timeout"
@@ -878,13 +996,20 @@ class ModelRouter:
         return (prompt_tokens * (model.prompt_price or _ZERO)) + (max_tokens * (model.completion_price or _ZERO))
 
     async def _preflight_paid(
-        self, model: CatalogModel, messages: list[dict[str, Any]], gen: dict[str, Any]
+        self, model: CatalogModel, messages: list[dict[str, Any]], gen: dict[str, Any], *, role: str | None = None
     ) -> tuple[bool, Decimal]:
         projected = self._project_cost(model, messages, gen)
+        if role == ROLE_VISION:
+            cap = self._vision_max_cost()
+            if cap is not None and projected > cap:
+                log.info("vision_budget_blocked model=%s reason=vision_max_cost", model.id)
+                return False, projected
         async with self._ledger_lock:
             if self._budget_ceiling is None or self._ledger_corrupt:
                 return False, _ZERO
             if self._cumulative + self._reserved + projected > self._budget_ceiling:
+                if role == ROLE_VISION:
+                    log.info("vision_budget_blocked model=%s reason=ceiling", model.id)
                 return False, projected
         return True, projected
 
@@ -962,6 +1087,24 @@ class ModelRouter:
             if not paid:
                 self._ledger["request_count"] = int(self._ledger.get("request_count") or 0) + 1
             self._persist_ledger()
+
+    def _log_vision_outcome(
+        self,
+        role: str,
+        result: ModelCallResult,
+        attempted: list[str],
+        *,
+        budget_limited: bool,
+    ) -> None:
+        if role != ROLE_VISION:
+            return
+        if result.model:
+            if result.fallback_used or len(attempted) > 1:
+                log.info("vision_model_fallback model=%s paid=%s", result.model, result.paid)
+            else:
+                log.info("vision_model_selected model=%s paid=%s", result.model, result.paid)
+        if budget_limited or result.budget_limited:
+            log.info("vision_budget_blocked attempted=%s", len(attempted))
 
     def _maybe_budget_warning(self) -> None:
         if self._budget_ceiling in {None, _ZERO}:

@@ -56,17 +56,41 @@ def _heatmap(incidents: list[Any], flagged: list[dict[str, Any]], *, now: dateti
     by_location: dict[str, dict[str, Any]] = {}
     for pattern in flagged:
         loc = str(pattern.get("location") or "Unknown")
-        cell = by_location.setdefault(loc, {"active": 0, "risk": "LOW", "predicted": False})
+        cell = by_location.setdefault(
+            loc,
+            {"active": 0, "risk": "LOW", "predicted": False, "electrical": 0, "machine": 0, "chemical": 0, "other": 0},
+        )
         cell["predicted"] = True
         cell["active"] = max(cell["active"], int(pattern.get("open_count") or 0))
         level = str(pattern.get("risk_level") or "Medium").upper()
         rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
         if rank.get(level, 0) > rank.get(cell["risk"], 0):
             cell["risk"] = level if level in rank else "HIGH"
+        cat = str(pattern.get("category") or "").lower()
+        count = int(pattern.get("incident_count") or 0)
+        if "electrical" in cat:
+            cell["electrical"] += count
+        elif "machine" in cat:
+            cell["machine"] += count
+        elif "chemical" in cat:
+            cell["chemical"] += count
+        else:
+            cell["other"] += count
     hotspots = detect_location_hotspots(incidents, now=now)
     for item in hotspots:
         loc = item["location"]
-        cell = by_location.setdefault(loc, {"active": 0, "risk": "MEDIUM", "predicted": False})
+        cell = by_location.setdefault(
+            loc,
+            {
+                "active": 0,
+                "risk": "MEDIUM",
+                "predicted": False,
+                "electrical": 0,
+                "machine": 0,
+                "chemical": 0,
+                "other": 0,
+            },
+        )
         if cell["risk"] == "LOW":
             cell["risk"] = "MEDIUM"
     rows = []
@@ -79,6 +103,10 @@ def _heatmap(incidents: list[Any], flagged: list[dict[str, Any]], *, now: dateti
                 marker=_MARKERS.get(risk, "🟢"),
                 active=int(cell["active"] or 0),
                 predicted=bool(cell["predicted"]),
+                electrical_images=int(cell.get("electrical") or 0),
+                machine_images=int(cell.get("machine") or 0),
+                chemical_images=int(cell.get("chemical") or 0),
+                other_images=int(cell.get("other") or 0),
             )
         )
     return rows

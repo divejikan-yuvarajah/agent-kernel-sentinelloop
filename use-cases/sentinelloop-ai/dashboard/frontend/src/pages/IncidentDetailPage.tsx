@@ -215,27 +215,64 @@ export function IncidentDetailPage() {
               <EvidenceImage src={pair.before} alt={detail.title || "Worker evidence"} ratio="16/9" />
             </Panel>
             <Panel title="Incident Evidence Gallery" style={{ marginBottom: 24 }}>
-              <div className="ds-before-after">
+              <p className="ds-metric__label">Original Evidence · AI Analysis · Resolution Evidence</p>
+              <div className="ds-before-after ds-before-after--triple">
                 <article>
-                  <p className="ds-metric__label">Before</p>
+                  <p className="ds-metric__label">Original Evidence</p>
                   <EvidenceImage src={pair.before} alt="Original worker image" />
                 </article>
                 <article>
-                  <p className="ds-metric__label">After</p>
+                  <p className="ds-metric__label">AI Analysis</p>
+                  <EvidenceImage src={pair.before} alt="AI analysis of hazard image" />
+                  <p className="ds-mono">{(detail.vision?.hazard_category || vision.hazard)} suggestion</p>
+                </article>
+                <article>
+                  <p className="ds-metric__label">Resolution Evidence</p>
                   <EvidenceImage src={pair.after} alt="Resolution image" />
                 </article>
               </div>
             </Panel>
-            <Panel title="AI Vision Analysis" style={{ marginBottom: 24 }}>
-              <p className="ds-mono">{vision.label}</p>
-              <p>Detected Objects:</p>
+            <Panel title="Before / After Safety Comparison" style={{ marginBottom: 24 }}>
+              <div className="ds-before-after">
+                <article>
+                  <p className="ds-metric__label">Before</p>
+                  <EvidenceImage src={pair.before} alt="Hazard image" />
+                  <p>Risk: High</p>
+                </article>
+                <article>
+                  <p className="ds-metric__label">After</p>
+                  <EvidenceImage src={pair.after} alt="Fixed image" />
+                  <p>Risk: Closed</p>
+                </article>
+              </div>
+            </Panel>
+            <Panel title="AI Image Analysis" style={{ marginBottom: 24 }}>
+              <p className="ds-metric__label">Uploaded Image → AI Observation → Final Classification</p>
+              <EvidenceImage src={pair.before} alt="Worker photo" ratio="16/9" />
+              <p>
+                <strong>AI Suggestion</strong> {detail.vision?.hazard_category || vision.hazard} Hazard
+              </p>
+              {(() => {
+                const conf = detail.vision?.confidence != null ? Math.round(detail.vision.confidence * 100) : vision.confidence;
+                const band = detail.vision?.confidence_band || (conf >= 90 ? "high" : conf >= 60 ? "medium" : "low");
+                const label = band === "high" ? "High Confidence" : band === "medium" ? "Medium Confidence" : "Low Confidence";
+                return (
+                  <p>
+                    Confidence: {conf}%{" "}
+                    <span className={`ds-confidence ds-confidence--${band}`}>{label}</span>
+                  </p>
+                );
+              })()}
+              <p>Observed:</p>
               <ul className="ds-vision">
-                {vision.objects.map((item) => (
+                {(detail.vision?.observations?.length ? detail.vision.observations : vision.objects).map((item) => (
                   <li key={item}>✓ {item}</li>
                 ))}
               </ul>
-              <p>Possible Hazard: {vision.hazard}</p>
-              <p>Confidence: {vision.confidence}%</p>
+              <p>
+                <strong>Final Category:</strong> {detail.vision?.final_category || detail.category}
+              </p>
+              <p className="ds-mono">Suggestion only. Worker text and human review remain in control.</p>
             </Panel>
             {detail.voice_report ? (
               <Panel title="🎤 Voice Report" style={{ marginBottom: 24 }}>

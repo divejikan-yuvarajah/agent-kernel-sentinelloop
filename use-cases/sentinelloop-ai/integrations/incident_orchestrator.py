@@ -542,6 +542,10 @@ class IncidentOrchestrator:
             draft["raw_text"] = _join_text(previous.get("raw_text"), intake_data.get("raw_text") or text)
         if message.media:
             draft["has_image"] = True
+            blob = self._pending_media.get(message.provider_message_id)
+            if blob and blob.get("content"):
+                draft["image_bytes"] = blob.get("content")
+                draft["image_mime_type"] = blob.get("mime_type") or "image/jpeg"
         for key in (
             "qr_location",
             "qr_equipment",
@@ -598,6 +602,7 @@ class IncidentOrchestrator:
     ) -> OrchestrationResult:
         persisted, persist_error = await self._ensure_canonical_incident(merged, message, session)
         merged.update(persisted)
+        await self._persist_vision_audit(merged)
         evidence_attached = await self.persist_initial_evidence(message, session, merged)
         if getattr(message, "voice_used", False):
             await self._audit(
@@ -904,6 +909,18 @@ class IncidentOrchestrator:
             for key, value in previous.items():
                 if key not in draft or draft.get(key) in (None, "", []):
                     draft[key] = value
+        mid = draft.get("external_message_id")
+        blob = self._pending_media.get(str(mid)) if mid else None
+        if blob is None and self._pending_media:
+            blob = next(reversed(list(self._pending_media.values())), None)
+        if blob:
+            draft["has_image"] = True
+            if blob.get("content"):
+                draft["image_bytes"] = blob.get("content")
+                draft["image_mime_type"] = blob.get("mime_type") or "image/jpeg"
+            url = blob.get("media_url") or blob.get("url")
+            if url:
+                draft["image_url"] = url
         return await self._incident()(
             draft,
             previous=previous or None,
@@ -1107,6 +1124,31 @@ class IncidentOrchestrator:
         except Exception:
             log.warning("audit_event_failed type=%s", update_type)
 
+    async def _persist_vision_audit(self, merged: dict[str, Any]) -> None:
+        if not merged.get("vision_hazard_category") and not merged.get("vision_timestamp"):
+            return
+        vision_cat = merged.get("vision_hazard_category")
+        final = merged.get("hazard_category")
+        overridden = bool(vision_cat and final and vision_cat != final)
+        await self._audit(
+            merged,
+            "vision_suggestion",
+            message="AI Vision Suggestion",
+            metadata={
+                "vision_hazard_category": vision_cat,
+                "vision_confidence": merged.get("vision_confidence"),
+                "vision_observations": merged.get("vision_observations") or [],
+                "vision_model_used": merged.get("vision_model_used"),
+                "vision_timestamp": merged.get("vision_timestamp"),
+                "final_category": final,
+                "vision_override": overridden or bool(merged.get("vision_override")),
+                "override_reason": merged.get("override_reason"),
+                "changed_by": merged.get("changed_by") or merged.get("category_source"),
+                "category_source": merged.get("category_source"),
+                "suggestion_only": True,
+            },
+        )
+
     async def _pause_for_clarification(
         self,
         message: NormalizedWhatsAppMessage,
@@ -1287,7 +1329,10 @@ def _jsonable(value: Any) -> bool:
 
 def _session_draft(merged: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
+    skip = {"image_bytes", "media_content"}
     for key, value in merged.items():
+        if key in skip:
+            continue
         if isinstance(value, UUID):
             out[key] = str(value)
         elif _jsonable(value):

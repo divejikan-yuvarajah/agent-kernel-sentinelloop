@@ -24,6 +24,7 @@ import {
   riskCounts,
   type DemoIncident,
 } from "../data/demoData";
+import { visionAnalysis } from "../data/demoImages";
 
 const DEMO_NOW = Date.parse("2026-08-31T14:55:00+00:00");
 
@@ -165,7 +166,14 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
   );
   const ev = evidenceRecords.filter((item) => item.incident_id === row.incident_id);
   const timeline = [
-    { timestamp: clockFrom(row.created_at, 0), title: "Worker message received", detail: row.original_text, actor: "worker" },
+    { timestamp: clockFrom(row.created_at, 0), title: "Worker uploaded image", detail: row.input_channel || "image", actor: "worker" },
+    { timestamp: clockFrom(row.created_at, 1), title: "Vision AI analyzed image", detail: "role_vision", actor: "incident_agent" },
+    {
+      timestamp: clockFrom(row.created_at, 1),
+      title: `Suggested ${visionAnalysis(row.incident_id, row.category).hazard} hazard`,
+      detail: `Confidence ${visionAnalysis(row.incident_id, row.category).confidence}%`,
+      actor: "role_vision",
+    },
     {
       timestamp: clockFrom(row.created_at, 1),
       title: `Language detected: ${row.language}`,
@@ -173,6 +181,7 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
       actor: "intake_agent",
     },
     { timestamp: clockFrom(row.created_at, 1), title: "Hazard classified", detail: row.category, actor: "intake_agent" },
+    { timestamp: clockFrom(row.created_at, 2), title: "Incident confirmed", detail: row.category, actor: "incident_agent" },
     {
       timestamp: clockFrom(row.created_at, 2),
       title: "Duplicate check completed",
@@ -291,6 +300,24 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
     assigned_team: row.assigned_team,
     severity: row.severity,
     likelihood: row.likelihood,
+    vision: {
+      hazard_category: visionAnalysis(row.incident_id, row.category).hazard,
+      confidence: visionAnalysis(row.incident_id, row.category).confidence / 100,
+      observations: visionAnalysis(row.incident_id, row.category).objects,
+      model_used: "qwen/qwen-vl-free",
+      timestamp: row.created_at,
+      suggestion_only: true,
+      final_category: row.category,
+      vision_override: false,
+      override_reason: null,
+      changed_by: null,
+      confidence_band:
+        visionAnalysis(row.incident_id, row.category).confidence >= 90
+          ? "high"
+          : visionAnalysis(row.incident_id, row.category).confidence >= 60
+            ? "medium"
+            : "low",
+    },
   };
   return wait(detail);
 }
@@ -367,6 +394,32 @@ export function fetchAnalyticsSummary(): Promise<AnalyticsSummary> {
     anonymous_reports: kpis.anonymousReports,
     average_detection: kpis.averageDetection,
     average_assignment: kpis.averageAssignment,
+    vision_analytics: {
+      images_analyzed: 142,
+      high_confidence_detections: 87,
+      human_overrides: 12,
+      average_confidence: 0.84,
+      confidence_distribution: { high: 70, medium: 25, low: 5 },
+      hazard_detection_by_image: [
+        { label: "Electrical", percent: 45, count: 64 },
+        { label: "Chemical", percent: 20, count: 28 },
+        { label: "Machine", percent: 15, count: 21 },
+        { label: "Slip", percent: 10, count: 14 },
+        { label: "Other", percent: 10, count: 15 },
+      ],
+      model_usage: { free_percent: 90, paid_percent: 10, average_cost_usd: 0.002 },
+      location_heatmap: [
+        {
+          location: "CNC Area",
+          risk: "HIGH",
+          electrical_images: 12,
+          machine_images: 7,
+          chemical_images: 0,
+          other_images: 1,
+          total_images: 20,
+        },
+      ],
+    },
   });
 }
 
@@ -416,7 +469,7 @@ export function fetchPredictions(): Promise<PredictionsResponse> {
     },
     heatmap: [
       { location: "Electrical Room", risk: "CRITICAL", marker: "🔴", active: 4, predicted: true },
-      { location: "CNC Area", risk: "HIGH", marker: "🟠", active: 3, predicted: true },
+      { location: "CNC Area", risk: "HIGH", marker: "🟠", active: 3, predicted: true, electrical_images: 12, machine_images: 7 },
       { location: "Loading Bay", risk: "MEDIUM", marker: "🟡", active: 2, predicted: true },
       { location: "Office Area", risk: "LOW", marker: "🟢", active: 1, predicted: false },
     ],
@@ -605,8 +658,22 @@ export function fetchAuditExport(id: string): Promise<AuditExport> {
       { officer: row.assigned_officer, previous_officer: null, assigned_at: row.created_at, reason: "Team match" },
     ],
     incident_timeline: [
-      { time: row.created_at, event: "Report received", update_type: "incident_created", message: row.translated_text, created_by: "intake_agent" },
+      { time: row.created_at, event: "Worker uploaded image", update_type: "evidence_added", message: row.translated_text, created_by: "worker" },
+      { time: row.created_at, event: "Vision AI analyzed image", update_type: "vision_suggestion", message: "Suggestion only", created_by: "role_vision" },
+      { time: row.created_at, event: "Incident confirmed", update_type: "intake_completed", message: row.category, created_by: "incident_agent" },
     ],
+    vision_suggestion: {
+      category: visionAnalysis(row.incident_id, row.category).hazard,
+      confidence: visionAnalysis(row.incident_id, row.category).confidence / 100,
+      observations: visionAnalysis(row.incident_id, row.category).objects,
+      model_used: "qwen/qwen-vl-free",
+      timestamp: row.created_at,
+      final_decision: row.category,
+      override: false,
+      override_reason: null,
+      changed_by: null,
+      suggestion_only: true,
+    },
     resolution: {
       status: row.status,
       resolution_message: row.status === "CLOSED" ? "Worker confirmed the area is safe." : null,

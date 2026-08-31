@@ -528,6 +528,35 @@
   gap: var(--space-3);
 }
 
+.ds-before-after--triple {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.ds-confidence {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ds-confidence--high {
+  color: var(--ink);
+  background: var(--verified-teal);
+}
+
+.ds-confidence--medium {
+  color: var(--ink);
+  background: var(--signal-amber);
+}
+
+.ds-confidence--low {
+  color: #fff;
+  background: var(--hazard-red);
+}
+
 .ds-location-tile p {
   margin: 8px 0 0;
 }
@@ -538,7 +567,8 @@
 }
 
 @media (max-width: 720px) {
-  .ds-before-after {
+  .ds-before-after,
+  .ds-before-after--triple {
     grid-template-columns: 1fr;
   }
 }

@@ -36,6 +36,10 @@ from dashboard.schemas import (
     RouterStatus,
     TelegramBotStatus,
     TimelineEvent,
+    VisionAnalytics,
+    VisionCategoryShare,
+    VisionInsight,
+    VisionLocationHeatmap,
     VoiceReport,
 )
 from database.models import Assignment, Incident, IncidentEvidence, IncidentUpdate, RiskAssessment
@@ -67,8 +71,18 @@ _STATUS_TO_STAGE = {status: key for key, _label, statuses in LOOP_STAGES for sta
 
 _RISK_RANK = {"LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}
 _RISK_SCORE_FALLBACK = {"LOW": 4, "MEDIUM": 9, "HIGH": 12, "CRITICAL": 16}
-_ROLE_TIER = {"role_fast": "FAST MODEL", "role_reasoning": "SMART MODEL", "role_guidance": "GUIDANCE MODEL"}
-_ROLE_AGENT = {"role_fast": "intake_agent", "role_reasoning": "risk_agent", "role_guidance": "guidance_agent"}
+_ROLE_TIER = {
+    "role_fast": "FAST MODEL",
+    "role_reasoning": "SMART MODEL",
+    "role_guidance": "GUIDANCE MODEL",
+    "role_vision": "VISION MODEL",
+}
+_ROLE_AGENT = {
+    "role_fast": "intake_agent",
+    "role_reasoning": "risk_agent",
+    "role_guidance": "guidance_agent",
+    "role_vision": "incident_agent",
+}
 
 _TIMELINE_TITLES = {
     "incident_draft_started": "Report received",
@@ -90,6 +104,8 @@ _TIMELINE_TITLES = {
     "duplicate_report_linked": "AI merged reports",
     "duplicate_threshold_reached": "Priority increased",
     "whatsapp_inbound": "Worker message received",
+    "vision_suggestion": "Vision AI analyzed image",
+    "vision_override": "Human overrode vision suggestion",
     "whatsapp_outbound": "Reply sent to worker",
     "incident_resolved": "Incident resolved",
     "incident_closed": "Incident closed",
@@ -543,6 +559,7 @@ class DashboardReadService:
             safety_status=status_label,
             input_channel=incident.source_channel,
             voice_report=_voice_report_from_updates(updates, incident),
+            vision=_vision_from_updates(updates, incident),
             safety=build_safety_panel(
                 incident_id=incident.incident_ref,
                 risk_level=incident.current_risk_level,
@@ -628,6 +645,7 @@ class DashboardReadService:
                 )
             )
         updates = self._repo.list_recent_updates(limit=12)
+        vision_updates = self._repo.list_recent_updates(limit=400)
         refs = {str(item.id): item.incident_ref for item in incidents}
         refs.update({item.incident_ref: item.incident_ref for item in incidents})
         activity = [_activity_from_update(row, refs.get(str(row.incident_id))) for row in updates]
@@ -654,6 +672,7 @@ class DashboardReadService:
             repeated_hazard_locations=repeat_stats["locations"],
             duplicate_detection_stats=duplicate_detection_stats(),
             reports_by_channel=_channel_share(incidents),
+            vision_analytics=_vision_analytics(incidents, vision_updates),
         )
 
     def telegram_status(self) -> TelegramBotStatus:
@@ -955,6 +974,33 @@ class DashboardReadService:
             fields = unpack_update(update)
             title = _timeline_title_for(str(fields["update_type"]), fields.get("new_status"))
             detail = redact_text(fields["message"] if isinstance(fields["message"], str) else None)
+            meta = fields.get("metadata") if isinstance(fields.get("metadata"), dict) else {}
+            if str(fields["update_type"]) == "vision_suggestion":
+                cat = meta.get("vision_hazard_category") or meta.get("category")
+                conf = meta.get("vision_confidence") or meta.get("confidence")
+                events.append(
+                    TimelineEvent(
+                        timestamp=update.created_at,
+                        title="Vision AI analyzed image",
+                        detail=str(meta.get("vision_model_used") or "") or None,
+                        actor="role_vision",
+                    )
+                )
+                if cat:
+                    pct = None
+                    try:
+                        pct = round(float(conf) * 100) if conf is not None else None
+                    except (TypeError, ValueError):
+                        pct = None
+                    events.append(
+                        TimelineEvent(
+                            timestamp=update.created_at,
+                            title=f"Suggested {cat} hazard",
+                            detail=f"Confidence {pct}%" if pct is not None else None,
+                            actor="role_vision",
+                        )
+                    )
+                continue
             if not detail and fields.get("previous_status") and fields.get("new_status"):
                 previous = to_display_status(str(fields["previous_status"])) or fields["previous_status"]
                 nxt = to_display_status(str(fields["new_status"])) or fields["new_status"]
@@ -1143,6 +1189,141 @@ def _channel_share(incidents: list[Incident]) -> list[ChannelShare]:
         ChannelShare(channel=name, count=counts.get(name, 0), percentage=round(100 * counts.get(name, 0) / total, 1))
         for name in order
     ]
+
+
+def _vision_from_updates(updates: list[IncidentUpdate], incident: Incident) -> VisionInsight | None:
+    vision_meta: dict[str, Any] = {}
+    override_meta: dict[str, Any] = {}
+    for update in updates:
+        meta = update.metadata if isinstance(update.metadata, dict) else {}
+        kind = (update.update_type or "").lower()
+        if kind in {"vision_suggestion", "vision_analyzed"}:
+            vision_meta = meta
+        elif meta.get("vision_hazard_category") and not vision_meta:
+            vision_meta = meta
+        if kind in {"vision_override", "category_override"} or meta.get("vision_override"):
+            override_meta = meta
+    if not vision_meta and not override_meta:
+        return None
+    observations = vision_meta.get("vision_observations") or vision_meta.get("observations") or []
+    if isinstance(observations, str):
+        observations = [observations]
+    if not isinstance(observations, list):
+        observations = []
+    confidence = vision_meta.get("vision_confidence") or vision_meta.get("confidence")
+    try:
+        conf = float(confidence) if confidence is not None else None
+    except (TypeError, ValueError):
+        conf = None
+    vision_cat = vision_meta.get("vision_hazard_category") or vision_meta.get("category")
+    final = override_meta.get("final_category") or vision_meta.get("final_category") or incident.hazard_category
+    overridden = bool(override_meta.get("vision_override")) or bool(
+        vision_cat and final and str(vision_cat).lower() != str(final).lower()
+    )
+    band = None
+    if conf is not None:
+        pct = conf * 100
+        band = "high" if pct >= 90 else "medium" if pct >= 60 else "low"
+    return VisionInsight(
+        hazard_category=str(vision_cat) if vision_cat else None,
+        confidence=conf,
+        observations=[str(item) for item in observations if item][:3],
+        model_used=str(vision_meta.get("vision_model_used") or vision_meta.get("model_used") or "") or None,
+        timestamp=str(vision_meta.get("vision_timestamp") or vision_meta.get("timestamp") or "") or None,
+        suggestion_only=True,
+        final_category=str(final) if final else None,
+        vision_override=overridden,
+        override_reason=str(override_meta.get("override_reason") or "") or None,
+        changed_by=str(override_meta.get("changed_by") or "") or None,
+        confidence_band=band,
+    )
+
+
+def _vision_analytics(incidents: list[Incident], updates: list[IncidentUpdate]) -> VisionAnalytics:
+    from tools.vision_tools import vision_stats
+
+    live = vision_stats()
+    by_category: dict[str, int] = dict(live.get("by_category") or {})
+    high = int(live.get("high_confidence_detections") or 0)
+    medium = int((live.get("confidence_distribution") or {}).get("medium") or 0)
+    low = int((live.get("confidence_distribution") or {}).get("low") or 0)
+    analyzed = int(live.get("images_analyzed") or 0)
+    overrides = int(live.get("human_overrides") or 0)
+    conf_sum = float(live.get("average_confidence") or 0) * analyzed
+    locations: dict[str, dict[str, int]] = {}
+    incident_map = {str(item.id): item for item in incidents}
+    for update in updates:
+        meta = update.metadata if isinstance(update.metadata, dict) else {}
+        kind = (update.update_type or "").lower()
+        if kind == "vision_override" or meta.get("vision_override"):
+            overrides += 1
+        if kind not in {"vision_suggestion", "vision_analyzed"}:
+            continue
+        analyzed += 1
+        cat = str(meta.get("vision_hazard_category") or meta.get("category") or "other")
+        by_category[cat] = by_category.get(cat, 0) + 1
+        try:
+            conf = float(meta.get("vision_confidence") or 0)
+        except (TypeError, ValueError):
+            conf = 0.0
+        conf_sum += conf
+        if conf >= 0.9:
+            high += 1
+        elif conf >= 0.6:
+            medium += 1
+        else:
+            low += 1
+        incident = incident_map.get(str(update.incident_id))
+        loc = (incident.location if incident is not None else None) or "Unknown"
+        cell = locations.setdefault(loc, {"electrical": 0, "machine": 0, "chemical": 0, "other": 0})
+        key = (
+            "electrical"
+            if "electrical" in cat.lower()
+            else "machine" if "machine" in cat.lower() else "chemical" if "chemical" in cat.lower() else "other"
+        )
+        cell[key] += 1
+    if analyzed == 0 and not by_category:
+        return VisionAnalytics()
+    total_cat = sum(by_category.values()) or 1
+    shares = [
+        VisionCategoryShare(label=label, count=count, percent=round(100 * count / total_cat, 1))
+        for label, count in sorted(by_category.items(), key=lambda item: item[1], reverse=True)
+    ]
+    band_total = high + medium + low or 1
+    heatmap = []
+    for location, counts in sorted(locations.items()):
+        total_images = sum(counts.values())
+        risk = "HIGH" if counts["electrical"] >= 3 or total_images >= 8 else "MEDIUM" if total_images >= 3 else "LOW"
+        heatmap.append(
+            VisionLocationHeatmap(
+                location=location,
+                risk=risk,
+                electrical_images=counts["electrical"],
+                machine_images=counts["machine"],
+                chemical_images=counts["chemical"],
+                other_images=counts["other"],
+                total_images=total_images,
+            )
+        )
+    usage = live.get("model_usage") or {}
+    return VisionAnalytics(
+        images_analyzed=analyzed,
+        high_confidence_detections=high,
+        human_overrides=overrides,
+        average_confidence=round(conf_sum / analyzed, 2) if analyzed else 0.0,
+        confidence_distribution={
+            "high": round(100 * high / band_total, 1),
+            "medium": round(100 * medium / band_total, 1),
+            "low": round(100 * low / band_total, 1),
+        },
+        hazard_detection_by_image=shares,
+        model_usage={
+            "free_percent": float(usage.get("free_percent") or 0),
+            "paid_percent": float(usage.get("paid_percent") or 0),
+            "average_cost_usd": float(usage.get("average_cost_usd") or 0),
+        },
+        location_heatmap=heatmap,
+    )
 
 
 def _voice_report_from_updates(updates: list[IncidentUpdate], incident: Incident) -> VoiceReport | None:

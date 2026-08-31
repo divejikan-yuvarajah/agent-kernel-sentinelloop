@@ -46,6 +46,12 @@ ROLES = {
         "temperature": 0.2,
         "max_tokens": 96,
     },
+    "role_vision": {
+        "preferred_family_order": ["qwen", "gemini", "deepseek"],
+        "paid_fallbacks": ["google/gemini-flash-vision-paid", "mistralai/mistral-nemo"],
+        "temperature": 0.1,
+        "max_tokens": 384,
+    },
 }
 
 PAID_NEMO = "mistralai/mistral-nemo"
@@ -707,6 +713,107 @@ def test_budget_fallback_returns_clean_response_when_paid_blocked(tmp_path: Path
     assert result.content
     assert "Stay clear of the hazard." in result.content
     assert result.error is None or result.budget_limited is True
+    run(router.aclose())
+
+
+FREE_VISION = "qwen/qwen-vl-free-test"
+PAID_VISION = "google/gemini-flash-vision-paid"
+VISION_MESSAGES = [
+    {"role": "system", "content": "Analyze this workplace safety image."},
+    {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "analyze"},
+            {"type": "image_url", "image_url": {"url": "https://example.com/panel.jpg"}},
+        ],
+    },
+]
+
+
+def test_architecture_input_modalities_marks_vision():
+    model = catalog_model_from_api(
+        api_model("vl/free", "0", "0", 4096, input_mod=["text", "image"], output_mod=["text"])
+    )
+    assert model is not None
+    assert model.supports_vision()
+
+
+def test_architecture_modality_string_text_plus_image():
+    model = catalog_model_from_api(
+        {
+            "id": "vl/string",
+            "pricing": {"prompt": "0", "completion": "0"},
+            "architecture": {"modality": "text+image->text"},
+        }
+    )
+    assert model is not None
+    assert "image" in {item.lower() for item in model.input_modalities}
+    assert model.supports_vision()
+
+
+def test_role_fast_still_prefers_qwen_when_vision_model_present(tmp_path: Path):
+    fake = FakeOpenRouter(
+        default_catalog() + [api_model(FREE_VISION, "0", "0", 8192, name="Qwen VL", input_mod=["text", "image"])]
+    )
+    router = make_router(tmp_path, fake)
+    result = run(router.call_model("role_fast", MESSAGES))
+    assert result.model == FREE_QWEN
+    run(router.aclose())
+
+
+def test_vision_prefers_free_vision_model(tmp_path: Path, caplog):
+    caplog.set_level(logging.INFO)
+    fake = FakeOpenRouter(
+        default_catalog()
+        + [
+            api_model(FREE_VISION, "0", "0", 8192, name="Qwen VL Free", input_mod=["text", "image"]),
+            api_model(
+                PAID_VISION, "0.00000002", "0.00000004", 8192, name="Gemini VL Paid", input_mod=["text", "image"]
+            ),
+        ]
+    )
+    router = make_router(tmp_path, fake)
+    result = run(router.call_model("role_vision", VISION_MESSAGES))
+    assert result.model == FREE_VISION
+    assert result.paid is False
+    assert "vision_model_selected" in caplog.text
+    assert "sk-or-test" not in caplog.text
+    run(router.aclose())
+
+
+def test_vision_paid_fallback_respects_budget_ceiling(tmp_path: Path, caplog):
+    caplog.set_level(logging.INFO)
+    fake = FakeOpenRouter(
+        [
+            api_model(
+                PAID_VISION, "0.00000002", "0.00000004", 8192, name="Gemini VL Paid", input_mod=["text", "image"]
+            ),
+        ]
+    )
+    router = make_router(tmp_path, fake, budget=Decimal("0"))
+    result = run(router.call_model("role_vision", VISION_MESSAGES))
+    assert result.paid is False
+    assert result.budget_limited is True
+    assert all(call["model"] != PAID_VISION for call in fake.chat_calls)
+    assert "vision_budget_blocked" in caplog.text
+    run(router.aclose())
+
+
+def test_vision_uses_cheapest_paid_when_no_free_vision(tmp_path: Path, caplog):
+    caplog.set_level(logging.INFO)
+    dear = "meta/llama-vision-paid"
+    fake = FakeOpenRouter(
+        [
+            api_model(FREE_QWEN, "0", "0", 32768),
+            api_model(PAID_VISION, "0.00000001", "0.00000002", 8192, input_mod=["text", "image"]),
+            api_model(dear, "0.00000009", "0.00000009", 8192, input_mod=["text", "image"]),
+        ]
+    )
+    router = make_router(tmp_path, fake, budget=Decimal("3"))
+    result = run(router.call_model("role_vision", VISION_MESSAGES))
+    assert result.paid is True
+    assert result.model == PAID_VISION
+    assert "vision_model_selected" in caplog.text or "vision_model_fallback" in caplog.text
     run(router.aclose())
 
 

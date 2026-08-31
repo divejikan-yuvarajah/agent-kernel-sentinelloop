@@ -222,27 +222,27 @@ export const demoImages = {
 const VISION: Record<string, DemoVisionAnalysis> = {
   "INC-2026-00421": {
     label: "Demo AI Analysis Result",
-    objects: ["Electrical cable", "Exposed wire", "Warning label"],
-    hazard: "Electrical Safety Risk",
-    confidence: 94,
+    objects: ["exposed wire visible", "damaged cable insulation", "worker near electrical panel"],
+    hazard: "electrical",
+    confidence: 88,
+  },
+  "INC-2026-00420": {
+    label: "Demo AI Analysis Result",
+    objects: ["liquid spill visible", "chemical container nearby"],
+    hazard: "chemical",
+    confidence: 81,
+  },
+  "INC-2026-00417": {
+    label: "Demo AI Analysis Result",
+    objects: ["liquid on floor", "walkway unmarked"],
+    hazard: "slip/trip",
+    confidence: 79,
   },
   "INC-2026-00422": {
     label: "Demo AI Analysis Result",
     objects: ["CNC machine", "Smoke plume", "Aisle marking"],
-    hazard: "Fire / Smoke Risk",
+    hazard: "fire/smoke",
     confidence: 91,
-  },
-  "INC-2026-00420": {
-    label: "Demo AI Analysis Result",
-    objects: ["Chemical drum", "Pooled liquid", "Storage cabinet"],
-    hazard: "Chemical Safety Risk",
-    confidence: 89,
-  },
-  "INC-2026-00417": {
-    label: "Demo AI Analysis Result",
-    objects: ["Oil film", "Concrete floor", "Pallet jack"],
-    hazard: "Slip / Trip Risk",
-    confidence: 92,
   },
 };
 

@@ -104,10 +104,23 @@ export type IncidentDetail = {
   likelihood?: number | null;
   input_channel?: string | null;
   voice_report?: {
-    duration_seconds: number | null;
-    language: string | null;
-    transcript: string | null;
-    audio_format: string | null;
+    duration_seconds?: number | null;
+    language?: string | null;
+    transcript?: string | null;
+    audio_format?: string | null;
+  } | null;
+  vision?: {
+    hazard_category: string | null;
+    confidence: number | null;
+    observations: string[];
+    model_used: string | null;
+    timestamp: string | null;
+    suggestion_only: boolean;
+    final_category: string | null;
+    vision_override: boolean;
+    override_reason: string | null;
+    changed_by: string | null;
+    confidence_band: string | null;
   } | null;
 };
 
@@ -291,6 +304,18 @@ export type AuditExport = {
     message: string | null;
     created_by: string | null;
   }[];
+  vision_suggestion?: {
+    category: string | null;
+    confidence: number | null;
+    observations: string[];
+    model_used: string | null;
+    timestamp: string | null;
+    final_decision: string | null;
+    override: boolean;
+    override_reason: string | null;
+    changed_by: string | null;
+    suggestion_only: boolean;
+  } | null;
   resolution: {
     status: string | null;
     resolution_message: string | null;

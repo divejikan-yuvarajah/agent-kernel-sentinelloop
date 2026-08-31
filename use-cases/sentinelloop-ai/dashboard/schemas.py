@@ -102,6 +102,20 @@ class VoiceReport(_Out):
     audio_format: str | None = "ogg"
 
 
+class VisionInsight(_Out):
+    hazard_category: str | None = None
+    confidence: float | None = None
+    observations: list[str] = Field(default_factory=list)
+    model_used: str | None = None
+    timestamp: str | None = None
+    suggestion_only: bool = True
+    final_category: str | None = None
+    vision_override: bool = False
+    override_reason: str | None = None
+    changed_by: str | None = None
+    confidence_band: str | None = None
+
+
 class IncidentDetail(_Out):
     incident_id: str
     record_id: UUID | None = None
@@ -129,6 +143,7 @@ class IncidentDetail(_Out):
     safety: IncidentSafetyPanel | None = None
     input_channel: str | None = None
     voice_report: VoiceReport | None = None
+    vision: VisionInsight | None = None
 
 
 class ChannelShare(_Out):
@@ -182,6 +197,33 @@ class RepeatedHazardStat(_Out):
     insight: str | None = None
 
 
+class VisionCategoryShare(_Out):
+    label: str
+    percent: float
+    count: int = 0
+
+
+class VisionLocationHeatmap(_Out):
+    location: str
+    risk: str | None = None
+    electrical_images: int = 0
+    machine_images: int = 0
+    chemical_images: int = 0
+    other_images: int = 0
+    total_images: int = 0
+
+
+class VisionAnalytics(_Out):
+    images_analyzed: int = 0
+    high_confidence_detections: int = 0
+    human_overrides: int = 0
+    average_confidence: float = 0.0
+    confidence_distribution: dict[str, float] = Field(default_factory=dict)
+    hazard_detection_by_image: list[VisionCategoryShare] = Field(default_factory=list)
+    model_usage: dict[str, float] = Field(default_factory=dict)
+    location_heatmap: list[VisionLocationHeatmap] = Field(default_factory=list)
+
+
 class AnalyticsSummary(_Out):
     total_incidents: int
     open_incidents: int
@@ -205,6 +247,7 @@ class AnalyticsSummary(_Out):
     reports_by_channel: list[ChannelShare] = Field(default_factory=list)
     telegram_message_types: dict[str, float] = Field(default_factory=dict)
     telegram_languages: dict[str, float] = Field(default_factory=dict)
+    vision_analytics: VisionAnalytics = Field(default_factory=VisionAnalytics)
 
 
 class RecurringHazard(_Out):
@@ -252,6 +295,10 @@ class HeatmapCell(_Out):
     marker: str
     active: int = 0
     predicted: bool = False
+    electrical_images: int = 0
+    machine_images: int = 0
+    chemical_images: int = 0
+    other_images: int = 0
 
 
 class PreventionAnalytics(_Out):
@@ -429,6 +476,19 @@ class AuditMetadata(_Out):
     compliance: list[str] = Field(default_factory=list)
 
 
+class AuditVisionSuggestion(_Out):
+    category: str | None = None
+    confidence: float | None = None
+    observations: list[str] = Field(default_factory=list)
+    model_used: str | None = None
+    timestamp: str | None = None
+    final_decision: str | None = None
+    override: bool = False
+    override_reason: str | None = None
+    changed_by: str | None = None
+    suggestion_only: bool = True
+
+
 class AuditExport(_Out):
     """Inspector-ready explainable-AI packet for one incident. Read-only."""
 
@@ -443,6 +503,7 @@ class AuditExport(_Out):
     assignment_history: list[AuditAssignmentChange] = Field(default_factory=list)
     incident_timeline: list[AuditTimelineEvent] = Field(default_factory=list)
     resolution: AuditResolution
+    vision_suggestion: AuditVisionSuggestion | None = None
     audit_metadata: AuditMetadata
 
 

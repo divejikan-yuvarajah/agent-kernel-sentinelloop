@@ -115,6 +115,10 @@ export type PredictionHeatmapCell = {
   marker: string;
   active: number;
   predicted: boolean;
+  electrical_images?: number;
+  machine_images?: number;
+  chemical_images?: number;
+  other_images?: number;
 };
 
 export type PredictionsResponse = {
@@ -186,6 +190,24 @@ export type AnalyticsSummary = {
   anonymous_reports?: number;
   average_detection?: string;
   average_assignment?: string;
+  vision_analytics?: {
+    images_analyzed: number;
+    high_confidence_detections: number;
+    human_overrides: number;
+    average_confidence: number;
+    confidence_distribution: Record<string, number>;
+    hazard_detection_by_image: { label: string; percent: number; count: number }[];
+    model_usage: Record<string, number>;
+    location_heatmap: {
+      location: string;
+      risk: string | null;
+      electrical_images: number;
+      machine_images: number;
+      chemical_images: number;
+      other_images: number;
+      total_images: number;
+    }[];
+  };
 };
 
 export type TimelineEvent = {

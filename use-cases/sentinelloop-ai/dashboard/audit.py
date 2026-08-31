@@ -29,6 +29,7 @@ from dashboard.schemas import (
     AuditResolution,
     AuditRiskAnalysis,
     AuditTimelineEvent,
+    AuditVisionSuggestion,
     ExtractedField,
 )
 from dashboard.service import (
@@ -487,6 +488,51 @@ def _audit_hash(payload: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _vision_suggestion(incident: Incident, updates: list[IncidentUpdate]) -> AuditVisionSuggestion | None:
+    vision_meta: dict[str, Any] = {}
+    override_meta: dict[str, Any] = {}
+    for update in updates:
+        meta = _meta(update)
+        kind = (update.update_type or "").lower()
+        if kind in {"vision_suggestion", "vision_analyzed"}:
+            vision_meta = meta
+        elif meta.get("vision_hazard_category") and not vision_meta:
+            vision_meta = meta
+        if kind in {"vision_override", "category_override"} or meta.get("vision_override"):
+            override_meta = meta
+    if not vision_meta and not override_meta:
+        return None
+    observations = vision_meta.get("vision_observations") or vision_meta.get("observations") or []
+    if isinstance(observations, str):
+        observations = [observations]
+    if not isinstance(observations, list):
+        observations = []
+    final = override_meta.get("final_category") or vision_meta.get("final_category") or incident.hazard_category
+    vision_cat = vision_meta.get("vision_hazard_category") or vision_meta.get("category")
+    overridden = bool(override_meta.get("vision_override")) or bool(
+        vision_cat and final and str(vision_cat).lower() != str(final).lower()
+    )
+    confidence = vision_meta.get("vision_confidence") or vision_meta.get("confidence")
+    try:
+        conf = float(confidence) if confidence is not None else None
+    except (TypeError, ValueError):
+        conf = None
+    return AuditVisionSuggestion(
+        category=str(vision_cat) if vision_cat else None,
+        confidence=conf,
+        observations=[str(item) for item in observations if item][:3],
+        model_used=str(vision_meta.get("vision_model_used") or vision_meta.get("model_used") or "") or None,
+        timestamp=str(vision_meta.get("vision_timestamp") or vision_meta.get("timestamp") or "") or None,
+        final_decision=str(final) if final else None,
+        override=overridden,
+        override_reason=redact_text(
+            str(override_meta.get("override_reason") or vision_meta.get("override_reason") or "") or None
+        ),
+        changed_by=str(override_meta.get("changed_by") or vision_meta.get("changed_by") or "") or None,
+        suggestion_only=True,
+    )
+
+
 def build_audit_export(
     *,
     incident: Incident,
@@ -536,6 +582,7 @@ def build_audit_export(
         ),
         extracted_information=_extracted(incident, origin),
         ai_decision=_ai_decision(incident, assessment, ordered),
+        vision_suggestion=_vision_suggestion(incident, ordered),
         risk_analysis=_risk_analysis(incident, assessment),
         guidance_history=_guidance(ordered),
         coordination_history=_coordination(ordered),
