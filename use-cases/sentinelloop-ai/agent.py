@@ -67,16 +67,8 @@ def build_agents() -> list[Agent]:
         ),
         model=model,
     )
-    coordination_agent = Agent(
-        name="coordination_agent",
-        handoff_description="Routes incidents to the safety team and records assignment intent.",
-        instructions=(
-            f"{SHARED} You are coordination_agent. Describe who should be notified. "
-            "Do not treat a message as proof that a human acknowledged the alert. "
-            "Handoff to followup_agent when the worker should be asked to verify a fix."
-        ),
-        handoffs=[followup_agent],
-        model=model,
+    coordination_agent = _load_local("coordination_agent.py", "create_coordination_agent")(
+        model=model, handoffs=[followup_agent]
     )
     guidance_agent = _load_local("guidance_agent.py", "create_guidance_agent")(
         model=model, handoffs=[coordination_agent]

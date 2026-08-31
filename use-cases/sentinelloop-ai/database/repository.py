@@ -185,6 +185,33 @@ class IncidentRepository:
         response = _execute(self._client.table("assignments").insert(payload), "assign_incident")
         return Assignment.model_validate(_first_row(response.data, "assign_incident"))
 
+    def get_assignment_for_incident(self, incident_id: UUID) -> Assignment | None:
+        response = _execute(
+            self._client.table("assignments")
+            .select("*")
+            .eq("incident_id", str(incident_id))
+            .order("created_at", desc=True)
+            .limit(1),
+            "get_assignment_for_incident",
+        )
+        rows = response.data or []
+        if not rows:
+            return None
+        return Assignment.model_validate(rows[0])
+
+    def update_assignment(self, assignment_id: UUID, fields: dict) -> Assignment:
+        allowed = {"team", "slack_channel_id", "assigned_to", "assignment_status", "acknowledged_at", "completed_at"}
+        payload = {key: value for key, value in fields.items() if key in allowed and value is not None}
+        if not payload:
+            raise PersistenceError("update_assignment requires at least one allowed field")
+        response = _execute(
+            self._client.table("assignments").update(payload).eq("id", str(assignment_id)),
+            "update_assignment",
+        )
+        if not response.data:
+            raise RecordNotFoundError(f"assignment not found: {assignment_id}")
+        return Assignment.model_validate(_first_row(response.data, "update_assignment"))
+
     def add_evidence(
         self,
         file: EvidenceFile | bytes,
@@ -313,6 +340,14 @@ def add_update(data: IncidentUpdateCreate) -> IncidentUpdate:
 
 def assign_incident(data: AssignmentCreate) -> Assignment:
     return _repo().assign_incident(data)
+
+
+def get_assignment_for_incident(incident_id: UUID) -> Assignment | None:
+    return _repo().get_assignment_for_incident(incident_id)
+
+
+def update_assignment(assignment_id: UUID, fields: dict) -> Assignment:
+    return _repo().update_assignment(assignment_id, fields)
 
 
 def add_evidence(

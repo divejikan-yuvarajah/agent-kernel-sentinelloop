@@ -1,9 +1,11 @@
-"""Future Slack integration boundary.
+"""Slack integration boundary.
 
-Safety alerts, assignment/acknowledgement interactions, and operational
-updates. Proactive channel posts are application Slack client code; inbound
-events use AgentSlackRequestHandler. Notification delivered is not
-acknowledgement.
-
-Implementation is intentionally deferred to a later build phase.
+Outbound coordination alerts live in ``slack_handler.py`` (application
+``slack_sdk`` client). Inbound Events API verification and routing remain
+with Agent Kernel ``AgentSlackRequestHandler``. Notification delivered is
+not human acknowledgement.
 """
+
+from integrations.slack_handler import SlackHandler, SlackPostError, parse_thread_command, sanitize_slack_text
+
+__all__ = ["SlackHandler", "SlackPostError", "parse_thread_command", "sanitize_slack_text"]

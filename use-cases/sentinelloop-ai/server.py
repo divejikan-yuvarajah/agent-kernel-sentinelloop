@@ -10,6 +10,8 @@ pin_openai_agents_sdk()
 
 from agentkernel.api import RESTAPI
 from agentkernel.openai import OpenAIModule
+from agentkernel.slack import AgentSlackRequestHandler
+from agentkernel.whatsapp import AgentWhatsAppRequestHandler
 
 from agent import build_agents, configure_model_provider
 
@@ -17,4 +19,4 @@ configure_model_provider()
 OpenAIModule(build_agents())
 
 if __name__ == "__main__":
-    RESTAPI.run()
+    RESTAPI.run([AgentWhatsAppRequestHandler(), AgentSlackRequestHandler()])
