@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import logging
+from inspect import isawaitable
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -21,7 +22,7 @@ from integrations.whatsapp_handler import (
     NormalizedWhatsAppMessage,
     WhatsAppCloudTransport,
 )
-from tools.duplicate_tools import DuplicateResult, check_for_duplicate
+from tools.duplicate_tools import DuplicateResult, check_duplicate_incident, handle_duplicate_match
 from tools.idempotency import EventIdempotencyStore, event_key
 from tools.lifecycle import (
     STATUS_ASSESSED,
@@ -164,7 +165,7 @@ class IncidentOrchestrator:
         self.coordination = coordination
         self.followup = followup
         self.intake_fn = intake_fn
-        self.duplicate_fn = duplicate_fn or check_for_duplicate
+        self.duplicate_fn = duplicate_fn or check_duplicate_incident
         self.incident_fn = incident_fn
         self.risk_fn = risk_fn
         self.guidance_fn = guidance_fn
@@ -503,7 +504,15 @@ class IncidentOrchestrator:
             draft["raw_text"] = _join_text(previous.get("raw_text"), intake_data.get("raw_text") or text)
         if message.media:
             draft["has_image"] = True
-        for key in ("qr_location", "qr_equipment", "language", "session_id", "source", "location_confidence", "clean_text"):
+        for key in (
+            "qr_location",
+            "qr_equipment",
+            "language",
+            "session_id",
+            "source",
+            "location_confidence",
+            "clean_text",
+        ):
             if previous.get(key) and not draft.get(key):
                 draft[key] = previous[key]
         log.info("clarification_reply_merged")
@@ -688,7 +697,10 @@ class IncidentOrchestrator:
         }
         if self.repository is None:
             return DuplicateResult(status="none", action="create_new", reason="no_repository")
-        return self.duplicate_fn(query, repository=self.repository)
+        result = self.duplicate_fn(query, repository=self.repository)
+        if isawaitable(result):
+            return await result
+        return result
 
     async def persist_initial_evidence(
         self,
@@ -836,15 +848,18 @@ class IncidentOrchestrator:
         ident = mapping.get("incident_ref") or duplicate.canonical_incident_id
         uuid = mapping.get("id") or duplicate.canonical_uuid
         count = int(mapping.get("duplicate_count") or duplicate.duplicate_count or 0)
-        if self.repository is not None and uuid is not None and hasattr(self.repository, "increment_duplicate_count"):
+        if self.repository is not None and uuid is not None:
             try:
                 as_uuid = uuid if isinstance(uuid, UUID) else UUID(str(uuid))
-                if count == 0:
-                    updated = self.repository.increment_duplicate_count(as_uuid)
-                    count = int(getattr(updated, "duplicate_count", 1) or 1)
-                updated = self.repository.increment_duplicate_count(as_uuid)
-                count = int(getattr(updated, "duplicate_count", count + 1) or count + 1)
-                mapping = _as_dict(updated)
+                handled = handle_duplicate_match(
+                    self.repository,
+                    as_uuid,
+                    result=duplicate,
+                    current_risk_level=mapping.get("current_risk_level"),
+                )
+                count = int(handled.duplicate_count or count)
+                duplicate = handled
+                mapping = _as_dict(self.repository.get_incident(as_uuid)) or mapping
             except Exception:
                 log.warning("duplicate_count_increment_failed")
         if duplicate.action == "reopen" and uuid is not None and self.repository is not None:
@@ -861,11 +876,6 @@ class IncidentOrchestrator:
         intake_data["incident_id"] = ident
         intake_data["id"] = str(uuid) if uuid else intake_data.get("id")
         intake_data["duplicate_count"] = count
-        await self._audit(
-            {"id": uuid, "incident_id": ident},
-            "duplicate_report_linked",
-            metadata={"provider_message_id": message.provider_message_id},
-        )
         return {
             "incident_id": ident,
             "incident_ref": ident,
@@ -877,6 +887,7 @@ class IncidentOrchestrator:
             "location": mapping.get("location"),
             "hazard_category": mapping.get("hazard_category") or intake_data.get("hazard_category"),
             "assigned_team": mapping.get("assigned_team"),
+            "current_risk_level": mapping.get("current_risk_level") or duplicate.new_risk_level,
         }
 
     async def _ensure_canonical_incident(
@@ -908,7 +919,9 @@ class IncidentOrchestrator:
                     session_id=str(getattr(session, "id", None) or message.sender_id),
                     detected_language=str(merged.get("language") or "") or None,
                     hazard_category=merged.get("hazard_category"),
-                    hazard_description=merged.get("translated_text") or merged.get("clean_text") or merged.get("raw_text"),
+                    hazard_description=merged.get("translated_text")
+                    or merged.get("clean_text")
+                    or merged.get("raw_text"),
                     location=merged.get("location") or merged.get("qr_location"),
                     injury_occurred=(
                         merged.get("already_injured") if isinstance(merged.get("already_injured"), bool) else None

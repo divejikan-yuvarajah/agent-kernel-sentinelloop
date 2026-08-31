@@ -1,5 +1,7 @@
 import type { AnalyticsSummary, IncidentSummary, RecurringHazard, RouterStatus } from "@ds/types";
 
+const API_BASE = "/api";
+
 export type IncidentListResponse = {
   items: IncidentSummary[];
   total: number;
@@ -58,18 +60,34 @@ export type IncidentDetail = {
 };
 
 async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(path);
-  if (!response.ok) {
-    let detail = `Request failed (${response.status})`;
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`);
+  } catch {
+    throw new Error("Dashboard API is not running. Start it on port 8000, then reload.");
+  }
+  const contentType = response.headers.get("content-type") || "";
+  const text = await response.text();
+  const looksLikeHtml = contentType.includes("text/html") || text.trimStart().startsWith("<");
+  if (looksLikeHtml) {
+    throw new Error("Dashboard API is not reachable. Start the SentinelLoop API on port 8000, then reload.");
+  }
+  let body: unknown = null;
+  if (text) {
     try {
-      const body = (await response.json()) as { detail?: string };
-      if (body.detail) detail = body.detail;
+      body = JSON.parse(text) as unknown;
     } catch {
-      /* ignore */
+      throw new Error("Dashboard API returned an invalid response.");
     }
+  }
+  if (!response.ok) {
+    const detail =
+      body && typeof body === "object" && "detail" in body && typeof (body as { detail?: unknown }).detail === "string"
+        ? (body as { detail: string }).detail
+        : `Request failed (${response.status})`;
     throw new Error(detail);
   }
-  return (await response.json()) as T;
+  return body as T;
 }
 
 export function fetchIncidents(params: Record<string, string | number | undefined> = {}) {

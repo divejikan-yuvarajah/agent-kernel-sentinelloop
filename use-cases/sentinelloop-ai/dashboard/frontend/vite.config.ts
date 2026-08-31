@@ -3,6 +3,25 @@ import { fileURLToPath, URL } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+const apiProxy = {
+  "/api": {
+    target: "http://127.0.0.1:8000",
+    changeOrigin: true,
+    configure: (proxy) => {
+      proxy.on("error", (_err, _req, res) => {
+        if (res && !res.headersSent && "writeHead" in res) {
+          res.writeHead(502, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              detail: "Dashboard API is not reachable. Start the SentinelLoop API on port 8000, then reload.",
+            }),
+          );
+        }
+      });
+    },
+  },
+};
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -11,13 +30,16 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
-  server: {
-    port: 5173,
-    strictPort: true,
-    proxy: {
-      "/incidents": "http://127.0.0.1:8000",
-      "/analytics": "http://127.0.0.1:8000",
-      "/router": "http://127.0.0.1:8000",
+    server: {
+        host: "127.0.0.1",
+        port: 5173,
+        strictPort: true,
+        proxy: apiProxy,
     },
-  },
+    preview: {
+        host: "127.0.0.1",
+        port: 4173,
+        strictPort: true,
+        proxy: apiProxy,
+    },
 });

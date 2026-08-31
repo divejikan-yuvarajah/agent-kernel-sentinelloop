@@ -90,7 +90,9 @@ export function IncidentDetailPage() {
               <RiskIndicator level={assessment.level} score={assessment.score} />
               <span className="ds-mono">{detail.elapsed_time}</span>
               {detail.duplicates.duplicate_count > 1 ? (
-                <Badge>Duplicate ×{detail.duplicates.duplicate_count}</Badge>
+                <Badge title="Multiple workers reported this same hazard">
+                  {detail.duplicates.duplicate_count} REPORTS
+                </Badge>
               ) : null}
               {detail.source === "QR_TAGGED" ? <Badge title="Location verified by QR scan">QR Tagged</Badge> : null}
             </div>

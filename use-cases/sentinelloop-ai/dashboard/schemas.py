@@ -134,6 +134,13 @@ class QrLocationStat(_Out):
     insight: str | None = None
 
 
+class RepeatedHazardStat(_Out):
+    label: str
+    location: str | None = None
+    count: int
+    insight: str | None = None
+
+
 class AnalyticsSummary(_Out):
     total_incidents: int
     open_incidents: int
@@ -151,6 +158,9 @@ class AnalyticsSummary(_Out):
     recent_activity: list[ActivityEvent] = Field(default_factory=list)
     qr_tagged_incidents: int = 0
     top_qr_locations: list[QrLocationStat] = Field(default_factory=list)
+    most_repeated_hazards: list[RepeatedHazardStat] = Field(default_factory=list)
+    repeated_hazard_locations: list[RepeatedHazardStat] = Field(default_factory=list)
+    duplicate_detection_stats: dict[str, int] = Field(default_factory=dict)
 
 
 class RecurringHazard(_Out):

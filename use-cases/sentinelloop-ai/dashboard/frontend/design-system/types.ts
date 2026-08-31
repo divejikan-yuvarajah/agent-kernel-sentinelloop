@@ -96,6 +96,13 @@ export type QrLocationStat = {
   insight: string | null;
 };
 
+export type RepeatedHazardStat = {
+  label: string;
+  location: string | null;
+  count: number;
+  insight: string | null;
+};
+
 export type AnalyticsSummary = {
   total_incidents: number;
   open_incidents: number;
@@ -113,6 +120,9 @@ export type AnalyticsSummary = {
   recent_activity: ActivityEvent[];
   qr_tagged_incidents?: number;
   top_qr_locations?: QrLocationStat[];
+  most_repeated_hazards?: RepeatedHazardStat[];
+  repeated_hazard_locations?: RepeatedHazardStat[];
+  duplicate_detection_stats?: Record<string, number>;
 };
 
 export type TimelineEvent = {

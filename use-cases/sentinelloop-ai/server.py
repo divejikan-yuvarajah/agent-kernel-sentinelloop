@@ -1,5 +1,7 @@
 """Local REST API for SentinelLoop AI (SPEC: REST, not Lambda)."""
 
+import logging
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,14 +18,25 @@ from agent import build_agents, configure_model_provider
 from dashboard.api import DashboardHandler
 from integrations.whatsapp_handler import SentinelLoopWhatsAppHandler
 
+log = logging.getLogger("sentinelloop.server")
+
 configure_model_provider()
 OpenAIModule(build_agents())
 
+
+def _rest_handlers():
+    """Dashboard always mounts. WhatsApp/Slack skip when tokens are missing."""
+    handlers = [DashboardHandler()]
+    try:
+        handlers.append(SentinelLoopWhatsAppHandler())
+    except ValueError as exc:
+        log.warning("WhatsApp handler disabled (%s). Dashboard API still runs.", exc)
+    try:
+        handlers.append(AgentSlackRequestHandler())
+    except Exception as exc:
+        log.warning("Slack handler disabled (%s). Dashboard API still runs.", exc)
+    return handlers
+
+
 if __name__ == "__main__":
-    RESTAPI.run(
-        [
-            DashboardHandler(),
-            SentinelLoopWhatsAppHandler(),
-            AgentSlackRequestHandler(),
-        ]
-    )
+    RESTAPI.run(_rest_handlers())

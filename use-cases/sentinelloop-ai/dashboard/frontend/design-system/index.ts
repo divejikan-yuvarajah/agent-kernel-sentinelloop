@@ -12,6 +12,7 @@ export type {
   ModelCall,
   Officer,
   RecurringHazard,
+  RepeatedHazardStat,
   QrLocationStat,
   RiskAssessment,
   RouterStatus,
@@ -33,6 +34,7 @@ export { LoopRing } from "./components/LoopRing";
 export { Modal } from "./components/Modal";
 export { Panel } from "./components/Panel";
 export { RecurringHazardsWidget } from "./components/RecurringHazardsWidget";
+export { DuplicateInsightsWidget } from "./components/DuplicateInsightsWidget";
 export { QrLocationsWidget } from "./components/QrLocationsWidget";
 export { ResponsePerformanceWidget } from "./components/ResponsePerformanceWidget";
 export { RiskAssessmentPanel } from "./components/RiskAssessmentPanel";

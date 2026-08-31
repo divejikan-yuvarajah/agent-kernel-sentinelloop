@@ -45,7 +45,9 @@ export function IncidentOverviewCard({ incident, onOpen, loading = false }: Prop
           <p className="ds-mono" style={{ margin: 0, fontSize: "var(--font-size-xs)", color: "var(--chalk-muted)" }}>
             {incident.category ?? "Uncategorized"}
           </p>
-          {showDuplicate ? <Badge>Duplicate ×{incident.duplicate_count}</Badge> : null}
+          {showDuplicate ? (
+            <Badge title="Multiple workers reported this same hazard">{incident.duplicate_count} REPORTS</Badge>
+          ) : null}
           {incident.source === "QR_TAGGED" ? (
             <Badge title="Location verified by QR scan">QR Tagged</Badge>
           ) : null}

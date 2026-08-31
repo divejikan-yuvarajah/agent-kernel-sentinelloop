@@ -27,6 +27,13 @@ from database.exceptions import (
     RecordNotFoundError,
 )
 from database.models import Assignment, Incident, IncidentEvidence, IncidentUpdate, RiskAssessment
+from database.schema_map import (
+    normalize_assignment_row,
+    normalize_evidence_row,
+    normalize_incident_row,
+    normalize_risk_row,
+    normalize_update_row,
+)
 from database.schemas import (
     EVIDENCE_STAGES,
     MAX_LIST_LIMIT,
@@ -77,6 +84,26 @@ def _execute(builder, operation: str):
         raise PersistenceError(f"{operation} failed") from exc
 
 
+def _incident(row: dict) -> Incident:
+    return Incident.model_validate(normalize_incident_row(row))
+
+
+def _evidence(row: dict) -> IncidentEvidence:
+    return IncidentEvidence.model_validate(normalize_evidence_row(row))
+
+
+def _assignment(row: dict) -> Assignment:
+    return Assignment.model_validate(normalize_assignment_row(row))
+
+
+def _update(row: dict) -> IncidentUpdate:
+    return IncidentUpdate.model_validate(normalize_update_row(row))
+
+
+def _risk(row: dict) -> RiskAssessment:
+    return RiskAssessment.model_validate(normalize_risk_row(row))
+
+
 def _safe_stage(stage: str) -> str:
     cleaned = _STAGE_RE.sub("", stage.strip().lower().replace(" ", "_"))
     if not cleaned:
@@ -122,32 +149,54 @@ class IncidentRepository:
     ) -> None:
         self._client = client or get_supabase_client()
         self._bucket = storage_bucket or evidence_bucket_name()
+        self._schema_kind: str | None = None
+
+    def _schema_kind_name(self) -> str:
+        if self._schema_kind is not None:
+            return self._schema_kind
+        if hasattr(self._client, "tables"):
+            self._schema_kind = "spec"
+            return self._schema_kind
+        try:
+            _execute(self._client.table("incidents").select("reported_date").limit(1), "detect_schema")
+            self._schema_kind = "live"
+        except PersistenceError:
+            self._schema_kind = "spec"
+        return self._schema_kind
+
+    def is_live_schema(self) -> bool:
+        return self._schema_kind_name() == "live"
+
+    def row_key(self, incident: Incident) -> str:
+        return incident.incident_ref if self.is_live_schema() else str(incident.id)
 
     def create_incident(self, data: IncidentCreate) -> Incident:
         payload = _dump(data)
         log.info("create_incident table=incidents incident_ref=%s", data.incident_ref)
         response = _execute(self._client.table("incidents").insert(payload), "create_incident")
-        return Incident.model_validate(_first_row(response.data, "create_incident"))
+        return _incident(_first_row(response.data, "create_incident"))
 
-    def get_incident(self, incident_id: UUID) -> Incident | None:
+    def get_incident(self, incident_id: UUID | str) -> Incident | None:
+        column = "incident_id" if self.is_live_schema() else "id"
         response = _execute(
-            self._client.table("incidents").select("*").eq("id", str(incident_id)).limit(1),
+            self._client.table("incidents").select("*").eq(column, str(incident_id)).limit(1),
             "get_incident",
         )
         rows = response.data or []
         if not rows:
             return None
-        return Incident.model_validate(rows[0])
+        return _incident(rows[0])
 
     def get_incident_by_ref(self, incident_ref: str) -> Incident | None:
+        column = "incident_id" if self.is_live_schema() else "incident_ref"
         response = _execute(
-            self._client.table("incidents").select("*").eq("incident_ref", incident_ref).limit(1),
+            self._client.table("incidents").select("*").eq(column, incident_ref).limit(1),
             "get_incident_by_ref",
         )
         rows = response.data or []
         if not rows:
             return None
-        return Incident.model_validate(rows[0])
+        return _incident(rows[0])
 
     def list_all_incidents(self, filters: IncidentFilters | None = None) -> list[Incident]:
         """Page through matching incidents. Dashboard analytics uses this; agents should not."""
@@ -166,25 +215,30 @@ class IncidentRepository:
 
     def list_incidents(self, filters: IncidentFilters | None = None) -> list[Incident]:
         filters = filters or IncidentFilters()
+        live = self.is_live_schema()
+        risk_col = "risk_level" if live else "current_risk_level"
+        category_col = "category" if live else "hazard_category"
+        language_col = "reporter_language" if live else "detected_language"
+        created_col = "reported_date" if live else "created_at"
         query = self._client.table("incidents").select("*")
         if filters.status is not None:
             query = query.eq("status", filters.status)
         if filters.current_risk_level is not None:
-            query = query.eq("current_risk_level", filters.current_risk_level)
+            query = query.eq(risk_col, filters.current_risk_level)
         if filters.hazard_category is not None:
-            query = query.eq("hazard_category", filters.hazard_category)
+            query = query.eq(category_col, filters.hazard_category)
         if filters.detected_language is not None:
-            query = query.eq("detected_language", filters.detected_language)
+            query = query.eq(language_col, filters.detected_language)
         if filters.reporter_id is not None:
             query = query.eq("reporter_id", filters.reporter_id)
         if filters.created_after is not None:
-            query = query.gte("created_at", filters.created_after.isoformat())
+            query = query.gte(created_col, filters.created_after.isoformat())
         if filters.created_before is not None:
-            query = query.lte("created_at", filters.created_before.isoformat())
+            query = query.lte(created_col, filters.created_before.isoformat())
         end = filters.offset + filters.limit - 1
-        query = query.order("created_at", desc=True).range(filters.offset, end)
+        query = query.order(created_col, desc=True).range(filters.offset, end)
         response = _execute(query, "list_incidents")
-        return [Incident.model_validate(row) for row in (response.data or [])]
+        return [_incident(row) for row in (response.data or [])]
 
     def update_incident_status(self, incident_id: UUID, status: str) -> Incident:
         log.info("update_incident_status incident_id=%s status=%s", incident_id, status)
@@ -194,7 +248,7 @@ class IncidentRepository:
         )
         if not response.data:
             raise RecordNotFoundError(f"incident not found: {incident_id}")
-        return Incident.model_validate(_first_row(response.data, "update_incident_status"))
+        return _incident(_first_row(response.data, "update_incident_status"))
 
     def update_incident_fields(self, incident_id: UUID, fields: dict) -> Incident:
         allowed = {
@@ -225,7 +279,7 @@ class IncidentRepository:
         )
         if not response.data:
             raise RecordNotFoundError(f"incident not found: {incident_id}")
-        return Incident.model_validate(_first_row(response.data, "update_incident_fields"))
+        return _incident(_first_row(response.data, "update_incident_fields"))
 
     def add_update(self, data: IncidentUpdateCreate) -> IncidentUpdate:
         payload = _dump(data)
@@ -234,96 +288,105 @@ class IncidentRepository:
             self._client.table("incident_updates").insert(payload),
             "add_update",
         )
-        return IncidentUpdate.model_validate(_first_row(response.data, "add_update"))
+        return _update(_first_row(response.data, "add_update"))
 
     def assign_incident(self, data: AssignmentCreate) -> Assignment:
         payload = _dump(data)
         log.info("assign_incident table=assignments incident_id=%s", data.incident_id)
         response = _execute(self._client.table("assignments").insert(payload), "assign_incident")
-        return Assignment.model_validate(_first_row(response.data, "assign_incident"))
+        return _assignment(_first_row(response.data, "assign_incident"))
 
-    def get_assignment_for_incident(self, incident_id: UUID) -> Assignment | None:
+    def get_assignment_for_incident(self, incident_id: UUID | str) -> Assignment | None:
+        order_col = "assignment_id" if self.is_live_schema() else "created_at"
         response = _execute(
             self._client.table("assignments")
             .select("*")
             .eq("incident_id", str(incident_id))
-            .order("created_at", desc=True)
+            .order(order_col, desc=True)
             .limit(1),
             "get_assignment_for_incident",
         )
         rows = response.data or []
         if not rows:
             return None
-        return Assignment.model_validate(rows[0])
+        return _assignment(rows[0])
 
-    def list_assignments_for_incidents(self, incident_ids: list[UUID]) -> list[Assignment]:
+    def list_assignments_for_incidents(self, incident_ids: list[UUID] | list[str]) -> list[Assignment]:
         if not incident_ids:
             return []
+        order_col = "assignment_id" if self.is_live_schema() else "created_at"
         response = _execute(
             self._client.table("assignments")
             .select("*")
             .in_("incident_id", [str(item) for item in incident_ids])
-            .order("created_at", desc=True),
+            .order(order_col, desc=True),
             "list_assignments_for_incidents",
         )
-        return [Assignment.model_validate(row) for row in (response.data or [])]
+        return [_assignment(row) for row in (response.data or [])]
 
-    def list_evidence_for_incident(self, incident_id: UUID) -> list[IncidentEvidence]:
+    def list_evidence_for_incident(self, incident_id: UUID | str) -> list[IncidentEvidence]:
+        order_col = "uploaded_time" if self.is_live_schema() else "created_at"
         response = _execute(
             self._client.table("incident_evidence")
             .select("*")
             .eq("incident_id", str(incident_id))
-            .order("created_at", desc=False),
+            .order(order_col, desc=False),
             "list_evidence_for_incident",
         )
-        return [IncidentEvidence.model_validate(row) for row in (response.data or [])]
+        return [_evidence(row) for row in (response.data or [])]
 
-    def list_updates_for_incident(self, incident_id: UUID) -> list[IncidentUpdate]:
+    def list_updates_for_incident(self, incident_id: UUID | str) -> list[IncidentUpdate]:
+        order_col = "timestamp" if self.is_live_schema() else "created_at"
         response = _execute(
             self._client.table("incident_updates")
             .select("*")
             .eq("incident_id", str(incident_id))
-            .order("created_at", desc=False),
+            .order(order_col, desc=False),
             "list_updates_for_incident",
         )
-        return [IncidentUpdate.model_validate(row) for row in (response.data or [])]
+        return [_update(row) for row in (response.data or [])]
 
     def list_recent_updates(self, *, limit: int = 20) -> list[IncidentUpdate]:
         cap = min(max(limit, 1), MAX_LIST_LIMIT)
+        order_col = "timestamp" if self.is_live_schema() else "created_at"
         response = _execute(
-            self._client.table("incident_updates").select("*").order("created_at", desc=True).limit(cap),
+            self._client.table("incident_updates").select("*").order(order_col, desc=True).limit(cap),
             "list_recent_updates",
         )
-        return [IncidentUpdate.model_validate(row) for row in (response.data or [])]
+        return [_update(row) for row in (response.data or [])]
 
-    def list_risk_assessments_for_incident(self, incident_id: UUID) -> list[RiskAssessment]:
+    def list_risk_assessments_for_incident(self, incident_id: UUID | str) -> list[RiskAssessment]:
+        order_col = "assessment_id" if self.is_live_schema() else "created_at"
         response = _execute(
             self._client.table("risk_assessments")
             .select("*")
             .eq("incident_id", str(incident_id))
-            .order("created_at", desc=True),
+            .order(order_col, desc=True),
             "list_risk_assessments_for_incident",
         )
-        return [RiskAssessment.model_validate(row) for row in (response.data or [])]
+        return [_risk(row) for row in (response.data or [])]
 
-    def list_risk_assessments_for_incidents(self, incident_ids: list[UUID]) -> list[RiskAssessment]:
+    def list_risk_assessments_for_incidents(self, incident_ids: list[UUID] | list[str]) -> list[RiskAssessment]:
         if not incident_ids:
             return []
+        order_col = "assessment_id" if self.is_live_schema() else "created_at"
         response = _execute(
             self._client.table("risk_assessments")
             .select("*")
             .in_("incident_id", [str(item) for item in incident_ids])
-            .order("created_at", desc=True),
+            .order(order_col, desc=True),
             "list_risk_assessments_for_incidents",
         )
-        return [RiskAssessment.model_validate(row) for row in (response.data or [])]
+        return [_risk(row) for row in (response.data or [])]
 
     def list_duplicates_of(self, incident_id: UUID) -> list[Incident]:
+        if self.is_live_schema():
+            return []
         response = _execute(
             self._client.table("incidents").select("*").eq("duplicate_of", str(incident_id)),
             "list_duplicates_of",
         )
-        return [Incident.model_validate(row) for row in (response.data or [])]
+        return [_incident(row) for row in (response.data or [])]
 
     def update_assignment(self, assignment_id: UUID, fields: dict) -> Assignment:
         allowed = {"team", "slack_channel_id", "assigned_to", "assignment_status", "acknowledged_at", "completed_at"}
@@ -336,7 +399,7 @@ class IncidentRepository:
         )
         if not response.data:
             raise RecordNotFoundError(f"assignment not found: {assignment_id}")
-        return Assignment.model_validate(_first_row(response.data, "update_assignment"))
+        return _assignment(_first_row(response.data, "update_assignment"))
 
     def add_evidence(
         self,
@@ -397,7 +460,7 @@ class IncidentRepository:
         except PersistenceError as exc:
             self._remove_storage_object(path)
             raise PartialPersistenceError("evidence uploaded but incident_evidence insert failed") from exc
-        return IncidentEvidence.model_validate(_first_row(response.data, "add_evidence"))
+        return _evidence(_first_row(response.data, "add_evidence"))
 
     def increment_duplicate_count(self, incident_id: UUID) -> Incident:
         """Increment incidents.duplicate_count with optimistic concurrency.
@@ -419,7 +482,7 @@ class IncidentRepository:
                 "increment_duplicate_count",
             )
             if response.data:
-                return Incident.model_validate(_first_row(response.data, "increment_duplicate_count"))
+                return _incident(_first_row(response.data, "increment_duplicate_count"))
         raise PersistenceError("increment_duplicate_count lost a concurrent update")
 
     def _remove_storage_object(self, path: str) -> None:

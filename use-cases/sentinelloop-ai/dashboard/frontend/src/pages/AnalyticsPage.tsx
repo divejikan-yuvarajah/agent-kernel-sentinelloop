@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 
-import { AppShell, Panel, RecurringHazardsWidget, QrLocationsWidget } from "@ds/index";
+import { AppShell, Panel, RecurringHazardsWidget, QrLocationsWidget, DuplicateInsightsWidget } from "@ds/index";
 import type { AnalyticsPoint, AnalyticsSummary, RecurringHazard } from "@ds/types";
 import type { RiskLevel } from "@ds/colors";
 
@@ -30,6 +30,7 @@ export function AnalyticsPage() {
       .then(([analytics, repeats]) => {
         setSummary(analytics);
         setRecurring(repeats.items);
+        setError(null);
       })
       .catch((err: Error) => setError(err.message));
   }, []);
@@ -71,6 +72,12 @@ export function AnalyticsPage() {
       )}
       <Panel title="Learn · recurring hazards" style={{ marginTop: 24 }}>
         <RecurringHazardsWidget items={recurring} />
+      </Panel>
+      <Panel title="Repeated reports" style={{ marginTop: 24 }}>
+        <DuplicateInsightsWidget
+          hazards={summary?.most_repeated_hazards ?? []}
+          locations={summary?.repeated_hazard_locations ?? []}
+        />
       </Panel>
       <Panel title="QR locations" style={{ marginTop: 24 }}>
         <QrLocationsWidget items={summary?.top_qr_locations ?? []} taggedCount={summary?.qr_tagged_incidents ?? 0} />

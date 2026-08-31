@@ -66,7 +66,7 @@ class DashboardHandler(RESTRequestHandler):
         return value
 
     def get_router(self) -> APIRouter:
-        router = APIRouter(tags=["dashboard"])
+        router = APIRouter(prefix="/api", tags=["dashboard"])
 
         @router.get(
             "/incidents",

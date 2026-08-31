@@ -7,11 +7,15 @@ import { fetchIncidents } from "../api/client";
 
 export function OfficersPage() {
   const [rows, setRows] = useState<IncidentSummary[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchIncidents({ limit: 100, sort_by: "newest" })
-      .then((payload) => setRows(payload.items))
-      .catch(() => setRows([]));
+      .then((payload) => {
+        setRows(payload.items);
+        setError(null);
+      })
+      .catch((err: Error) => setError(err.message));
   }, []);
 
   const officers = useMemo(() => {
@@ -28,7 +32,11 @@ export function OfficersPage() {
 
   return (
     <AppShell title="Officers" operationalStatus="VERIFIED">
-      {officers.length === 0 ? (
+      {error ? (
+        <p className="ds-empty" role="alert">
+          {error}
+        </p>
+      ) : officers.length === 0 ? (
         <p className="ds-empty">No officers assigned.</p>
       ) : (
         <div className="ds-grid ds-grid--cards">

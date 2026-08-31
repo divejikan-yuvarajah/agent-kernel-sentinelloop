@@ -13,7 +13,10 @@ export function EvidencePage() {
 
   useEffect(() => {
     fetchIncidents({ limit: 40, sort_by: "newest" })
-      .then((payload) => setRows(payload.items))
+      .then((payload) => {
+        setRows(payload.items);
+        setError(null);
+      })
       .catch((err: Error) => setError(err.message));
   }, []);
 

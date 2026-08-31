@@ -28,6 +28,7 @@ from dashboard.schemas import (
     QrLocationStat,
     RecurringHazard,
     RecurringResponse,
+    RepeatedHazardStat,
     ReporterInfo,
     RiskIntelligence,
     RouterBudget,
@@ -37,6 +38,7 @@ from dashboard.schemas import (
 from database.models import Assignment, Incident, IncidentEvidence, IncidentUpdate, RiskAssessment
 from database.repository import IncidentRepository
 from database.schemas import IncidentFilters
+from tools.duplicate_tools import duplicate_detection_stats
 from tools.lifecycle import to_display_status
 from tools.qr_tags import SOURCE_QR_TAGGED, extract_qr_origin
 
@@ -73,6 +75,8 @@ _TIMELINE_TITLES = {
     "incident_assigned": "Officer assigned",
     "guidance_send_failed": "Worker guidance delayed",
     "slack_coordination_failed": "Coordination failed",
+    "duplicate_report_linked": "AI merged reports",
+    "duplicate_threshold_reached": "Priority increased",
 }
 
 _ACTIVITY_KINDS = {
@@ -82,6 +86,8 @@ _ACTIVITY_KINDS = {
     "status_transition": "Status",
     "slack_coordination_completed": "Officer action",
     "incident_assigned": "Officer action",
+    "duplicate_report_linked": "Duplicate report",
+    "duplicate_threshold_reached": "Priority increase",
 }
 
 
@@ -326,8 +332,9 @@ class DashboardReadService:
         stage_statuses = statuses_for_stage(stage)
         if stage_statuses is not None:
             incidents = [item for item in incidents if (item.status or "").upper() in stage_statuses]
-        assignments = _latest_by_incident(self._repo.list_assignments_for_incidents([item.id for item in incidents]))
-        risks = _latest_by_incident(self._repo.list_risk_assessments_for_incidents([item.id for item in incidents]))
+        keys = [self._repo.row_key(item) for item in incidents]
+        assignments = _latest_by_incident(self._repo.list_assignments_for_incidents(keys))
+        risks = _latest_by_incident(self._repo.list_risk_assessments_for_incidents(keys))
         summaries = [self._to_summary(item, assignments.get(item.id), risks.get(item.id)) for item in incidents]
         reverse = order == "desc"
         summaries.sort(key=lambda row: _sort_key(row, sort_key), reverse=reverse)
@@ -345,11 +352,12 @@ class DashboardReadService:
         incident = self._resolve_incident(incident_id)
         if incident is None:
             return None
-        assignment = self._repo.get_assignment_for_incident(incident.id)
-        assessments = self._repo.list_risk_assessments_for_incident(incident.id)
+        key = self._repo.row_key(incident)
+        assignment = self._repo.get_assignment_for_incident(key)
+        assessments = self._repo.list_risk_assessments_for_incident(key)
         assessment = assessments[0] if assessments else None
-        evidence = self._repo.list_evidence_for_incident(incident.id)
-        updates = self._repo.list_updates_for_incident(incident.id)
+        evidence = self._repo.list_evidence_for_incident(key)
+        updates = self._repo.list_updates_for_incident(key)
         linked: list[LinkedIncident] = []
         similarity: float | None = None
         if incident.duplicate_of is not None:
@@ -412,7 +420,9 @@ class DashboardReadService:
 
     def analytics_summary(self) -> AnalyticsSummary:
         incidents = self._repo.list_all_incidents()
-        assignments = _latest_by_incident(self._repo.list_assignments_for_incidents([item.id for item in incidents]))
+        assignments = _latest_by_incident(
+            self._repo.list_assignments_for_incidents([self._repo.row_key(item) for item in incidents])
+        )
         now = _utcnow()
         day_ago = now - timedelta(hours=24)
         week_ago = now - timedelta(days=7)
@@ -477,6 +487,7 @@ class DashboardReadService:
             for row in updates
         ]
         qr_stats = _qr_location_stats(incidents)
+        repeat_stats = _repeated_hazard_stats(incidents)
         return AnalyticsSummary(
             total_incidents=total,
             open_incidents=open_n,
@@ -494,6 +505,9 @@ class DashboardReadService:
             recent_activity=activity,
             qr_tagged_incidents=qr_stats["tagged"],
             top_qr_locations=qr_stats["top"],
+            most_repeated_hazards=repeat_stats["hazards"],
+            repeated_hazard_locations=repeat_stats["locations"],
+            duplicate_detection_stats=duplicate_detection_stats(),
         )
 
     def recurring_hazards(self, *, window_days: int = 30, threshold: int = 3) -> RecurringResponse:
@@ -806,6 +820,35 @@ def _as_str(value: object) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _repeated_hazard_stats(incidents: list[Incident]) -> dict[str, list[RepeatedHazardStat]]:
+    hazard_buckets: dict[tuple[str, str], int] = {}
+    location_buckets: dict[str, int] = {}
+    for incident in incidents:
+        reports = int(incident.duplicate_count or 0)
+        if reports <= 1:
+            continue
+        location = incident.location or "Unknown location"
+        category = incident.hazard_category or "hazard"
+        hazard_buckets[(category, location)] = hazard_buckets.get((category, location), 0) + reports
+        location_buckets[location] = location_buckets.get(location, 0) + reports
+    hazards = [
+        RepeatedHazardStat(
+            label=f"{category} · {location}",
+            location=location,
+            count=count,
+            insight="This equipment has recurring reports. Consider inspection." if count >= 3 else None,
+        )
+        for (category, location), count in hazard_buckets.items()
+    ]
+    hazards.sort(key=lambda row: (-row.count, row.label))
+    locations = [
+        RepeatedHazardStat(label=location, location=location, count=count, insight=None)
+        for location, count in location_buckets.items()
+    ]
+    locations.sort(key=lambda row: (-row.count, row.label or ""))
+    return {"hazards": hazards[:8], "locations": locations[:8]}
 
 
 def _qr_location_stats(incidents: list[Incident]) -> dict[str, Any]:

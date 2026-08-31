@@ -122,7 +122,7 @@ def test_list_incidents_filters_and_pagination():
     _seed(repo, backend)
     client = _app(repo)
 
-    open_rows = client.get("/incidents", params={"status": "OPEN"})
+    open_rows = client.get("/api/incidents", params={"status": "OPEN"})
     assert open_rows.status_code == 200
     body = open_rows.json()
     assert body["total"] == 1
@@ -131,20 +131,20 @@ def test_list_incidents_filters_and_pagination():
     assert "evidence" not in body["items"][0]
     assert body["items"][0]["assigned_officer"]
 
-    critical = client.get("/incidents", params={"risk_level": "CRITICAL"})
+    critical = client.get("/api/incidents", params={"risk_level": "CRITICAL"})
     assert critical.status_code == 200
     assert critical.json()["total"] == 1
 
-    page = client.get("/incidents", params={"limit": 2, "offset": 0, "sort_by": "newest"})
+    page = client.get("/api/incidents", params={"limit": 2, "offset": 0, "sort_by": "newest"})
     assert page.status_code == 200
     assert page.json()["limit"] == 2
     assert len(page.json()["items"]) == 2
 
-    oldest = client.get("/incidents", params={"sort_by": "oldest"})
+    oldest = client.get("/api/incidents", params={"sort_by": "oldest"})
     ids = [row["incident_id"] for row in oldest.json()["items"]]
     assert ids[0] == "SL-2026-000012"
 
-    riskiest = client.get("/incidents", params={"sort_by": "highest_risk"})
+    riskiest = client.get("/api/incidents", params={"sort_by": "highest_risk"})
     assert riskiest.json()["items"][0]["risk_level"] == "CRITICAL"
 
 
@@ -154,11 +154,11 @@ def test_incident_detail_and_404():
     seeded = _seed(repo, backend)
     client = _app(repo)
 
-    missing = client.get("/incidents/does-not-exist")
+    missing = client.get("/api/incidents/does-not-exist")
     assert missing.status_code == 404
     assert missing.json()["detail"] == "incident not found"
 
-    found = client.get("/incidents/SL-2026-000010")
+    found = client.get("/api/incidents/SL-2026-000010")
     assert found.status_code == 200
     payload = found.json()
     assert payload["incident_id"] == "SL-2026-000010"
@@ -168,7 +168,7 @@ def test_incident_detail_and_404():
     assert payload["timeline"]
     assert "••••" in payload["reporter"]["reporter_id"]
     assert "+94771234567" not in json.dumps(payload)
-    by_uuid = client.get(f"/incidents/{seeded['chemical'].id}")
+    by_uuid = client.get(f"/api/incidents/{seeded['chemical'].id}")
     assert by_uuid.status_code == 200
     assert by_uuid.json()["incident_id"] == "SL-2026-000010"
 
@@ -179,7 +179,7 @@ def test_analytics_and_recurring():
     _seed(repo, backend)
     client = _app(repo)
 
-    summary = client.get("/analytics/summary")
+    summary = client.get("/api/analytics/summary")
     assert summary.status_code == 200
     data = summary.json()
     assert data["total_incidents"] == 4
@@ -190,7 +190,7 @@ def test_analytics_and_recurring():
     assert "Chemical Leak" in data["incidents_by_category"]
     assert len(data["loop_stages"]) == 7
 
-    recurring = client.get("/analytics/recurring")
+    recurring = client.get("/api/analytics/recurring")
     assert recurring.status_code == 200
     items = recurring.json()["items"]
     assert items
@@ -231,7 +231,7 @@ def test_router_status_hides_secrets(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     client = _app(repo, ledger_path=ledger)
-    response = client.get("/router/status")
+    response = client.get("/api/router/status")
     assert response.status_code == 200
     body = response.json()
     dumped = json.dumps(body)
@@ -249,7 +249,7 @@ def test_dashboard_rejects_writes():
     repo = IncidentRepository(backend, storage_bucket="evidence")
     client = _app(repo)
     for method in ("post", "put", "patch", "delete"):
-        response = getattr(client, method)("/incidents")
+        response = getattr(client, method)("/api/incidents")
         assert response.status_code == 405
         assert response.json()["detail"] == "dashboard is read-only"
 
@@ -282,14 +282,14 @@ def test_qr_tagged_source_and_top_locations():
         )
     client = _app(repo)
 
-    listed = client.get("/incidents", params={"status": "OPEN"})
+    listed = client.get("/api/incidents", params={"status": "OPEN"})
     assert listed.status_code == 200
     qr_row = next(row for row in listed.json()["items"] if row["incident_id"] == "SL-2026-000020")
     assert qr_row["source"] == "QR_TAGGED"
     assert qr_row["location_verified"] is True
     assert qr_row["qr_equipment"] == "Storage Cabinet A"
 
-    detail = client.get(f"/incidents/{tagged.incident_ref}")
+    detail = client.get(f"/api/incidents/{tagged.incident_ref}")
     assert detail.status_code == 200
     payload = detail.json()
     assert payload["source"] == "QR_TAGGED"
@@ -298,7 +298,7 @@ def test_qr_tagged_source_and_top_locations():
     assert payload["location_confidence"] == 1.0
     assert payload["location"] == "Chemical Storage"
 
-    summary = client.get("/analytics/summary")
+    summary = client.get("/api/analytics/summary")
     assert summary.status_code == 200
     data = summary.json()
     assert data["qr_tagged_incidents"] == 4
@@ -308,3 +308,34 @@ def test_qr_tagged_source_and_top_locations():
     assert machine["insight"]
     assert "Machine 4" in machine["insight"]
     assert "oil" in machine["insight"].lower() or "machine" in machine["insight"].lower()
+
+
+def test_repeated_hazard_widgets():
+    backend = FakeBackend()
+    repo = IncidentRepository(backend, storage_bucket="evidence")
+    created = repo.create_incident(
+        _create_payload(
+            incident_ref="SL-2026-000030",
+            hazard_category="machine",
+            hazard_description="Oil leaking from hydraulic machine",
+            location="Production Floor",
+            status="OPEN",
+            current_risk_level="Medium",
+        )
+    )
+    for row in backend.tables["incidents"]:
+        if row["incident_ref"] == created.incident_ref:
+            row["duplicate_count"] = 12
+    client = _app(repo)
+    summary = client.get("/api/analytics/summary")
+    assert summary.status_code == 200
+    data = summary.json()
+    assert data["most_repeated_hazards"]
+    top = data["most_repeated_hazards"][0]
+    assert top["count"] == 12
+    assert "Production Floor" in top["label"]
+    assert top["insight"]
+    assert data["repeated_hazard_locations"][0]["location"] == "Production Floor"
+    listed = client.get("/api/incidents")
+    card = next(row for row in listed.json()["items"] if row["incident_id"] == "SL-2026-000030")
+    assert card["duplicate_count"] == 12
