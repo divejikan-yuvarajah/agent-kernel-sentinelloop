@@ -28,6 +28,8 @@ export type IncidentSummary = {
   assigned_officer: string | null;
   duplicate_count: number;
   loop_stage: string | null;
+  assigned_team?: string | null;
+  reporter_name?: string | null;
   source?: string | null;
   location_verified?: boolean;
   qr_equipment?: string | null;
@@ -125,6 +127,14 @@ export type AnalyticsSummary = {
   most_repeated_hazards?: RepeatedHazardStat[];
   repeated_hazard_locations?: RepeatedHazardStat[];
   duplicate_detection_stats?: Record<string, number>;
+  monthly_trend?: { label: string; value: number }[];
+  category_share?: { label: string; percent: number }[];
+  resolved_this_month?: number;
+  ai_detection_accuracy?: string;
+  worker_languages?: Record<string, number>;
+  anonymous_reports?: number;
+  average_detection?: string;
+  average_assignment?: string;
 };
 
 export type TimelineEvent = {
@@ -147,6 +157,7 @@ export type EvidenceItem = {
   source: string;
   timestamp: string;
   kind: "image" | "file";
+  stage?: string | null;
 };
 
 export type AnalyticsPoint = {

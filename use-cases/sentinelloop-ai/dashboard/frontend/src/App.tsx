@@ -1,12 +1,19 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
+import { CoordinationPage } from "./pages/CoordinationPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { DuplicatesPage } from "./pages/DuplicatesPage";
 import { EvidencePage } from "./pages/EvidencePage";
+import { FollowUpPage } from "./pages/FollowUpPage";
 import { GuardrailDebugPage } from "./pages/GuardrailDebugPage";
 import { IncidentDetailPage } from "./pages/IncidentDetailPage";
 import { IncidentsPage } from "./pages/IncidentsPage";
+import { KnowledgePage } from "./pages/KnowledgePage";
+import { NotificationsPage } from "./pages/NotificationsPage";
 import { OfficersPage } from "./pages/OfficersPage";
+import { PeoplePage } from "./pages/PeoplePage";
+import { ReportsPage } from "./pages/ReportsPage";
 import { ReviewQueuePage } from "./pages/ReviewQueuePage";
 import { SafetyCenterPage } from "./pages/SafetyCenterPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -25,6 +32,13 @@ export function App() {
         <Route path="/incidents/:incidentId" element={<IncidentDetailPage />} />
         <Route path="/evidence" element={<EvidencePage />} />
         <Route path="/officers" element={<OfficersPage />} />
+        <Route path="/people" element={<PeoplePage />} />
+        <Route path="/follow-up" element={<FollowUpPage />} />
+        <Route path="/coordination" element={<CoordinationPage />} />
+        <Route path="/duplicates" element={<DuplicatesPage />} />
+        <Route path="/knowledge" element={<KnowledgePage />} />
+        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/safety" element={<SafetyCenterPage />} />
         <Route path="/safety/review" element={<ReviewQueuePage />} />

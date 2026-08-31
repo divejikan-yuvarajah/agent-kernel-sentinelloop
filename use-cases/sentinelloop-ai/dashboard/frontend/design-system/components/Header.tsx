@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import { StatusIndicator } from "./StatusIndicator";
 
 type Props = {
@@ -8,6 +10,8 @@ type Props = {
   operatorRole: string;
   brand?: string;
   openIncidentCount?: number;
+  demo?: boolean;
+  notifyHref?: string;
 };
 
 export function Header({
@@ -18,6 +22,8 @@ export function Header({
   operatorRole,
   brand,
   openIncidentCount,
+  demo = false,
+  notifyHref = "/notifications",
 }: Props) {
   const hasAlerts = notificationCount > 0;
   const padded = openIncidentCount === undefined ? null : String(openIncidentCount).padStart(2, "0");
@@ -45,16 +51,21 @@ export function Header({
             OPS LIVE
           </span>
         )}
+        {demo ? (
+          <span className="ds-demo-pill" title="Horizon Engineering Workshop sample data">
+            DEMO
+          </span>
+        ) : null}
       </div>
       <div className="ds-header__meta">
-        <button
-          type="button"
+        <Link
+          to={notifyHref}
           className="ds-notify"
           aria-label={hasAlerts ? `${notificationCount} unread operational alerts` : "No unread alerts"}
         >
           {hasAlerts ? <span className="ds-notify__count" aria-hidden="true" /> : null}
           <span aria-hidden="true">!</span>
-        </button>
+        </Link>
         <div className="ds-profile">
           <span className="ds-profile__mark" aria-hidden="true">
             {operatorName
@@ -74,3 +85,4 @@ export function Header({
     </header>
   );
 }
+

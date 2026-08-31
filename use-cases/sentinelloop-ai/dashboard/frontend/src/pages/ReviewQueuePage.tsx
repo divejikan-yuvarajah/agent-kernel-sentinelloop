@@ -5,9 +5,11 @@ import { AppShell, Button, Panel } from "@ds/index";
 import type { ReviewQueueItem } from "@ds/types";
 
 import { fetchReviewQueue } from "../api/client";
+import { useDemoMode } from "../demo/useDemoMode";
 
 export function ReviewQueuePage() {
   const navigate = useNavigate();
+  const [demo] = useDemoMode();
   const [items, setItems] = useState<ReviewQueueItem[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,7 +20,7 @@ export function ReviewQueuePage() {
         setError(null);
       })
       .catch((err: Error) => setError(err.message));
-  }, []);
+  }, [demo]);
 
   return (
     <AppShell title="Review Required" operationalStatus="OPEN">
@@ -31,7 +33,7 @@ export function ReviewQueuePage() {
           {error}
         </p>
       ) : items.length === 0 ? (
-        <p className="ds-empty">No incidents waiting for human review.</p>
+        <p className="ds-empty">No incidents waiting for human review. All safety issues are currently resolved.</p>
       ) : (
         items.map((item) => (
           <Panel key={item.incident_id} title={item.incident_id} style={{ marginBottom: 16 }}>

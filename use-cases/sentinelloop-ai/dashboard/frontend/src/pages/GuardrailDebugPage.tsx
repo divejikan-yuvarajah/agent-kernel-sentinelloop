@@ -5,8 +5,10 @@ import { AppShell, Panel } from "@ds/index";
 import type { GuardrailDebugEvent } from "@ds/types";
 
 import { fetchGuardrailDebug } from "../api/client";
+import { useDemoMode } from "../demo/useDemoMode";
 
 export function GuardrailDebugPage() {
+  const [demo] = useDemoMode();
   const [events, setEvents] = useState<GuardrailDebugEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,7 +19,7 @@ export function GuardrailDebugPage() {
         setError(null);
       })
       .catch((err: Error) => setError(err.message));
-  }, []);
+  }, [demo]);
 
   return (
     <AppShell title="Guardrail Debug Console" operationalStatus="RESOLVED">

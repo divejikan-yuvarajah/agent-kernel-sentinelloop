@@ -153,3 +153,34 @@ def test_live_feed_component_humanizes_json_envelopes():
     assert "ds-feed__summary" in source
     css = (FRONTEND / "design-system" / "layout.css").read_text(encoding="utf-8")
     assert "overflow-wrap: anywhere" in css
+
+
+def test_horizon_demo_dataset_covers_command_center():
+    demo = (FRONTEND / "src" / "data" / "demoData.ts").read_text(encoding="utf-8")
+    assert "Horizon Engineering Workshop" in demo
+    assert "INC-2026-00421" in demo
+    assert "මැෂින් panel එකෙන් spark එනවා" in demo
+    assert "Lorem ipsum" not in demo
+    assert "Test User" not in demo
+    settings = (FRONTEND / "src" / "pages" / "SettingsPage.tsx").read_text(encoding="utf-8")
+    assert "Demo Mode" in settings
+    client = (FRONTEND / "src" / "api" / "client.ts").read_text(encoding="utf-8")
+    assert "isDemoMode" in client
+    assert "demoAdapter" in client
+    app = (FRONTEND / "src" / "App.tsx").read_text(encoding="utf-8")
+    for path in (
+        "/duplicates",
+        "/follow-up",
+        "/coordination",
+        "/knowledge",
+        "/reports",
+        "/people",
+        "/notifications",
+    ):
+        assert path in app
+    dashboard = (FRONTEND / "src" / "pages" / "DashboardPage.tsx").read_text(encoding="utf-8")
+    assert "Total incidents" in dashboard
+    assert "AI detection accuracy" in dashboard
+    detail = (FRONTEND / "src" / "pages" / "IncidentDetailPage.tsx").read_text(encoding="utf-8")
+    assert "Worker report" in detail
+    assert "AI extraction" in detail

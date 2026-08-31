@@ -5,6 +5,7 @@ import { AppShell, Button, Card, Panel } from "@ds/index";
 import type { GuardrailComplianceExport, GuardrailStatus } from "@ds/types";
 
 import { fetchComplianceExport, fetchGuardrailStatus } from "../api/client";
+import { useDemoMode } from "../demo/useDemoMode";
 
 function downloadReport(report: GuardrailComplianceExport) {
   const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
@@ -17,6 +18,7 @@ function downloadReport(report: GuardrailComplianceExport) {
 }
 
 export function SafetyCenterPage() {
+  const [demo] = useDemoMode();
   const [status, setStatus] = useState<GuardrailStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -28,7 +30,7 @@ export function SafetyCenterPage() {
         setError(null);
       })
       .catch((err: Error) => setError(err.message));
-  }, []);
+  }, [demo]);
 
   function exportReport() {
     setExporting(true);
@@ -95,6 +97,21 @@ export function SafetyCenterPage() {
         <p>Blocked closures: {status?.violations.blocked_closures ?? 0}</p>
         <p>Budget blocks: {status?.violations.budget_blocks ?? 0}</p>
       </Panel>
+      {demo ? (
+        <div className="ds-grid ds-grid--split" style={{ marginTop: 24 }}>
+          <Panel title="Guidance validation · passed">
+            <p>Status: Approved</p>
+            <p>Knowledge source: electrical_safety.md</p>
+            <p>Confidence: 98%</p>
+            <p className="ds-mono">INC-2026-00421 · Keep away from exposed wires, sparks, smoke, or damaged electrical equipment.</p>
+          </Panel>
+          <Panel title="Unsafe AI suggestion · blocked">
+            <p>Reason: Instruction not found in knowledge base</p>
+            <p>Action: Blocked</p>
+            <p className="ds-mono">INC-2026-00415 · Invented electrical isolation step was not released.</p>
+          </Panel>
+        </div>
+      ) : null}
       <Panel title="Safety Compliance Overview" style={{ marginTop: 24 }}>
         <div className="ds-chart" role="img" aria-label="Safety compliance overview">
           {[

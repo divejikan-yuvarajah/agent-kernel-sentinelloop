@@ -13,6 +13,7 @@
   padding: var(--space-4) var(--space-3);
   border-right: 1px solid var(--border);
   background: var(--ink);
+  overflow: hidden;
 }
 
 .ds-sidebar__brand {
@@ -36,6 +37,26 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ds-nav__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+
+.ds-nav__group-label {
+  margin: 0;
+  padding: var(--space-2) var(--space-3) 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--chalk-muted);
 }
 
 .ds-nav__link {
@@ -82,6 +103,8 @@
 
 .ds-notify {
   position: relative;
+  display: grid;
+  place-items: center;
   width: 36px;
   height: 36px;
   border: 1px solid var(--border);
@@ -89,6 +112,7 @@
   background: var(--panel);
   color: var(--chalk);
   cursor: pointer;
+  text-decoration: none;
 }
 
 .ds-notify__count {
@@ -169,6 +193,75 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--chalk-muted);
+}
+
+.ds-kpi {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.ds-demo-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--verified-teal);
+}
+
+.ds-share {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ds-share__row {
+  display: grid;
+  grid-template-columns: 110px 1fr auto;
+  gap: var(--space-3);
+  align-items: center;
+  font-size: var(--font-size-sm);
+}
+
+.ds-share__track {
+  height: 8px;
+  background: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.ds-share__fill {
+  height: 100%;
+  background: var(--chalk-muted);
+}
+
+.ds-slack {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ds-slack li {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ds-slack strong {
+  display: block;
+  font-size: var(--font-size-sm);
+}
+
+.ds-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
 }
 
 .ds-feed {
@@ -303,7 +396,8 @@
 
 @media (max-width: 1100px) {
   .ds-grid--split,
-  .ds-grid--metrics {
+  .ds-grid--metrics,
+  .ds-kpi {
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -344,7 +438,8 @@
 
   .ds-grid--cards,
   .ds-grid--split,
-  .ds-grid--metrics {
+  .ds-grid--metrics,
+  .ds-kpi {
     grid-template-columns: 1fr;
   }
 

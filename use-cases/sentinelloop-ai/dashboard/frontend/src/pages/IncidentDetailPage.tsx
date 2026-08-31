@@ -19,6 +19,8 @@ import { normalizeRisk } from "@ds/colors";
 
 import { fetchAuditExport, fetchIncident, type AuditExport, type IncidentDetail } from "../api/client";
 import { AuditTrailView } from "../components/AuditTrailView";
+import { slackThread } from "../data/demoData";
+import { useDemoMode } from "../demo/useDemoMode";
 
 function downloadAudit(audit: AuditExport) {
   const blob = new Blob([JSON.stringify(audit, null, 2)], { type: "application/json" });
@@ -32,6 +34,7 @@ function downloadAudit(audit: AuditExport) {
 
 export function IncidentDetailPage() {
   const { incidentId = "" } = useParams();
+  const [demo] = useDemoMode();
   const [detail, setDetail] = useState<IncidentDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,7 +64,7 @@ export function IncidentDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [incidentId]);
+  }, [incidentId, demo]);
 
   function exportAudit() {
     setAuditOpen(true);
@@ -99,12 +102,13 @@ export function IncidentDetailPage() {
       source: item.source ?? "unknown",
       timestamp: item.uploaded_at ?? "",
       kind: item.has_image ? "image" : "file",
+      stage: item.stage,
     })) ?? [];
 
   return (
     <AppShell title={detail?.incident_id ?? "Incident"} operationalStatus={detail?.status ?? "OPEN"}>
       <p className="ds-page-lead">
-        <Link to="/incidents">Active incidents</Link>
+        <Link to="/incidents">Incident Management</Link>
         {" / "}
         <span className="ds-mono">{incidentId}</span>
       </p>
@@ -130,6 +134,12 @@ export function IncidentDetailPage() {
               <SafetyStatusBadge status={detail.safety_status} />
             </div>
             <p style={{ margin: "16px 0 0" }}>{detail.location}</p>
+            {detail.assigned_team ? (
+              <p className="ds-mono" style={{ margin: "4px 0 0" }}>
+                Assigned: {detail.assigned_team}
+                {detail.assigned_officer ? ` · ${detail.assigned_officer}` : ""}
+              </p>
+            ) : null}
             {detail.location_verified ? (
               <p className="ds-verified ds-mono">
                 Location verified
@@ -141,11 +151,31 @@ export function IncidentDetailPage() {
               Reporter {detail.reporter.reporter_id}
               {detail.assigned_officer ? ` · Assigned to ${detail.assigned_officer}` : " · Unassigned"}
             </p>
+            {detail.original_text ? (
+              <Panel title="Worker report" style={{ marginBottom: 24 }}>
+                <p className="ds-metric__label">Original</p>
+                <p style={{ margin: "4px 0 12px" }}>{detail.original_text}</p>
+                <p className="ds-metric__label">Translation</p>
+                <p style={{ margin: "4px 0 12px" }}>{detail.translated_text}</p>
+                <p className="ds-mono">Language: {detail.language ?? detail.reporter.language ?? "—"}</p>
+              </Panel>
+            ) : null}
+            {detail.equipment || detail.people_exposed != null ? (
+              <Panel title="AI extraction" style={{ marginBottom: 24 }}>
+                <p>Hazard: {detail.category}</p>
+                <p>Location: {detail.location}</p>
+                <p>Equipment: {detail.equipment ?? "—"}</p>
+                <p>People exposed: {detail.people_exposed ?? "—"}</p>
+                <p>Active: {detail.hazard_active ? "Yes" : "No"}</p>
+                <p>Injury: {detail.injury ? "Yes" : "No"}</p>
+              </Panel>
+            ) : null}
             <div className="ds-toolbar">
               <Button variant="ghost" data-testid="audit-export" onClick={exportAudit}>
                 Export audit trail
               </Button>
             </div>
+            <h3 style={{ marginTop: 8 }}>AI decision timeline</h3>
             <IncidentTimeline events={events} />
             {detail.duplicates.linked_incidents.length > 0 ? (
               <p style={{ marginTop: 24, fontSize: "var(--font-size-sm)", color: "var(--chalk-muted)" }}>
@@ -159,6 +189,15 @@ export function IncidentDetailPage() {
           </Panel>
           <div className="ds-grid">
             <RiskAssessmentPanel assessment={assessment} />
+            {detail.severity != null && detail.likelihood != null ? (
+              <Panel title="Risk matrix">
+                <p>Severity: {detail.severity}</p>
+                <p>Likelihood: {detail.likelihood}</p>
+                <p>Score: {detail.risk.risk_score}</p>
+                <p>Level: {detail.risk.risk_level}</p>
+                <p style={{ marginTop: 12, color: "var(--chalk-muted)" }}>{detail.risk.risk_explanation}</p>
+              </Panel>
+            ) : null}
             {detail.safety ? (
               <Panel title="AI Decision Safety Panel">
                 <p>Risk Level: {detail.safety.risk_level ?? "Unknown"}</p>
@@ -184,6 +223,24 @@ export function IncidentDetailPage() {
                     {event.detail ? ` · ${event.detail}` : ""}
                   </p>
                 ))}
+              </Panel>
+            ) : null}
+            {detail.incident_id === slackThread.incident ? (
+              <Panel title={`Slack · ${slackThread.channel}`}>
+                <p className="ds-mono">
+                  {detail.assigned_team} · {slackThread.actions.join(" · ")}
+                </p>
+                <ul className="ds-slack">
+                  {slackThread.messages.map((message) => (
+                    <li key={message.text}>
+                      <strong>{message.author}</strong>
+                      <span>{message.text}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p>
+                  <Link to="/coordination">Open coordination</Link>
+                </p>
               </Panel>
             ) : null}
             <Panel title="Evidence">

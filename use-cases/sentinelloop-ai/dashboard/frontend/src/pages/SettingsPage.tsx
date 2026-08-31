@@ -5,8 +5,11 @@ import { AppShell, Button, InputField, Modal, Panel, SelectDropdown } from "@ds/
 import type { GuardrailConfigView } from "@ds/types";
 
 import { fetchGuardrailConfig } from "../api/client";
+import { organization } from "../data/demoData";
+import { useDemoMode } from "../demo/useDemoMode";
 
 export function SettingsPage() {
+  const [demo, setDemo] = useDemoMode();
   const [open, setOpen] = useState(false);
   const [config, setConfig] = useState<GuardrailConfigView | null>(null);
 
@@ -14,19 +17,49 @@ export function SettingsPage() {
     fetchGuardrailConfig()
       .then(setConfig)
       .catch(() => setConfig(null));
-  }, []);
+  }, [demo]);
+
   return (
     <AppShell title="Settings" operationalStatus="RESOLVED">
-      <Panel title="Operator preferences">
+      <Panel title="Demo Mode">
+        <label className="ds-toggle">
+          <input
+            type="checkbox"
+            checked={demo}
+            onChange={(event) => setDemo(event.target.checked)}
+            name="demo-mode"
+          />
+          <span>Demo Mode</span>
+        </label>
+        <p style={{ marginTop: 12, color: "var(--chalk-muted)" }}>
+          {demo
+            ? `Load ${organization.name} sample data across dashboards, tables, and detail views.`
+            : "Use real API and database data. Production workflows stay unchanged."}
+        </p>
+      </Panel>
+      <Panel title="Operator preferences" style={{ marginTop: 24 }}>
         <div className="ds-grid" style={{ maxWidth: 420 }}>
-          <InputField label="Display name" name="name" defaultValue="A. Perera" />
+          <InputField
+            key={demo ? "demo-name" : "live-name"}
+            label="Display name"
+            name="name"
+            defaultValue={demo ? organization.operator.name : "A. Perera"}
+          />
           <SelectDropdown
+            key={demo ? "demo-site" : "live-site"}
             label="Default site"
             name="site"
-            options={[
-              { value: "colombo", label: "Colombo plant" },
-              { value: "kandy", label: "Kandy warehouse" },
-            ]}
+            options={
+              demo
+                ? [
+                    { value: "horizon", label: `${organization.name} · ${organization.site}` },
+                    { value: "workshop", label: "Main Workshop Floor" },
+                  ]
+                : [
+                    { value: "colombo", label: "Colombo plant" },
+                    { value: "kandy", label: "Kandy warehouse" },
+                  ]
+            }
           />
           <Button onClick={() => setOpen(true)}>Save profile</Button>
         </div>

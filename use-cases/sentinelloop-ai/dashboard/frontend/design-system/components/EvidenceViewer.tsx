@@ -13,9 +13,14 @@ export function EvidenceViewer({ items }: Props) {
     <div className="ds-evidence">
       {items.map((item) => (
         <Card key={item.id} variant="evidence-card" className="ds-evidence__item">
-          <div className="ds-evidence__frame" aria-hidden="true" />
+          <div className="ds-evidence__frame" data-stage={item.stage ?? undefined} aria-hidden="true" />
           <div className="ds-evidence__meta">
             <p className="ds-evidence__id">{item.id}</p>
+            {item.stage ? (
+              <p className="ds-mono" style={{ margin: "4px 0 0", fontSize: "var(--font-size-xs)", letterSpacing: "0.06em" }}>
+                {item.stage === "report" ? "Before" : item.stage === "verification" ? "After" : item.stage}
+              </p>
+            ) : null}
             <p style={{ margin: "4px 0 0", fontSize: "var(--font-size-sm)" }}>{item.label}</p>
             <p className="ds-mono" style={{ margin: "8px 0 0", fontSize: "var(--font-size-xs)", color: "var(--chalk-muted)" }}>
               {item.timestamp}

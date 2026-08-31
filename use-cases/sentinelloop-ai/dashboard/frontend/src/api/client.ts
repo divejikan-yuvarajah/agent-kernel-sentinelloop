@@ -10,6 +10,9 @@ import type {
   RouterStatus,
 } from "@ds/types";
 
+import { isDemoMode } from "../demo/demoMode";
+import * as demo from "./demoAdapter";
+
 const API_BASE = "/api";
 
 export type IncidentListResponse = {
@@ -86,6 +89,16 @@ export type IncidentDetail = {
     timeline: { timestamp: string | null; title: string; detail: string | null }[];
     assigned_reviewer: string | null;
   } | null;
+  original_text?: string | null;
+  translated_text?: string | null;
+  language?: string | null;
+  equipment?: string | null;
+  people_exposed?: number | null;
+  hazard_active?: boolean | null;
+  injury?: boolean | null;
+  assigned_team?: string | null;
+  severity?: number | null;
+  likelihood?: number | null;
 };
 
 async function getJson<T>(path: string): Promise<T> {
@@ -120,6 +133,7 @@ async function getJson<T>(path: string): Promise<T> {
 }
 
 export function fetchIncidents(params: Record<string, string | number | undefined> = {}) {
+  if (isDemoMode()) return demo.fetchIncidents(params);
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === "") continue;
@@ -130,18 +144,22 @@ export function fetchIncidents(params: Record<string, string | number | undefine
 }
 
 export function fetchIncident(id: string) {
+  if (isDemoMode()) return demo.fetchIncident(id);
   return getJson<IncidentDetail>(`/incidents/${encodeURIComponent(id)}`);
 }
 
 export function fetchAnalyticsSummary() {
+  if (isDemoMode()) return demo.fetchAnalyticsSummary();
   return getJson<AnalyticsSummary>("/analytics/summary");
 }
 
 export function fetchRecurring() {
+  if (isDemoMode()) return demo.fetchRecurring();
   return getJson<{ items: RecurringHazard[] }>("/analytics/recurring");
 }
 
 export function fetchRouterStatus() {
+  if (isDemoMode()) return demo.fetchRouterStatus();
   return getJson<RouterStatus>("/router/status");
 }
 
@@ -238,25 +256,31 @@ export type AuditExport = {
 };
 
 export function fetchAuditExport(id: string) {
+  if (isDemoMode()) return demo.fetchAuditExport(id);
   return getJson<AuditExport>(`/incidents/${encodeURIComponent(id)}/audit-export`);
 }
 
 export function fetchGuardrailStatus() {
+  if (isDemoMode()) return demo.fetchGuardrailStatus();
   return getJson<GuardrailStatus>("/guardrails/status");
 }
 
 export function fetchReviewQueue() {
+  if (isDemoMode()) return demo.fetchReviewQueue();
   return getJson<{ items: ReviewQueueItem[]; total: number }>("/guardrails/review-queue");
 }
 
 export function fetchGuardrailDebug() {
+  if (isDemoMode()) return demo.fetchGuardrailDebug();
   return getJson<GuardrailDebugEvent[]>("/guardrails/debug");
 }
 
 export function fetchGuardrailConfig() {
+  if (isDemoMode()) return demo.fetchGuardrailConfig();
   return getJson<GuardrailConfigView>("/guardrails/config");
 }
 
 export function fetchComplianceExport() {
+  if (isDemoMode()) return demo.fetchComplianceExport();
   return getJson<GuardrailComplianceExport>("/guardrails/compliance-export");
 }
