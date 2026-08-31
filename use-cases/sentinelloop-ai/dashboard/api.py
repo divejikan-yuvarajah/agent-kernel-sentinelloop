@@ -1,8 +1,8 @@
 """Read-only SentinelLoop operations dashboard API.
 
-Mounted on the existing Agent Kernel REST server. GET endpoints only.
-Consumes already-persisted incident intelligence; does not import agents
-or mutate incidents, evidence, or AI decisions.
+Mounted on the existing Agent Kernel REST server. Incident, evidence, and
+AI-decision records are never mutated here. GET views are cached reads.
+POST /analytics/predictions/inspect only posts a Slack inspection note.
 """
 
 from __future__ import annotations
@@ -25,6 +25,9 @@ from dashboard.schemas import (
     GuardrailStatus,
     IncidentDetail,
     IncidentListResponse,
+    InspectionRequestIn,
+    InspectionRequestOut,
+    PredictionsResponse,
     RecurringResponse,
     ReviewQueueResponse,
     RouterStatus,
@@ -37,6 +40,7 @@ log = logging.getLogger("sentinelloop.dashboard.api")
 _ANALYTICS_TTL_S = 15.0
 _RECURRING_TTL_S = 30.0
 _ROUTER_TTL_S = 5.0
+_PREDICTIONS_TTL_S = 600.0
 
 
 class DashboardHandler(RESTRequestHandler):
@@ -48,10 +52,14 @@ class DashboardHandler(RESTRequestHandler):
         *,
         service: DashboardReadService | None = None,
         ledger_path: Any | None = None,
+        call_model_fn: Any | None = None,
+        coordination_service: Any | None = None,
     ) -> None:
         self._repository = repository
         self._service = service
         self._ledger_path = ledger_path
+        self._call_model_fn = call_model_fn
+        self._coordination_service = coordination_service
         self._cache: dict[str, tuple[float, Any]] = {}
 
     def _reader(self) -> DashboardReadService:
@@ -69,6 +77,17 @@ class DashboardHandler(RESTRequestHandler):
         if hit is not None and now - hit[0] < ttl:
             return hit[1]
         value = builder()
+        self._cache[key] = (now, value)
+        return value
+
+    async def _cached_async(self, key: str, ttl: float, builder):
+        now = time.monotonic()
+        hit = self._cache.get(key)
+        if hit is not None and now - hit[0] < ttl:
+            return hit[1]
+        value = builder()
+        if hasattr(value, "__await__"):
+            value = await value
         self._cache[key] = (now, value)
         return value
 
@@ -252,6 +271,73 @@ class DashboardHandler(RESTRequestHandler):
                 raise HTTPException(status_code=500, detail="internal dashboard failure") from None
 
         @router.get(
+            "/analytics/predictions",
+            response_model=PredictionsResponse,
+            summary="Predicted risk zones",
+            description=(
+                "Deterministic recurrence patterns plus prevention-agent wording. "
+                "Computed from the incidents table. Cached for 10 minutes."
+            ),
+            responses={
+                500: {
+                    "description": "internal dashboard failure",
+                    "content": {"application/json": {"example": {"detail": "internal dashboard failure"}}},
+                }
+            },
+        )
+        async def analytics_predictions() -> PredictionsResponse:
+            try:
+                from dashboard.predictions import build_predictions
+
+                repo = self._repository or self._reader()._repo
+                return await self._cached_async(
+                    "analytics.predictions",
+                    _PREDICTIONS_TTL_S,
+                    lambda: build_predictions(repo, call_model_fn=self._call_model_fn),
+                )
+            except HTTPException:
+                raise
+            except Exception:
+                log.exception("dashboard analytics_predictions failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
+        @router.post(
+            "/analytics/predictions/inspect",
+            response_model=InspectionRequestOut,
+            summary="Request preventive inspection",
+            description="Posts a Slack inspection_request note. Does not create a schedule or mutate incidents.",
+        )
+        async def request_prediction_inspection(body: InspectionRequestIn) -> InspectionRequestOut:
+            try:
+                from agents.coordination_agent import request_inspection
+                from dashboard.predictions import record_inspection_triggered
+
+                result = await request_inspection(
+                    {
+                        "location": body.location,
+                        "category": body.category,
+                        "reason": body.reason,
+                        "recommendation": body.recommendation,
+                    },
+                    service=self._coordination_service,
+                )
+                if result.posted:
+                    record_inspection_triggered()
+                    self._cache.pop("analytics.predictions", None)
+                return InspectionRequestOut(
+                    posted=result.posted,
+                    message_type=result.message_type or "inspection_request",
+                    location=result.location or body.location,
+                    coordination_error=result.coordination_error,
+                    slack_channel_id=result.slack_channel_id,
+                )
+            except HTTPException:
+                raise
+            except Exception:
+                log.exception("dashboard request_inspection failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
+        @router.get(
             "/telegram/health",
             response_model=TelegramBotStatus,
             summary="Telegram bot monitoring",
@@ -371,6 +457,7 @@ class DashboardHandler(RESTRequestHandler):
             "/incidents/{incident_id}/audit-export",
             "/analytics/summary",
             "/analytics/recurring",
+            "/analytics/predictions",
             "/telegram/health",
             "/router/status",
             "/guardrails/status",

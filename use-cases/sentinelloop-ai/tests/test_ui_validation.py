@@ -185,3 +185,20 @@ def test_horizon_demo_dataset_covers_command_center():
     detail = (FRONTEND / "src" / "pages" / "IncidentDetailPage.tsx").read_text(encoding="utf-8")
     assert "Worker report" in detail
     assert "AI extraction" in detail
+    assert "Future Risk Warning" in detail
+    dashboard = (FRONTEND / "src" / "pages" / "DashboardPage.tsx").read_text(encoding="utf-8")
+    assert "Predicted Risk Zones" in dashboard
+    assert "ds-predict-panel" in dashboard
+    css = (FRONTEND / "src" / "styles" / "command-center.css").read_text(encoding="utf-8")
+    assert "--signal-amber" in css
+    assert "ds-predict__card" in css
+    zones = (FRONTEND / "design-system" / "components" / "PredictedRiskZones.tsx").read_text(encoding="utf-8")
+    assert "Schedule Inspection" in zones
+    assert 'data-testid="schedule-inspection"' in zones
+    app = (FRONTEND / "src" / "App.tsx").read_text(encoding="utf-8")
+    assert "/forecast/:predictionId" in app
+    analytics = (FRONTEND / "src" / "pages" / "AnalyticsPage.tsx").read_text(encoding="utf-8")
+    assert "Predicted Risk Zones" in analytics
+    assert "Safety Prediction Heatmap" in analytics
+    coordination = (FRONTEND / "src" / "pages" / "CoordinationPage.tsx").read_text(encoding="utf-8")
+    assert "inspection_request" in coordination

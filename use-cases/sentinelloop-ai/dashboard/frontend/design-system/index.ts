@@ -13,6 +13,8 @@ export type {
   Officer,
   RecurringHazard,
   RepeatedHazardStat,
+  PredictionItem,
+  PredictionsResponse,
   QrLocationStat,
   RiskAssessment,
   RouterStatus,
@@ -40,6 +42,7 @@ export { LoopRing } from "./components/LoopRing";
 export { Modal } from "./components/Modal";
 export { Panel } from "./components/Panel";
 export { RecurringHazardsWidget } from "./components/RecurringHazardsWidget";
+export { PredictedRiskZones, formatUpdatedAgo } from "./components/PredictedRiskZones";
 export { DuplicateInsightsWidget } from "./components/DuplicateInsightsWidget";
 export { QrLocationsWidget } from "./components/QrLocationsWidget";
 export { ResponsePerformanceWidget } from "./components/ResponsePerformanceWidget";

@@ -226,6 +226,66 @@ class RecurringResponse(_Out):
     threshold: int = 3
 
 
+class PredictionItem(_Out):
+    location: str
+    category: str
+    reason: str
+    recommendation: str
+    trend: str
+    incident_count: int = 0
+    frequency_score: float = 0.0
+    risk_level: str | None = None
+    reason_factors: list[str] = Field(default_factory=list)
+    weekly_counts: list[int] = Field(default_factory=list)
+    generated_by: str = "prevention_agent"
+    confidence: float | None = None
+    prediction_id: str | None = None
+    location_hotspot: bool = False
+    days_since_last: int = 0
+    span_days: int = 0
+    timeline: list[dict[str, str]] = Field(default_factory=list)
+
+
+class HeatmapCell(_Out):
+    location: str
+    risk: str
+    marker: str
+    active: int = 0
+    predicted: bool = False
+
+
+class PreventionAnalytics(_Out):
+    predicted_risk_zones: int = 0
+    resolved_future_risks: int = 0
+    inspections_triggered: int = 0
+    prevented_recurrences: int = 0
+
+
+class PredictionsResponse(_Out):
+    generated_at: datetime
+    last_updated: datetime
+    prediction_count: int
+    predictions: list[PredictionItem] = Field(default_factory=list)
+    heatmap: list[HeatmapCell] = Field(default_factory=list)
+    analytics: PreventionAnalytics = Field(default_factory=PreventionAnalytics)
+    weekly_counts: list[int] = Field(default_factory=list)
+
+
+class InspectionRequestIn(_Out):
+    location: str
+    category: str | None = None
+    reason: str | None = None
+    recommendation: str | None = None
+
+
+class InspectionRequestOut(_Out):
+    posted: bool
+    message_type: str = "inspection_request"
+    location: str | None = None
+    coordination_error: str | None = None
+    slack_channel_id: str | None = None
+
+
 class ModelCallRecord(_Out):
     timestamp: str | None = None
     model: str | None = None

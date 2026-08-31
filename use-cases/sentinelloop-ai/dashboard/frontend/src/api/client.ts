@@ -8,6 +8,7 @@ import type {
   RecurringHazard,
   ReviewQueueItem,
   RouterStatus,
+  PredictionsResponse,
 } from "@ds/types";
 
 import { isDemoMode } from "../demo/demoMode";
@@ -141,6 +142,36 @@ async function getJson<T>(path: string): Promise<T> {
   return body as T;
 }
 
+async function postJson<T>(path: string, payload: unknown): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error("Dashboard API is not running. Start it on port 8000, then reload.");
+  }
+  const text = await response.text();
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text) as unknown;
+    } catch {
+      throw new Error("Dashboard API returned an invalid response.");
+    }
+  }
+  if (!response.ok) {
+    const detail =
+      body && typeof body === "object" && "detail" in body && typeof (body as { detail?: unknown }).detail === "string"
+        ? (body as { detail: string }).detail
+        : `Request failed (${response.status})`;
+    throw new Error(detail);
+  }
+  return body as T;
+}
+
 export function fetchIncidents(params: Record<string, string | number | undefined> = {}) {
   if (isDemoMode()) return demo.fetchIncidents(params);
   const query = new URLSearchParams();
@@ -165,6 +196,24 @@ export function fetchAnalyticsSummary() {
 export function fetchRecurring() {
   if (isDemoMode()) return demo.fetchRecurring();
   return getJson<{ items: RecurringHazard[] }>("/analytics/recurring");
+}
+
+export function fetchPredictions() {
+  if (isDemoMode()) return demo.fetchPredictions();
+  return getJson<PredictionsResponse>("/analytics/predictions");
+}
+
+export function requestInspection(payload: {
+  location: string;
+  category?: string | null;
+  reason?: string | null;
+  recommendation?: string | null;
+}) {
+  if (isDemoMode()) return demo.requestInspection(payload);
+  return postJson<{ posted: boolean; message_type: string; coordination_error?: string | null }>(
+    "/analytics/predictions/inspect",
+    payload,
+  );
 }
 
 export function fetchRouterStatus() {

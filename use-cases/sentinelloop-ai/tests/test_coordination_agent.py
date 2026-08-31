@@ -481,3 +481,27 @@ def test_channel_not_found_is_permanent():
     assert result.posted is False
     assert result.coordination_error == "channel_not_found"
     assert result.coordination_delivery_status == "Failed"
+
+
+def test_inspection_request_posts_slack_note_without_status_change():
+    client = FakeSlackClient()
+    repo = FakeRepo()
+    service = _service(client, repo)
+    result = run(
+        service.request_inspection(
+            {
+                "location": "Chemical Storage Room",
+                "category": "chemical",
+                "reason": "3 chemical leak reports detected in 25 days.",
+                "recommendation": "Schedule safety inspection.",
+            }
+        )
+    )
+    assert result.posted is True
+    assert result.message_type == "inspection_request"
+    assert repo.statuses == []
+    blob = json.dumps(client.posts[0])
+    assert "Preventive Inspection Request" in blob
+    assert "Chemical Storage Room" in blob
+    assert "Attention Needed" in blob
+    assert client.posts[0]["channel"] == "C-LAB"

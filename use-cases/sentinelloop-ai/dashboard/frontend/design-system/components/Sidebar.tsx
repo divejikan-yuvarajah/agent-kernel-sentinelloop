@@ -28,6 +28,7 @@ const GROUPS = [
     label: "Intelligence",
     links: [
       { to: "/analytics", label: "Analytics" },
+      { to: "/forecast/cnc-area__electrical", label: "Risk Forecast" },
       { to: "/telegram", label: "Telegram Bot" },
       { to: "/reports", label: "Reports" },
       { to: "/knowledge", label: "Knowledge Base" },

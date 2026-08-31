@@ -9,13 +9,14 @@ import {
   LoopRing,
   Panel,
   RecurringHazardsWidget,
+  PredictedRiskZones,
   ResponsePerformanceWidget,
   RiskDistributionWidget,
   RouterStatusStrip,
 } from "@ds/index";
-import type { AnalyticsSummary, IncidentSummary, LoopStage, RecurringHazard, RouterStatus } from "@ds/types";
+import type { AnalyticsSummary, IncidentSummary, LoopStage, RecurringHazard, RouterStatus, PredictionItem, PredictionsResponse } from "@ds/types";
 
-import { fetchAnalyticsSummary, fetchIncidents, fetchRecurring, fetchRouterStatus } from "../api/client";
+import { fetchAnalyticsSummary, fetchIncidents, fetchPredictions, fetchRecurring, fetchRouterStatus, requestInspection } from "../api/client";
 import { organization } from "../data/demoData";
 import { incidentThumbnail, locationImage, recentEvidenceFeed, locationRiskDemo } from "../data/demoImages";
 import { EvidenceImage } from "../components/EvidenceImage";
@@ -46,8 +47,11 @@ export function DashboardPage() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [recurring, setRecurring] = useState<RecurringHazard[]>([]);
   const [router, setRouter] = useState<RouterStatus | null>(null);
+  const [predictions, setPredictions] = useState<PredictionsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [inspectingId, setInspectingId] = useState<string | null>(null);
+  const [inspectNote, setInspectNote] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,13 +61,15 @@ export function DashboardPage() {
       fetchAnalyticsSummary(),
       fetchRecurring(),
       fetchRouterStatus(),
+      fetchPredictions(),
     ])
-      .then(([list, analytics, repeats, routerStatus]) => {
+      .then(([list, analytics, repeats, routerStatus, forecast]) => {
         if (cancelled) return;
         setIncidents(list.items);
         setSummary(analytics);
         setRecurring(repeats.items.map((item) => ({ ...item, imageSrc: locationImage(item.location) })));
         setRouter(routerStatus);
+        setPredictions(forecast);
         setError(null);
       })
       .catch((err: Error) => {
@@ -101,6 +107,29 @@ export function DashboardPage() {
     { label: "Average response", value: summary?.avg_response_time ?? "—" },
     { label: "AI detection accuracy", value: summary?.ai_detection_accuracy ?? "—" },
   ];
+
+  async function scheduleInspection(item: PredictionItem) {
+    const id = item.prediction_id || `${item.location}-${item.category}`;
+    setInspectingId(id);
+    setInspectNote(null);
+    try {
+      const result = await requestInspection({
+        location: item.location,
+        category: item.category,
+        reason: item.reason,
+        recommendation: item.recommendation,
+      });
+      setInspectNote(
+        result.posted
+          ? `Inspection requested: ${item.location}. Slack note sent by AI Prevention Agent.`
+          : result.coordination_error || "Inspection note was not delivered.",
+      );
+    } catch (err) {
+      setInspectNote(err instanceof Error ? err.message : "Inspection request failed.");
+    } finally {
+      setInspectingId(null);
+    }
+  }
 
   return (
     <AppShell
@@ -227,6 +256,16 @@ export function DashboardPage() {
           <ActivityFeed events={activity.slice(0, 6)} loading={loading} />
         </Panel>
       </div>
+      <Panel className="ds-predict-panel" title="Predicted Risk Zones" titleTooltip="Attention needed but not urgent.">
+        {inspectNote ? <p className="ds-mono">{inspectNote}</p> : null}
+        <PredictedRiskZones
+          items={predictions?.predictions ?? []}
+          lastUpdated={predictions?.last_updated}
+          loading={loading}
+          inspectingId={inspectingId}
+          onInspect={scheduleInspection}
+        />
+      </Panel>
       {trend.length > 0 ? (
         <div className="ds-grid ds-grid--split" style={{ marginBottom: "var(--space-5)" }}>
           <Panel title="Incident trend · last 12 months">

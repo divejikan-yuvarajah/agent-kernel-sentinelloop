@@ -8,6 +8,7 @@ import type {
   RecurringHazard,
   ReviewQueueItem,
   RouterStatus,
+  PredictionsResponse,
 } from "@ds/types";
 
 import type { AuditExport, IncidentDetail, IncidentListResponse } from "./client";
@@ -398,6 +399,114 @@ export function fetchRecurring(): Promise<{ items: RecurringHazard[] }> {
       },
     ],
   });
+}
+
+export function fetchPredictions(): Promise<PredictionsResponse> {
+  const lastUpdated = new Date(Date.now() - 4 * 60 * 1000).toISOString();
+  return wait({
+    generated_at: lastUpdated,
+    last_updated: lastUpdated,
+    prediction_count: 3,
+    weekly_counts: [2, 3, 5, 7],
+    analytics: {
+      predicted_risk_zones: 3,
+      resolved_future_risks: 1,
+      inspections_triggered: 2,
+      prevented_recurrences: 1,
+    },
+    heatmap: [
+      { location: "Electrical Room", risk: "CRITICAL", marker: "🔴", active: 4, predicted: true },
+      { location: "CNC Area", risk: "HIGH", marker: "🟠", active: 3, predicted: true },
+      { location: "Loading Bay", risk: "MEDIUM", marker: "🟡", active: 2, predicted: true },
+      { location: "Office Area", risk: "LOW", marker: "🟢", active: 1, predicted: false },
+    ],
+    predictions: [
+      {
+        location: "CNC Area",
+        category: "electrical",
+        reason: "4 related incidents detected",
+        recommendation: "Inspect electrical panel before next shift.",
+        trend: "increasing",
+        incident_count: 4,
+        frequency_score: 0.38,
+        risk_level: "High",
+        reason_factors: [
+          "4 incidents detected",
+          "same location",
+          "increasing frequency",
+          "recent active report",
+        ],
+        weekly_counts: [1, 1, 1, 1],
+        generated_by: "prevention_agent",
+        confidence: 0.91,
+        prediction_id: "cnc-area__electrical",
+        location_hotspot: true,
+        days_since_last: 0,
+        span_days: 21,
+        timeline: [
+          { date: "2026-08-10", label: "Incident reported" },
+          { date: "2026-08-18", label: "Duplicate detected" },
+          { date: "2026-08-30", label: "Pattern identified" },
+          { date: "2026-08-31", label: "Inspection recommended" },
+        ],
+      },
+      {
+        location: "Chemical Storage Room",
+        category: "chemical",
+        reason: "3 chemical leak reports detected",
+        recommendation: "Schedule a supervisor review of chemical storage before the next shift.",
+        trend: "increasing",
+        incident_count: 3,
+        frequency_score: 0.31,
+        risk_level: "High",
+        reason_factors: ["3 reports in 25 days", "same location", "high frequency"],
+        weekly_counts: [0, 1, 1, 1],
+        generated_by: "prevention_agent",
+        confidence: 0.88,
+        prediction_id: "chemical-storage-room__chemical",
+        location_hotspot: false,
+        days_since_last: 1,
+        span_days: 25,
+        timeline: [
+          { date: "2026-08-06", label: "Incident reported" },
+          { date: "2026-08-29", label: "Pattern identified" },
+          { date: "2026-08-31", label: "Inspection recommended" },
+        ],
+      },
+      {
+        location: "Loading Bay",
+        category: "slip/trip",
+        reason: "2 related incidents detected",
+        recommendation: "Inspect walkways and spill controls at Loading Bay before the next shift.",
+        trend: "stable",
+        incident_count: 2,
+        frequency_score: 0.22,
+        risk_level: "Medium",
+        reason_factors: ["2 reports in 16 days", "same location", "stable reporting interval"],
+        weekly_counts: [0, 1, 0, 1],
+        generated_by: "prevention_agent",
+        confidence: 0.7,
+        prediction_id: "loading-bay__slip/trip",
+        location_hotspot: false,
+        days_since_last: 4,
+        span_days: 16,
+        timeline: [
+          { date: "2026-08-15", label: "Incident reported" },
+          { date: "2026-08-27", label: "Pattern identified" },
+          { date: "2026-08-31", label: "Inspection recommended" },
+        ],
+      },
+    ],
+  });
+}
+
+export function requestInspection(_payload: {
+  location: string;
+  category?: string | null;
+  reason?: string | null;
+  recommendation?: string | null;
+}) {
+  return wait({ posted: true, message_type: "inspection_request", coordination_error: null });
 }
 
 export function fetchRouterStatus(): Promise<RouterStatus> {

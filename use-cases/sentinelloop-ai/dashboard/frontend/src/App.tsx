@@ -6,6 +6,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { DuplicatesPage } from "./pages/DuplicatesPage";
 import { EvidencePage } from "./pages/EvidencePage";
 import { FollowUpPage } from "./pages/FollowUpPage";
+import { ForecastPage } from "./pages/ForecastPage";
 import { GuardrailDebugPage } from "./pages/GuardrailDebugPage";
 import { IncidentDetailPage } from "./pages/IncidentDetailPage";
 import { IncidentsPage } from "./pages/IncidentsPage";
@@ -41,6 +42,7 @@ export function App() {
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/forecast/:predictionId" element={<ForecastPage />} />
         <Route path="/telegram" element={<TelegramBotPage />} />
         <Route path="/safety" element={<SafetyCenterPage />} />
         <Route path="/safety/review" element={<ReviewQueuePage />} />

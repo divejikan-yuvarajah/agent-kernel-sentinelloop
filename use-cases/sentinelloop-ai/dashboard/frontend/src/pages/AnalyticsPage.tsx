@@ -1,10 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 
 import { AppShell, Card, Panel, RecurringHazardsWidget, QrLocationsWidget, DuplicateInsightsWidget } from "@ds/index";
-import type { AnalyticsPoint, AnalyticsSummary, RecurringHazard } from "@ds/types";
+import type { AnalyticsPoint, AnalyticsSummary, RecurringHazard, PredictionsResponse } from "@ds/types";
 import type { RiskLevel } from "@ds/colors";
 
-import { fetchAnalyticsSummary, fetchRecurring } from "../api/client";
+import { fetchAnalyticsSummary, fetchPredictions, fetchRecurring } from "../api/client";
 import { kpis } from "../data/demoData";
 import { categoryImage, locationImage, locationRiskDemo } from "../data/demoImages";
 import { EvidenceImage } from "../components/EvidenceImage";
@@ -28,15 +28,17 @@ export function AnalyticsPage() {
   const [demo] = useDemoMode();
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [recurring, setRecurring] = useState<RecurringHazard[]>([]);
+  const [forecast, setForecast] = useState<PredictionsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchAnalyticsSummary(), fetchRecurring()])
-      .then(([analytics, repeats]) => {
+    Promise.all([fetchAnalyticsSummary(), fetchRecurring(), fetchPredictions()])
+      .then(([analytics, repeats, predicted]) => {
         setSummary(analytics);
         setRecurring(repeats.items.map((item) => ({ ...item, imageSrc: locationImage(item.location) })));
+        setForecast(predicted);
         setError(null);
       })
       .catch((err: Error) => setError(err.message))
@@ -64,6 +66,9 @@ export function AnalyticsPage() {
       : 0;
   const languages = summary?.worker_languages ?? (demo ? kpis.languages : {});
   const langTotal = Object.values(languages).reduce((sum, value) => sum + value, 0) || 1;
+  const prevention = forecast?.analytics;
+  const weekMax = Math.max(...(forecast?.weekly_counts ?? [1]), 1);
+  const timeline = forecast?.predictions[0]?.timeline ?? [];
 
   return (
     <AppShell title="Analytics" operationalStatus="RESOLVED">
@@ -174,6 +179,65 @@ export function AnalyticsPage() {
             </div>
           ))}
         </div>
+      </Panel>
+      <div className="ds-grid ds-grid--metrics" style={{ marginTop: 24 }}>
+        <Card variant="analytics-card">
+          <p className="ds-metric__label">Predicted Risk Zones</p>
+          <p className="ds-metric__value">{prevention?.predicted_risk_zones ?? 0}</p>
+        </Card>
+        <Card variant="analytics-card">
+          <p className="ds-metric__label">Resolved Future Risks</p>
+          <p className="ds-metric__value">{prevention?.resolved_future_risks ?? 0}</p>
+        </Card>
+        <Card variant="analytics-card">
+          <p className="ds-metric__label">Inspections Triggered</p>
+          <p className="ds-metric__value">{prevention?.inspections_triggered ?? 0}</p>
+        </Card>
+        <Card variant="analytics-card">
+          <p className="ds-metric__label">Prevented Recurrences</p>
+          <p className="ds-metric__value">{prevention?.prevented_recurrences ?? 0}</p>
+        </Card>
+      </div>
+      <Panel title="Risk trend chart" style={{ marginTop: 24 }}>
+        <div className="ds-weekbars" role="img" aria-label="Incident frequency over four weeks">
+          {(forecast?.weekly_counts ?? [0, 0, 0, 0]).map((value, index) => (
+            <div key={`week-${index}`} className="ds-weekbars__col">
+              <div className="ds-weekbars__bar" style={{ height: `${Math.max(8, Math.round((value / weekMax) * 100))}px` }} />
+              <span className="ds-mono">
+                Week {index + 1}
+                <br />
+                {value}
+              </span>
+            </div>
+          ))}
+        </div>
+      </Panel>
+      <Panel title="Safety Prediction Heatmap" style={{ marginTop: 24 }}>
+        <div className="ds-heatmap">
+          {(forecast?.heatmap ?? []).map((cell) => (
+            <article key={cell.location}>
+              <p>
+                <strong>{cell.location}</strong> {cell.marker}
+              </p>
+              <p className="ds-mono">
+                {cell.risk} · {cell.active} active
+              </p>
+            </article>
+          ))}
+        </div>
+      </Panel>
+      <Panel title="Safety intelligence timeline" style={{ marginTop: 24 }}>
+        {timeline.length === 0 ? (
+          <p className="ds-empty">No prevention timeline yet.</p>
+        ) : (
+          <ul className="ds-forecast-why">
+            {timeline.map((event) => (
+              <li key={`${event.date}-${event.label}`}>
+                <strong>{event.date}</strong> {event.label}
+              </li>
+            ))}
+          </ul>
+        )}
       </Panel>
       <Panel title="Learn · recurring hazards" style={{ marginTop: 24 }}>
         <RecurringHazardsWidget items={recurring} />

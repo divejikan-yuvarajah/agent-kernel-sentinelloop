@@ -400,3 +400,146 @@ def test_repeated_hazard_widgets():
     listed = client.get("/api/incidents")
     card = next(row for row in listed.json()["items"] if row["incident_id"] == "SL-2026-000030")
     assert card["duplicate_count"] == 12
+
+
+def _prediction_seed(repo: IncidentRepository, backend: FakeBackend) -> None:
+    now = datetime.now(timezone.utc)
+    specs = [
+        ("SL-2026-P01", "electrical", "CNC Area", 8),
+        ("SL-2026-P02", "electrical", "CNC Area", 3),
+        ("SL-2026-P03", "electrical", "CNC Area", 1),
+        ("SL-2026-P04", "electrical", "CNC Area", 0),
+        ("SL-2026-P05", "chemical", "Chemical Storage Room", 6),
+        ("SL-2026-P06", "chemical", "Chemical Storage Room", 2),
+        ("SL-2026-P07", "chemical", "Chemical Storage Room", 0),
+        ("SL-2026-P08", "slip/trip", "Loading Bay", 12),
+        ("SL-2026-P09", "slip/trip", "Loading Bay", 4),
+    ]
+    for ref, category, location, days_ago in specs:
+        repo.create_incident(
+            _create_payload(
+                incident_ref=ref,
+                hazard_category=category,
+                location=location,
+                status="OPEN",
+                current_risk_level="High",
+            )
+        )
+        for row in backend.tables["incidents"]:
+            if row["incident_ref"] == ref:
+                row["created_at"] = (now - timedelta(days=days_ago)).isoformat()
+
+
+class _PredictionRouter:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def __call__(self, role: str = "", messages: list | None = None, **kwargs):
+        self.calls += 1
+        assert role == "role_reasoning"
+        location = "site"
+        if messages:
+            try:
+                payload = json.loads(messages[-1]["content"])
+                location = payload.get("location") or location
+            except (TypeError, json.JSONDecodeError, KeyError):
+                pass
+        from tools.model_router import ModelCallResult
+
+        return ModelCallResult(
+            content=json.dumps(
+                {
+                    "recommendation": f"Inspect {location} before next shift",
+                    "reason": "related incidents detected",
+                    "confidence": 0.9,
+                }
+            ),
+            model="mock",
+            role="role_reasoning",
+            paid=False,
+        )
+
+
+def test_analytics_predictions_format_cache_and_empty_state():
+    backend = FakeBackend()
+    repo = IncidentRepository(backend, storage_bucket="evidence")
+    router = _PredictionRouter()
+    handler = DashboardHandler(repository=repo, call_model_fn=router)
+    app = FastAPI()
+    app.include_router(handler.get_router())
+    client = TestClient(app)
+
+    empty = client.get("/api/analytics/predictions")
+    assert empty.status_code == 200
+    body = empty.json()
+    assert body["prediction_count"] == 0
+    assert body["predictions"] == []
+    assert "generated_at" in body
+    assert "last_updated" in body
+    assert router.calls == 0
+
+    _prediction_seed(repo, backend)
+    handler._cache.clear()
+    first = client.get("/api/analytics/predictions")
+    assert first.status_code == 200
+    data = first.json()
+    assert data["prediction_count"] >= 2
+    assert {row["location"] for row in data["predictions"]} >= {"CNC Area", "Chemical Storage Room"}
+    for row in data["predictions"]:
+        assert "recommendation" in row
+        assert "trend" in row
+        assert "reason" in row
+    calls_after_first = router.calls
+    assert calls_after_first == data["prediction_count"]
+
+    second = client.get("/api/analytics/predictions")
+    assert second.status_code == 200
+    assert router.calls == calls_after_first
+    assert second.json()["prediction_count"] == data["prediction_count"]
+
+    forbidden = client.post("/api/analytics/predictions", json={})
+    assert forbidden.status_code == 405
+
+
+class _FakeInspectionService:
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    async def request_inspection(self, payload: dict) -> object:
+        from agents.coordination_agent import CoordinationResult
+
+        self.calls.append(payload)
+        return CoordinationResult(
+            posted=True,
+            message_type="inspection_request",
+            location=str(payload.get("location") or ""),
+            slack_channel_id="C-LAB",
+        )
+
+
+def test_analytics_predictions_inspect_posts_slack_note():
+    backend = FakeBackend()
+    repo = IncidentRepository(backend, storage_bucket="evidence")
+    coord = _FakeInspectionService()
+    handler = DashboardHandler(repository=repo, coordination_service=coord)
+    app = FastAPI()
+    app.include_router(handler.get_router())
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/analytics/predictions/inspect",
+        json={
+            "location": "CNC Area",
+            "category": "electrical",
+            "reason": "Recurring electrical incidents detected.",
+            "recommendation": "Inspect electrical panel before next shift.",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["posted"] is True
+    assert body["message_type"] == "inspection_request"
+    assert body["location"] == "CNC Area"
+    assert body["slack_channel_id"] == "C-LAB"
+    assert len(coord.calls) == 1
+    assert coord.calls[0]["location"] == "CNC Area"

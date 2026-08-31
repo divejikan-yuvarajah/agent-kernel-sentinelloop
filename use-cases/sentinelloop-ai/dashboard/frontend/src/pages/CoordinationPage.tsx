@@ -39,6 +39,14 @@ export function CoordinationPage() {
       ) : (
         <p className="ds-empty">No coordination threads in this session. All safety issues are currently resolved.</p>
       )}
+      <Panel className="ds-predict-panel" title="Preventive Inspection Request" style={{ marginTop: 24 }}>
+        <p>🔍 Preventive Inspection Request</p>
+        <p>Location: Chemical Storage Room</p>
+        <p>Reason: 3 chemical leak reports detected in 25 days.</p>
+        <p>Recommended Action: Schedule safety inspection.</p>
+        <p>Priority: Attention Needed</p>
+        <p className="ds-mono">Requested by: AI Prevention Agent · message type inspection_request</p>
+      </Panel>
     </AppShell>
   );
 }

@@ -193,6 +193,45 @@ def incident_fallback_text(blocks_context: dict[str, Any]) -> str:
     )
 
 
+MESSAGE_INSPECTION_REQUEST = "inspection_request"
+
+
+def build_inspection_request_blocks(
+    *,
+    location: str,
+    reason: str,
+    recommended_action: str | None = None,
+    category: str | None = None,
+) -> list[dict[str, Any]]:
+    loc = sanitize_slack_text(location or "Unknown")
+    why = sanitize_slack_text(reason or "Recurring hazard pattern detected.")
+    action = sanitize_slack_text(recommended_action or "Schedule safety inspection.")
+    category_line = sanitize_slack_text(category) if category else ""
+    body = (
+        f"*Location:*\n{loc}\n\n"
+        + (f"*Category:*\n{category_line}\n\n" if category_line else "")
+        + f"*Reason:*\n{why}\n\n"
+        + f"*Recommended Action:*\n{action}\n\n"
+        + "*Priority:*\nAttention Needed"
+    )
+    return [
+        {"type": "header", "text": {"type": "plain_text", "text": "Preventive Inspection Request"}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": body}},
+    ]
+
+
+def inspection_request_fallback_text(*, location: str, reason: str) -> str:
+    loc = sanitize_slack_text(location or "Unknown")
+    why = sanitize_slack_text(reason or "Recurring hazard pattern detected.")
+    return (
+        "Preventive Inspection Request\n\n"
+        f"Location:\n{loc}\n\n"
+        f"Reason:\n{why}\n\n"
+        "Recommended Action:\nSchedule safety inspection.\n\n"
+        "Priority:\nAttention Needed"
+    )
+
+
 class SlackHandler:
     """Thin Slack Web API wrapper. Inject ``client`` in tests."""
 

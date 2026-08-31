@@ -15,10 +15,10 @@ import {
   SafetyStatusBadge,
   StatusIndicator,
 } from "@ds/index";
-import type { EvidenceItem, RiskAssessment, TimelineEvent } from "@ds/types";
+import type { EvidenceItem, RiskAssessment, TimelineEvent, PredictionItem } from "@ds/types";
 import { normalizeRisk } from "@ds/colors";
 
-import { fetchAuditExport, fetchIncident, type AuditExport, type IncidentDetail } from "../api/client";
+import { fetchAuditExport, fetchIncident, fetchPredictions, type AuditExport, type IncidentDetail } from "../api/client";
 import { AuditTrailView } from "../components/AuditTrailView";
 import { EvidenceImage } from "../components/EvidenceImage";
 import { slackThread } from "../data/demoData";
@@ -45,6 +45,7 @@ export function IncidentDetailPage() {
   const [audit, setAudit] = useState<AuditExport | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [warning, setWarning] = useState<PredictionItem | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,6 +55,19 @@ export function IncidentDetailPage() {
         if (cancelled) return;
         setDetail(payload);
         setError(null);
+        return fetchPredictions()
+          .catch(() => null)
+          .then((forecast) => {
+            if (cancelled || !forecast) return;
+            const match =
+              forecast.predictions.find(
+                (item) =>
+                  item.location.toLowerCase() === (payload.location || "").toLowerCase() &&
+                  item.category.toLowerCase() === (payload.category || "").toLowerCase(),
+              ) ||
+              forecast.predictions.find((item) => item.location.toLowerCase() === (payload.location || "").toLowerCase());
+            setWarning(match ?? null);
+          });
       })
       .catch((err: Error) => {
         if (!cancelled) {
@@ -167,6 +181,15 @@ export function IncidentDetailPage() {
               Reporter {detail.reporter.reporter_id}
               {detail.assigned_officer ? ` · Assigned to ${detail.assigned_officer}` : " · Unassigned"}
             </p>
+            {warning ? (
+              <Panel className="ds-warning-panel" title="Future Risk Warning">
+                <p>This location has a recurring hazard pattern.</p>
+                <p>
+                  Probability of repeat incident: {warning.risk_level === "High" || warning.trend === "increasing" ? "High" : "Medium"}
+                </p>
+                <p>Recommended: {warning.recommendation}</p>
+              </Panel>
+            ) : null}
             {detail.original_text ? (
               <Panel title="Worker report" style={{ marginBottom: 24 }}>
                 <p className="ds-metric__label">Original</p>

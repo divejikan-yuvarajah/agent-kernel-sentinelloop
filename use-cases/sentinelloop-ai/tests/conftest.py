@@ -13,8 +13,10 @@ from uuid import uuid4
 
 import pytest
 
+from agents.prevention_agent import reset_prevention_stats
 from guardrails.events import reset_guardrail_events
 from tools.duplicate_tools import reset_duplicate_detection_stats
+from tools.forecast_tools import reset_forecast_stats
 from tools.model_router import ModelCallResult
 
 
@@ -27,9 +29,13 @@ def run(coro):
 def _isolate_guardrail_and_duplicate_state():
     reset_guardrail_events()
     reset_duplicate_detection_stats()
+    reset_forecast_stats()
+    reset_prevention_stats()
     yield
     reset_guardrail_events()
     reset_duplicate_detection_stats()
+    reset_forecast_stats()
+    reset_prevention_stats()
 
 
 class FakeRepository:

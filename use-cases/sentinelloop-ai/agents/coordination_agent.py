@@ -21,11 +21,14 @@ from integrations.slack_handler import (
     ACTION_CLOSED,
     ACTION_ESCALATE,
     ACTION_REASSIGN,
+    MESSAGE_INSPECTION_REQUEST,
     SlackHandler,
     SlackPostError,
     build_incident_blocks,
+    build_inspection_request_blocks,
     extract_action,
     incident_fallback_text,
+    inspection_request_fallback_text,
     is_bot_message,
     parse_thread_command,
 )
@@ -119,6 +122,8 @@ class CoordinationResult(BaseModel):
     slack_reply: str | None = None
     priority: str | None = None
     requires_acknowledgement: bool = False
+    message_type: str | None = None
+    location: str | None = None
 
 
 def determine_assigned_team(category: str | None) -> str:
@@ -802,6 +807,47 @@ class CoordinationService:
         self._mark_if_committed(record, event_id, result)
         return result
 
+    async def request_inspection(self, payload: dict[str, Any]) -> CoordinationResult:
+        """Post a preventive inspection Slack note. Does not schedule or mutate incidents."""
+        location = str(payload.get("location") or "Unknown location")
+        reason = str(payload.get("reason") or "Recurring hazard pattern detected.")
+        recommendation = str(payload.get("recommendation") or "Schedule safety inspection.")
+        category = payload.get("category")
+        team = determine_assigned_team(str(category) if category else None)
+        result = CoordinationResult(
+            location=location,
+            hazard_category=str(category) if category else None,
+            assigned_team=team,
+            message_type=MESSAGE_INSPECTION_REQUEST,
+            priority="Attention Needed",
+        )
+        channel = self.slack.channel_for_team(team)
+        if not channel:
+            result.coordination_error = ERROR_CHANNEL
+            result.coordination_delivery_status = "Failed"
+            log.warning("inspection_requested location=%s posted=false reason=channel_not_configured", location)
+            return result
+        blocks = build_inspection_request_blocks(
+            location=location,
+            reason=reason,
+            recommended_action=recommendation,
+            category=str(category) if category else None,
+        )
+        fallback = inspection_request_fallback_text(location=location, reason=reason)
+        try:
+            posted = await self.slack.post_incident_message(channel=channel, blocks=blocks, text=fallback)
+        except SlackPostError as exc:
+            result.coordination_error = exc.code if exc.code in PERMANENT_OR_GENERIC else ERROR_SLACK_POST
+            result.coordination_delivery_status = "Failed"
+            log.warning("inspection_requested location=%s posted=false code=%s", location, exc.code)
+            return result
+        result.posted = True
+        result.slack_channel_id = posted.get("channel") or channel
+        result.slack_message_ts = posted.get("ts")
+        result.coordination_delivery_status = "Delivered"
+        log.info("inspection_requested location=%s posted=true", location)
+        return result
+
 
 _default_service: CoordinationService | None = None
 
@@ -815,6 +861,14 @@ def get_coordination_service() -> CoordinationService:
 
 async def coordinate_incident(incident: Any, *, service: CoordinationService | None = None) -> CoordinationResult:
     return await (service or get_coordination_service()).coordinate_incident(incident)
+
+
+async def request_inspection(
+    payload: dict[str, Any] | None = None,
+    *,
+    service: CoordinationService | None = None,
+) -> CoordinationResult:
+    return await (service or get_coordination_service()).request_inspection(payload or {})
 
 
 async def coordinate_incident_alert(incident_json: str) -> str:

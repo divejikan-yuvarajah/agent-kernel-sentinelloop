@@ -89,6 +89,49 @@ export type RecurringHazard = {
   imageSrc?: string | null;
 };
 
+export type PredictionItem = {
+  location: string;
+  category: string;
+  reason: string;
+  recommendation: string;
+  trend: string;
+  incident_count: number;
+  frequency_score: number;
+  risk_level?: string | null;
+  reason_factors: string[];
+  weekly_counts: number[];
+  generated_by: string;
+  confidence?: number | null;
+  prediction_id?: string | null;
+  location_hotspot?: boolean;
+  days_since_last?: number;
+  span_days?: number;
+  timeline: { date: string; label: string }[];
+};
+
+export type PredictionHeatmapCell = {
+  location: string;
+  risk: string;
+  marker: string;
+  active: number;
+  predicted: boolean;
+};
+
+export type PredictionsResponse = {
+  generated_at: string;
+  last_updated: string;
+  prediction_count: number;
+  predictions: PredictionItem[];
+  heatmap: PredictionHeatmapCell[];
+  analytics: {
+    predicted_risk_zones: number;
+    resolved_future_risks: number;
+    inspections_triggered: number;
+    prevented_recurrences: number;
+  };
+  weekly_counts: number[];
+};
+
 export type ActivityEvent = {
   timestamp: string;
   kind: string;
