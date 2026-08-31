@@ -26,15 +26,15 @@ SHARED = (
 _OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1"
 
 
-def _load_create_intake_agent():
-    """Load local agents/intake_agent.py without the SDK ``agents`` package."""
-    path = Path(__file__).resolve().parent / "agents" / "intake_agent.py"
-    spec = importlib.util.spec_from_file_location("sentinelloop_intake_agent", path)
+def _load_local(filename: str, attr: str):
+    """Load a function from use-case ``agents/`` without the SDK ``agents`` package."""
+    path = Path(__file__).resolve().parent / "agents" / filename
+    spec = importlib.util.spec_from_file_location(f"sentinelloop_{filename}", path)
     if spec is None or spec.loader is None:
-        raise ImportError("cannot load intake_agent module")
+        raise ImportError(f"cannot load {filename}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.create_intake_agent
+    return getattr(module, attr)
 
 
 def configure_model_provider() -> None:
@@ -99,18 +99,10 @@ def build_agents() -> list[Agent]:
         handoffs=[guidance_agent],
         model=model,
     )
-    incident_agent = Agent(
-        name="incident_agent",
-        handoff_description="Extracts structured incident facts. Unknown is not false.",
-        instructions=(
-            f"{SHARED} You are incident_agent. Extract hazard description, location, and whether "
-            "injury, active danger, or people exposed were stated. Missing facts stay unknown. "
-            "Handoff to risk_agent when you have a usable description."
-        ),
-        handoffs=[risk_agent],
-        model=model,
+    incident_agent = _load_local("incident_agent.py", "create_incident_agent")(model=model, handoffs=[risk_agent])
+    intake_agent = _load_local("intake_agent.py", "create_intake_agent")(
+        model=model, handoffs=[incident_agent, followup_agent]
     )
-    intake_agent = _load_create_intake_agent()(model=model, handoffs=[incident_agent, followup_agent])
     return [
         intake_agent,
         incident_agent,
