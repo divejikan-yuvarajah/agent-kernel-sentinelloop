@@ -78,15 +78,8 @@ def build_agents() -> list[Agent]:
         handoffs=[followup_agent],
         model=model,
     )
-    guidance_agent = Agent(
-        name="guidance_agent",
-        handoff_description="Retrieves approved safety guidance; never invents procedures.",
-        instructions=(
-            f"{SHARED} You are guidance_agent. If no approved guidance was retrieved, say so clearly. "
-            "Handoff to coordination_agent next."
-        ),
-        handoffs=[coordination_agent],
-        model=model,
+    guidance_agent = _load_local("guidance_agent.py", "create_guidance_agent")(
+        model=model, handoffs=[coordination_agent]
     )
     risk_agent = _load_local("risk_agent.py", "create_risk_agent")(model=model, handoffs=[guidance_agent])
     incident_agent = _load_local("incident_agent.py", "create_incident_agent")(model=model, handoffs=[risk_agent])
