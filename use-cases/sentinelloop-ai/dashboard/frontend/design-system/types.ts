@@ -31,6 +31,8 @@ export type IncidentSummary = {
   source?: string | null;
   location_verified?: boolean;
   qr_equipment?: string | null;
+  safety_status?: string | null;
+  is_anonymous?: boolean;
 };
 
 export type LoopStage = {
@@ -158,4 +160,107 @@ export type Officer = {
   team: string;
   load: number;
   status: string;
+};
+
+export type SafetyActiveCard = {
+  name: string;
+  active: boolean;
+  spec_rule?: string | null;
+};
+
+export type GuardrailMetrics = {
+  total_validations: number;
+  passed: number;
+  blocked: number;
+  warnings: number;
+};
+
+export type SafetyViolationCounts = {
+  guidance_hallucinations: number;
+  privacy_attempts: number;
+  blocked_closures: number;
+  budget_blocks: number;
+};
+
+export type SafetyComplianceCharts = {
+  guidance_validation_success_rate: number;
+  incidents_requiring_human_review: number;
+  blocked_ai_outputs: number;
+  anonymous_reports_percentage: number;
+  average_ai_cost_per_incident: number;
+};
+
+export type GuardrailStatus = {
+  cards: SafetyActiveCard[];
+  metrics: GuardrailMetrics;
+  violations: SafetyViolationCounts;
+  charts: SafetyComplianceCharts;
+  budget_ceiling_usd: number | null;
+  budget_spent_usd: number;
+};
+
+export type GuidanceVerification = {
+  knowledge_base_file: string | null;
+  supported_lines: string | null;
+  hallucination_check: string | null;
+  generated_guidance?: string | null;
+};
+
+export type IncidentSafetyPanel = {
+  incident_id: string;
+  safety_status: string;
+  risk_level: string | null;
+  human_review: string;
+  guidance: string;
+  closure: string;
+  auto_close_disabled: boolean;
+  guidance_verification: GuidanceVerification;
+  timeline: { timestamp: string | null; title: string; detail: string | null }[];
+  assigned_reviewer: string | null;
+};
+
+export type ReviewQueueItem = {
+  incident_id: string;
+  risk_level: string | null;
+  reason: string;
+  assigned_reviewer: string | null;
+  waiting_time: string | null;
+  status: string | null;
+  actions: string[];
+  actions_enabled: boolean;
+  action_hint: string | null;
+};
+
+export type GuardrailDebugEvent = {
+  timestamp: string | null;
+  guardrail: string;
+  event: string;
+  input_summary: string | null;
+  validation_result: string;
+  agent_output: string | null;
+  rule_violated: string | null;
+  decision: string | null;
+  incident_id: string | null;
+  violations: string[];
+};
+
+export type GuardrailConfigView = {
+  ai_budget_ceiling: string | null;
+  guidance_validation_strictness: string | null;
+  anonymous_data_policy: string | null;
+  closure_rules: string | null;
+  max_text_length: number | null;
+  max_attachment_bytes: number | null;
+  writable: boolean;
+};
+
+export type GuardrailComplianceExport = {
+  generated_at: string;
+  validation_history: Record<string, unknown>[];
+  violations: SafetyViolationCounts;
+  human_approvals: number;
+  incident_count: number;
+  ai_spend_usd: number;
+  budget_ceiling_usd: number | null;
+  audit_note: string | null;
 };

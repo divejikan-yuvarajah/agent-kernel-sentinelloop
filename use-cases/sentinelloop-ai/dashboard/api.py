@@ -19,9 +19,14 @@ from fastapi.responses import JSONResponse
 from dashboard.schemas import (
     AnalyticsSummary,
     AuditExport,
+    GuardrailComplianceExport,
+    GuardrailConfigView,
+    GuardrailDebugEvent,
+    GuardrailStatus,
     IncidentDetail,
     IncidentListResponse,
     RecurringResponse,
+    ReviewQueueResponse,
     RouterStatus,
 )
 from dashboard.service import DashboardReadService
@@ -266,6 +271,73 @@ class DashboardHandler(RESTRequestHandler):
                 log.exception("dashboard router_status failed")
                 raise HTTPException(status_code=500, detail="internal dashboard failure") from None
 
+        @router.get(
+            "/guardrails/status",
+            response_model=GuardrailStatus,
+            summary="AI Safety Center",
+            description="Active guardrails, metrics, violations, and compliance charts. Read-only.",
+        )
+        async def guardrail_status() -> GuardrailStatus:
+            try:
+                return await asyncio.to_thread(self._reader().guardrail_status)
+            except Exception:
+                log.exception("dashboard guardrail_status failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
+        @router.get(
+            "/guardrails/review-queue",
+            response_model=ReviewQueueResponse,
+            summary="Human review queue",
+            description="High and Critical incidents waiting for Slack Closed. Dashboard actions are display-only.",
+        )
+        async def review_queue() -> ReviewQueueResponse:
+            try:
+                return await asyncio.to_thread(self._reader().review_queue)
+            except Exception:
+                log.exception("dashboard review_queue failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
+        @router.get(
+            "/guardrails/debug",
+            response_model=list[GuardrailDebugEvent],
+            summary="Guardrail debug console",
+            description="Admin-only operator view of validation events. Never exposed to workers.",
+        )
+        async def guardrail_debug(
+            limit: int = Query(default=100, ge=1, le=500),
+        ) -> list[GuardrailDebugEvent]:
+            try:
+                return await asyncio.to_thread(self._reader().guardrail_debug, limit=limit)
+            except Exception:
+                log.exception("dashboard guardrail_debug failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
+        @router.get(
+            "/guardrails/config",
+            response_model=GuardrailConfigView,
+            summary="Guardrail configuration",
+            description="Read-only policy display. Normal users cannot modify safety rules.",
+        )
+        async def guardrail_config() -> GuardrailConfigView:
+            try:
+                return await asyncio.to_thread(self._reader().guardrail_config)
+            except Exception:
+                log.exception("dashboard guardrail_config failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
+        @router.get(
+            "/guardrails/compliance-export",
+            response_model=GuardrailComplianceExport,
+            summary="Export safety compliance report",
+            description="Validation history, violations, human approvals, and audit timestamps. Read-only JSON.",
+        )
+        async def guardrail_compliance_export() -> GuardrailComplianceExport:
+            try:
+                return await asyncio.to_thread(self._reader().guardrail_compliance_export)
+            except Exception:
+                log.exception("dashboard compliance_export failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
         async def writes_forbidden() -> JSONResponse:
             return JSONResponse(status_code=405, content={"detail": "dashboard is read-only"})
 
@@ -276,6 +348,11 @@ class DashboardHandler(RESTRequestHandler):
             "/analytics/summary",
             "/analytics/recurring",
             "/router/status",
+            "/guardrails/status",
+            "/guardrails/review-queue",
+            "/guardrails/debug",
+            "/guardrails/config",
+            "/guardrails/compliance-export",
         ):
             router.add_api_route(
                 path,

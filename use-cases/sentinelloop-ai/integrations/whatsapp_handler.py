@@ -391,6 +391,39 @@ class SentinelLoopWhatsAppHandler(_KernelWhatsAppHandler):  # type: ignore[misc]
             if self._orchestrator is not None:
                 return await self._orchestrator.process_incoming_whatsapp_message(normalized)
             return None
+        from guardrails.input_validation import validate_external_event, validate_media_input, validate_worker_input
+
+        validate_external_event(
+            {"event_id": normalized.provider_message_id, "source": "whatsapp"},
+            source="whatsapp",
+        )
+        inbound = validate_worker_input(normalized.text)
+        if inbound.rejected:
+            try:
+                await self._transport.send_text_message(
+                    normalized.sender_id,
+                    "Your message is too large to process safely. Please send a shorter description.",
+                )
+            except WhatsAppSendError:
+                log.warning("whatsapp_input_guardrail_ack_failed")
+            return None
+        if normalized.media:
+            media_check = validate_media_input(
+                mime_type=normalized.media.mime_type,
+                filename=normalized.media.filename if hasattr(normalized.media, "filename") else None,
+                size_bytes=normalized.media.size_bytes if hasattr(normalized.media, "size_bytes") else None,
+                provider_id=normalized.media.media_id,
+                source="whatsapp",
+            )
+            if media_check.rejected:
+                try:
+                    await self._transport.send_text_message(
+                        normalized.sender_id,
+                        "That attachment is not an allowed workplace photo. Please send a JPEG or PNG image.",
+                    )
+                except WhatsAppSendError:
+                    log.warning("whatsapp_media_guardrail_ack_failed")
+                return None
         if normalized.media and normalized.media.media_id:
             resolved = await self._transport.resolve_inbound_media(normalized.media)
             if resolved is not None and resolved.content:

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -17,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from integrations.slack_handler import (
     ACTION_ACCEPT,
+    ACTION_CLOSED,
     ACTION_ESCALATE,
     ACTION_REASSIGN,
     SlackHandler,
@@ -111,7 +113,7 @@ class CoordinationResult(BaseModel):
     duplicate_count: int = 1
     posted: bool = False
     interactive_actions_supported: bool = True
-    available_actions: list[str] = Field(default_factory=lambda: ["accept", "reassign", "escalate"])
+    available_actions: list[str] = Field(default_factory=lambda: ["accept", "reassign", "escalate", "closed"])
     coordination_error: str | None = None
     coordination_delivery_status: str = "Pending"
     slack_reply: str | None = None
@@ -574,6 +576,102 @@ class CoordinationService:
             await self._trigger_followup(record, mapping, actor)
         return result
 
+    async def close_incident_human(
+        self,
+        incident_id: str,
+        *,
+        actor: str | None = None,
+        action_id: str | None = None,
+        thread_ts: str | None = None,
+        channel_id: str | None = None,
+        mapping: dict[str, Any] | None = None,
+        message: dict[str, Any] | None = None,
+    ) -> CoordinationResult:
+        # SPEC.md Rule: Human intervention for Critical incidents; explicit Slack Closed.
+        record = self._record(incident_id)
+        result = CoordinationResult(
+            incident_id=incident_id,
+            assigned_team=record.assigned_team,
+            status=record.status,
+            slack_channel_id=record.slack_channel_id,
+            slack_message_ts=record.slack_message_ts,
+            slack_thread_ts=record.slack_thread_ts,
+            posted=bool(record.slack_message_ts),
+        )
+        from guardrails.output_validation import validate_slack_closure
+
+        slack = validate_slack_closure(
+            action="Closed",
+            actor=actor,
+            incident_id=incident_id,
+            expected_incident_id=record.incident_id or incident_id,
+            thread_ts=thread_ts,
+            expected_thread_ts=record.slack_thread_ts,
+            channel_id=channel_id,
+            expected_channel_id=record.slack_channel_id,
+            is_bot=False,
+        )
+        if not slack.get("approved"):
+            result.coordination_error = ERROR_ACTION
+            result.slack_reply = "Closed is only accepted from an authorized officer in this incident thread."
+            return result
+        evidence = {
+            "closed_by": actor,
+            "source": "slack",
+            "action": "Closed",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "slack_action_id": action_id or ACTION_CLOSED,
+        }
+        risk_level = None
+        if mapping:
+            risk = mapping.get("risk") if isinstance(mapping.get("risk"), dict) else mapping
+            if isinstance(risk, dict):
+                risk_level = risk.get("risk_level") or risk.get("final_risk_level") or mapping.get("risk_level")
+        from agents.followup_agent import FollowupRecord, get_followup_service
+        from tools.lifecycle import STATUS_AWAITING_VERIFICATION, STATUS_CLOSED, STATUS_RESOLVED
+
+        followup = getattr(self, "followup", None) or get_followup_service()
+        existing = followup.store.get(incident_id)
+        display = record.status
+        if existing is None and display not in {STATUS_RESOLVED, STATUS_AWAITING_VERIFICATION, STATUS_CLOSED}:
+            result.coordination_error = ERROR_TRANSITION
+            result.slack_reply = "This incident is not in a closable state."
+            return result
+        if existing is None:
+            followup.store.put(
+                FollowupRecord(
+                    incident_id=incident_id,
+                    uuid=record.uuid,
+                    status=STATUS_RESOLVED,
+                    assigned_team=record.assigned_team,
+                    slack_channel_id=record.slack_channel_id,
+                    slack_thread_ts=record.slack_thread_ts,
+                    risk_level=risk_level,
+                    reviewed_by_human=True,
+                    slack_closed_action=evidence,
+                )
+            )
+        closed = await followup.confirm_safe_and_close(incident_id, actor=actor, source="slack", slack_closure=evidence)
+        if closed.error:
+            result.coordination_error = closed.error
+            result.slack_reply = closed.worker_reply or "Closure was blocked by the safety guardrail."
+            result.status = closed.status or record.status
+            return result
+        record.status = STATUS_CLOSED
+        self.store.put(record)
+        result.status = STATUS_CLOSED
+        result.slack_reply = "Incident closed by authorized officer."
+        if record.slack_channel_id and record.slack_thread_ts:
+            try:
+                await self.slack.post_thread_reply(
+                    channel=record.slack_channel_id,
+                    thread_ts=record.slack_thread_ts,
+                    text=result.slack_reply,
+                )
+            except SlackPostError:
+                log.warning("slack close acknowledgement failed")
+        return result
+
     async def _trigger_followup(
         self, record: CoordinationRecord, mapping: dict[str, Any] | None, actor: str | None
     ) -> None:
@@ -639,6 +737,15 @@ class CoordinationService:
             result = await self.update_incident_status(
                 record.incident_id, command["status"], actor=actor, mapping=mapping
             )
+        elif command["command"] == "close":
+            result = await self.close_incident_human(
+                record.incident_id,
+                actor=actor,
+                action_id=ACTION_CLOSED,
+                thread_ts=thread_ts,
+                channel_id=event.get("channel") or event.get("channel_id"),
+                mapping=mapping,
+            )
         if result is not None:
             self._mark_if_committed(record, event_id, result)
         return result
@@ -671,6 +778,25 @@ class CoordinationService:
                 )
             else:
                 result = await self.reassign_incident(incident_id, team, actor=actor, mapping=mapping)
+        elif action_id == ACTION_CLOSED:
+            message = payload.get("message") if isinstance(payload.get("message"), dict) else {}
+            result = await self.close_incident_human(
+                incident_id,
+                actor=actor,
+                action_id=action_id,
+                thread_ts=(
+                    payload.get("message", {}).get("thread_ts")
+                    if isinstance(payload.get("message"), dict)
+                    else payload.get("thread_ts") or record.slack_thread_ts
+                ),
+                channel_id=(
+                    payload.get("channel", {}).get("id")
+                    if isinstance(payload.get("channel"), dict)
+                    else payload.get("channel") or record.slack_channel_id
+                ),
+                mapping=mapping,
+                message=message,
+            )
         else:
             result = CoordinationResult(incident_id=incident_id, coordination_error=ERROR_ACTION)
         self._mark_if_committed(record, event_id, result)

@@ -119,6 +119,10 @@ class GuidanceResult(BaseModel):
     error: str | None = None
     incident_id: str | None = None
     session_id: str | None = None
+    validation_approved: bool | None = None
+    validation_confidence: float | None = None
+    matched_line_count: int | None = None
+    hallucination_check: str | None = None
 
     def worker_text(self) -> str:
         """Worker-facing WhatsApp text. No source IDs or file paths."""
@@ -323,9 +327,11 @@ def _pack_result(
     *,
     grounded: bool,
     fallback: bool,
+    validation: dict[str, Any] | None = None,
 ) -> GuidanceResult:
     items = [GuidanceItem(source_id=line.id, source_text=line.text, output_text=text) for line, text in pairs]
     footer_source = pack.footer.text if pack.footer else footer_text
+    matched = (validation or {}).get("matched_lines") or []
     return GuidanceResult(
         hazard_category=mapping.get("hazard_category") or pack.category,
         knowledge_base_file=pack.filename,
@@ -339,6 +345,10 @@ def _pack_result(
         error=None,
         incident_id=mapping.get("incident_id"),
         session_id=mapping.get("session_id"),
+        validation_approved=True if fallback else bool((validation or {}).get("approved", True)),
+        validation_confidence=1.0 if fallback else (validation or {}).get("confidence"),
+        matched_line_count=len(matched) if matched else len(items),
+        hallucination_check="Fallback" if fallback else "Passed",
     )
 
 
@@ -395,6 +405,17 @@ async def generate_guidance(
         if routed.degraded or routed.error or not routed.content:
             raise ValueError(routed.error or "empty model content")
         grounded_pairs, footer_out = validate_guidance_response(_parse_model_json(routed.content), pack)
+        from guardrails.output_validation import validate_guidance_output
+
+        kb_text = "\n".join(line.text for line in pack.action_lines)
+        grounding = validate_guidance_output(
+            [{"source_text": line.text, "output_text": text} for line, text in grounded_pairs],
+            kb_text,
+            knowledge_base_file=pack.filename,
+            incident_id=mapping.get("incident_id") or mapping.get("incident_ref"),
+        )
+        if not grounding.get("approved"):
+            raise GuidanceValidationError("ungrounded_guidance")
         footer_text = footer_out or (pack.footer.text if pack.footer else "")
         result = _pack_result(
             mapping,
@@ -404,6 +425,7 @@ async def generate_guidance(
             footer_text,
             grounded=True,
             fallback=False,
+            validation=grounding,
         )
     except Exception:
         log.warning("guidance_model_validation_failed")

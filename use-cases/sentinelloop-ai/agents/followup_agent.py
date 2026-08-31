@@ -63,6 +63,7 @@ ERROR_AMBIGUOUS = "verification_ambiguous"
 ERROR_TEAM_NOTIFY = "team_renotification_failed"
 ERROR_WRONG_THREAD = "unrelated_slack_thread"
 ERROR_UNSUPPORTED_FILE = "unsupported_evidence_type"
+ERROR_HUMAN_REVIEW = "human_review_required"
 
 _PUNCT_RE = re.compile(r"[!?.,;:]+")
 
@@ -170,6 +171,8 @@ class FollowupRecord(BaseModel):
     processed_file_ids: list[str] = Field(default_factory=list)
     pending_after_file_ids: list[str] = Field(default_factory=list)
     reopen_count: int = 0
+    reviewed_by_human: bool = False
+    slack_closed_action: dict[str, Any] | None = None
 
 
 class MemoryFollowupStore:
@@ -616,7 +619,14 @@ class FollowupService:
             self._mark_event(record, event_id)
         return result
 
-    async def confirm_safe_and_close(self, incident_id: str, *, actor: str | None = None) -> FollowupResult:
+    async def confirm_safe_and_close(
+        self,
+        incident_id: str,
+        *,
+        actor: str | None = None,
+        source: str = "whatsapp",
+        slack_closure: dict[str, Any] | None = None,
+    ) -> FollowupResult:
         record = self._reload_status(self._record(incident_id))
         previous = record.status
         outcome = validate_status_transition(previous, STATUS_CLOSED)
@@ -630,17 +640,68 @@ class FollowupService:
         if outcome == "invalid":
             result.error = ERROR_TRANSITION
             return result
+        risk_level = self._closure_risk_level(record)
+        from guardrails.output_validation import validate_closure_request
+
+        if slack_closure:
+            record.slack_closed_action = slack_closure
+            record.reviewed_by_human = True
+        closure = validate_closure_request(
+            risk_level=risk_level,
+            source=source,
+            reviewed_by_human=record.reviewed_by_human,
+            slack_closed_action=record.slack_closed_action or slack_closure,
+            incident_id=incident_id,
+        )
+        if not closure.get("approved"):
+            result.error = ERROR_HUMAN_REVIEW
+            result.worker_reply = "A safety officer must confirm closure in Slack for High and Critical incidents."
+            try:
+                self._persist(
+                    record,
+                    event_type="closure_blocked",
+                    previous_status=previous,
+                    actor=actor,
+                    source=source,
+                    extra={
+                        "event": "guardrail_closure_blocked",
+                        "risk_level": risk_level,
+                        "reason": "human_review_required",
+                    },
+                )
+            except Exception:
+                log.exception("repository_update_failed during closure block")
+            await self._notify_slack(
+                record,
+                "Human approval required according to SPEC.md\n"
+                f"Worker confirmed the area is safe, but {risk_level or 'this'} risk "
+                "cannot auto-close. An authorized officer must press Closed in this thread.",
+            )
+            log.info("closure_blocked_human_review incident=%s risk=%s", incident_id, risk_level)
+            return result
         closed_at = _now()
         record.status = STATUS_CLOSED
         record.verification_status = VERIFICATION_CONFIRMED
+        evidence = dict(slack_closure or record.slack_closed_action or {})
+        extra = {"event": "worker_confirmed_safe"}
+        if evidence:
+            extra.update(
+                {
+                    "closed_by": evidence.get("closed_by") or actor,
+                    "closed_source": evidence.get("source") or source,
+                    "closed_timestamp": evidence.get("timestamp") or closed_at,
+                    "slack_action_id": evidence.get("slack_action_id") or evidence.get("action_id"),
+                    "action": evidence.get("action") or "Closed",
+                }
+            )
         try:
             self._persist(
                 record,
                 event_type="incident_closed",
                 previous_status=previous,
                 actor=actor,
-                source="whatsapp",
-                extra={"event": "worker_confirmed_safe"},
+                source=source,
+                extra=extra,
                 timestamps={"closed_at": closed_at},
             )
         except Exception:
@@ -659,6 +720,21 @@ class FollowupService:
         result.resolution_timestamp = closed_at
         result.after_evidence_added = bool(record.processed_file_ids)
         return result
+
+    def _closure_risk_level(self, record: FollowupRecord) -> str | None:
+        if record.risk_level:
+            return record.risk_level
+        if self.repository is None or not record.uuid:
+            return record.risk_level
+        try:
+            row = self.repository.get_incident(UUID(record.uuid))
+        except Exception:
+            return record.risk_level
+        if row is None:
+            return record.risk_level
+        if isinstance(row, dict):
+            return row.get("current_risk_level") or row.get("risk_level") or record.risk_level
+        return getattr(row, "current_risk_level", None) or getattr(row, "risk_level", None) or record.risk_level
 
     async def reopen_incident(self, incident_id: str, *, actor: str | None = None) -> FollowupResult:
         record = self._reload_status(self._record(incident_id))

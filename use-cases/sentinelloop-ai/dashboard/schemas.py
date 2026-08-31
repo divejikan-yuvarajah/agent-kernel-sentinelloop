@@ -30,6 +30,8 @@ class IncidentSummary(_Out):
     source: str | None = None
     location_verified: bool = False
     qr_equipment: str | None = None
+    safety_status: str | None = None
+    is_anonymous: bool = False
 
 
 class IncidentListResponse(_Out):
@@ -110,6 +112,9 @@ class IncidentDetail(_Out):
     location_verified: bool = False
     qr_equipment: str | None = None
     location_confidence: float | None = None
+    is_anonymous: bool = False
+    safety_status: str | None = None
+    safety: IncidentSafetyPanel | None = None
 
 
 class LoopStageCount(_Out):
@@ -340,3 +345,120 @@ class AuditExport(_Out):
     incident_timeline: list[AuditTimelineEvent] = Field(default_factory=list)
     resolution: AuditResolution
     audit_metadata: AuditMetadata
+
+
+class SafetyActiveCard(_Out):
+    name: str
+    active: bool = True
+    spec_rule: str | None = None
+
+
+class GuardrailMetrics(_Out):
+    total_validations: int = 0
+    passed: int = 0
+    blocked: int = 0
+    warnings: int = 0
+
+
+class SafetyViolationCounts(_Out):
+    guidance_hallucinations: int = 0
+    privacy_attempts: int = 0
+    blocked_closures: int = 0
+    budget_blocks: int = 0
+
+
+class SafetyComplianceCharts(_Out):
+    guidance_validation_success_rate: float = 0.0
+    incidents_requiring_human_review: int = 0
+    blocked_ai_outputs: int = 0
+    anonymous_reports_percentage: float = 0.0
+    average_ai_cost_per_incident: float = 0.0
+
+
+class GuardrailStatus(_Out):
+    cards: list[SafetyActiveCard] = Field(default_factory=list)
+    metrics: GuardrailMetrics = Field(default_factory=GuardrailMetrics)
+    violations: SafetyViolationCounts = Field(default_factory=SafetyViolationCounts)
+    charts: SafetyComplianceCharts = Field(default_factory=SafetyComplianceCharts)
+    budget_ceiling_usd: float | None = None
+    budget_spent_usd: float = 0.0
+
+
+class GuardrailTimelineEvent(_Out):
+    timestamp: str | None = None
+    title: str
+    detail: str | None = None
+
+
+class GuidanceVerification(_Out):
+    knowledge_base_file: str | None = None
+    supported_lines: str | None = None
+    hallucination_check: str | None = None
+    generated_guidance: str | None = None
+
+
+class IncidentSafetyPanel(_Out):
+    incident_id: str
+    safety_status: str
+    risk_level: str | None = None
+    human_review: str
+    guidance: str
+    closure: str
+    auto_close_disabled: bool = False
+    guidance_verification: GuidanceVerification = Field(default_factory=GuidanceVerification)
+    timeline: list[GuardrailTimelineEvent] = Field(default_factory=list)
+    assigned_reviewer: str | None = None
+
+
+class ReviewQueueItem(_Out):
+    incident_id: str
+    risk_level: str | None = None
+    reason: str
+    assigned_reviewer: str | None = None
+    waiting_time: str | None = None
+    status: str | None = None
+    actions: list[str] = Field(default_factory=list)
+    actions_enabled: bool = False
+    action_hint: str | None = None
+
+
+class ReviewQueueResponse(_Out):
+    items: list[ReviewQueueItem] = Field(default_factory=list)
+    total: int = 0
+
+
+class GuardrailDebugEvent(_Out):
+    timestamp: str | None = None
+    guardrail: str
+    event: str
+    input_summary: str | None = None
+    validation_result: str
+    agent_output: str | None = None
+    rule_violated: str | None = None
+    decision: str | None = None
+    incident_id: str | None = None
+    violations: list[str] = Field(default_factory=list)
+
+
+class GuardrailConfigView(_Out):
+    ai_budget_ceiling: str | None = None
+    guidance_validation_strictness: str | None = None
+    anonymous_data_policy: str | None = None
+    closure_rules: str | None = None
+    max_text_length: int | None = None
+    max_attachment_bytes: int | None = None
+    writable: bool = False
+
+
+class GuardrailComplianceExport(_Out):
+    generated_at: str
+    validation_history: list[dict[str, Any]] = Field(default_factory=list)
+    violations: SafetyViolationCounts = Field(default_factory=SafetyViolationCounts)
+    human_approvals: int = 0
+    incident_count: int = 0
+    ai_spend_usd: float = 0.0
+    budget_ceiling_usd: float | None = None
+    audit_note: str | None = None
+
+
+IncidentDetail.model_rebuild()

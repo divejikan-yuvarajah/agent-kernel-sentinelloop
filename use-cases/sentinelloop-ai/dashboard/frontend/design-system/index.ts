@@ -17,6 +17,11 @@ export type {
   RiskAssessment,
   RouterStatus,
   TimelineEvent,
+  GuardrailStatus,
+  IncidentSafetyPanel,
+  ReviewQueueItem,
+  GuardrailDebugEvent,
+  GuardrailConfigView,
 } from "./types";
 
 export { ActivityFeed } from "./components/ActivityFeed";
@@ -43,6 +48,7 @@ export { RiskIndicator } from "./components/RiskIndicator";
 export { RouterStatusStrip } from "./components/RouterStatusStrip";
 export { SelectDropdown } from "./components/SelectDropdown";
 export { Sidebar } from "./components/Sidebar";
+export { SafetyStatusBadge } from "./components/SafetyStatusBadge";
 export { StatusIndicator } from "./components/StatusIndicator";
 export { TableRow } from "./components/TableRow";
 export { TimelineItem } from "./components/TimelineItem";

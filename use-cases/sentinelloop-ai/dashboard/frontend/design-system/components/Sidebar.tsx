@@ -6,6 +6,8 @@ const LINKS = [
   { to: "/evidence", label: "Evidence Review" },
   { to: "/officers", label: "Officers" },
   { to: "/analytics", label: "Analytics" },
+  { to: "/safety", label: "AI Safety Center" },
+  { to: "/safety/review", label: "Review Required" },
   { to: "/settings", label: "Settings" },
 ];
 

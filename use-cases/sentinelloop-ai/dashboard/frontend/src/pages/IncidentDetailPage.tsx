@@ -11,6 +11,7 @@ import {
   Panel,
   RiskAssessmentPanel,
   RiskIndicator,
+  SafetyStatusBadge,
   StatusIndicator,
 } from "@ds/index";
 import type { EvidenceItem, RiskAssessment, TimelineEvent } from "@ds/types";
@@ -126,6 +127,7 @@ export function IncidentDetailPage() {
                 </Badge>
               ) : null}
               {detail.source === "QR_TAGGED" ? <Badge title="Location verified by QR scan">QR Tagged</Badge> : null}
+              <SafetyStatusBadge status={detail.safety_status} />
             </div>
             <p style={{ margin: "16px 0 0" }}>{detail.location}</p>
             {detail.location_verified ? (
@@ -157,6 +159,33 @@ export function IncidentDetailPage() {
           </Panel>
           <div className="ds-grid">
             <RiskAssessmentPanel assessment={assessment} />
+            {detail.safety ? (
+              <Panel title="AI Decision Safety Panel">
+                <p>Risk Level: {detail.safety.risk_level ?? "Unknown"}</p>
+                <p>Human Review: {detail.safety.human_review}</p>
+                <p>Guidance: {detail.safety.guidance}</p>
+                <p>Closure: {detail.safety.closure}</p>
+                {detail.safety.auto_close_disabled ? (
+                  <p className="ds-mono">Human approval required according to SPEC.md</p>
+                ) : null}
+                <div className="ds-toolbar">
+                  <Button disabled={detail.safety.auto_close_disabled} title="Auto Close is blocked for High/Critical">
+                    Auto Close
+                  </Button>
+                </div>
+                <h3 style={{ marginTop: 16 }}>Generated Guidance</h3>
+                <p>Matched Knowledge Base: {detail.safety.guidance_verification.knowledge_base_file ?? "—"}</p>
+                <p>Supported Lines: {detail.safety.guidance_verification.supported_lines ?? "—"}</p>
+                <p>Hallucination Check: {detail.safety.guidance_verification.hallucination_check ?? "—"}</p>
+                <h3 style={{ marginTop: 16 }}>Guardrail Timeline</h3>
+                {detail.safety.timeline.map((event, index) => (
+                  <p key={`${event.title}-${index}`} className="ds-mono">
+                    {event.timestamp ? event.timestamp.slice(11, 16) : "--:--"} {event.title}
+                    {event.detail ? ` · ${event.detail}` : ""}
+                  </p>
+                ))}
+              </Panel>
+            ) : null}
             <Panel title="Evidence">
               <EvidenceViewer items={evidence} />
             </Panel>

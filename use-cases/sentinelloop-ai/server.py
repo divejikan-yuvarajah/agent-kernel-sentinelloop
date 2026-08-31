@@ -14,14 +14,15 @@ from agentkernel.api import RESTAPI
 from agentkernel.openai import OpenAIModule
 from agentkernel.slack import AgentSlackRequestHandler
 
-from agent import build_agents, configure_model_provider
+from agent import build_agents, configure_model_provider, register_safety_hooks
 from dashboard.api import DashboardHandler
 from integrations.whatsapp_handler import SentinelLoopWhatsAppHandler
 
 log = logging.getLogger("sentinelloop.server")
 
 configure_model_provider()
-OpenAIModule(build_agents())
+_agents = build_agents()
+register_safety_hooks(OpenAIModule(_agents), _agents)
 
 
 def _rest_handlers():

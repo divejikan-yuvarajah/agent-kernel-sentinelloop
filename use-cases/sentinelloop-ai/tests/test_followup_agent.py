@@ -9,6 +9,7 @@ from agents.followup_agent import (
     ERROR_AMBIGUOUS,
     ERROR_DELIVERY,
     ERROR_DUPLICATE,
+    ERROR_HUMAN_REVIEW,
     ERROR_NO_WORKER,
     ERROR_REPO,
     ERROR_STALE,
@@ -67,7 +68,7 @@ class FakeRepo:
         self.incident_status = "RESOLVED"
         self.closed_at = None
         self.reopen_count = 0
-        self.risk_level = "High"
+        self.risk_level = "Medium"
         self.hazard_category = "electrical"
 
     def get_incident(self, incident_id):
@@ -123,7 +124,7 @@ def _incident(**kwargs) -> dict:
         "slack_channel_id": "C-ELEC",
         "slack_thread_ts": "1.000",
         "hazard_category": "electrical",
-        "risk_level": "High",
+        "risk_level": "Medium",
     }
     base.update(kwargs)
     return base
@@ -216,7 +217,7 @@ def test_still_exists_reopens_same_incident_and_renotifies():
     assert slack.posts[0]["channel"] == "C-ELEC"
     types = [getattr(u, "update_type", None) for u in repo.updates]
     assert "incident_reopened" in types
-    assert repo.risk_level == "High"
+    assert repo.risk_level == "Medium"
     assert repo.hazard_category == "electrical"
 
 
@@ -507,3 +508,48 @@ def test_assigned_team_not_remapped():
     run(service.handle_worker_verification_response(text="No, still exists", incident_id="INC-0042"))
     assert "Electrical Maintenance" in slack.posts[0]["text"]
     assert "Lab Safety" not in slack.posts[0]["text"]
+
+
+def test_high_worker_yes_requires_human_slack_close():
+    repo = FakeRepo()
+    repo.risk_level = "High"
+    service, _, slack = _service(repo=repo)
+    run(service.start_worker_verification(_incident(risk_level="High")))
+    result = run(service.handle_worker_verification_response(text="Yes", incident_id="INC-0042"))
+    assert result.closed is False
+    assert result.error == ERROR_HUMAN_REVIEW
+    assert repo.incident_status == "RESOLVED"
+    assert any("SPEC.md" in str(post.get("text")) for post in slack.posts)
+
+
+def test_critical_worker_yes_requires_human_slack_close():
+    repo = FakeRepo()
+    repo.risk_level = "Critical"
+    service, _, _ = _service(repo=repo)
+    run(service.start_worker_verification(_incident(risk_level="Critical")))
+    result = run(service.handle_worker_verification_response(text="Yes", incident_id="INC-0042"))
+    assert result.closed is False
+    assert result.error == ERROR_HUMAN_REVIEW
+
+
+def test_high_slack_closed_allows_closure():
+    repo = FakeRepo()
+    repo.risk_level = "High"
+    service, _, _ = _service(repo=repo)
+    run(service.start_worker_verification(_incident(risk_level="High")))
+    result = run(
+        service.confirm_safe_and_close(
+            "INC-0042",
+            actor="U12345",
+            source="slack",
+            slack_closure={
+                "closed_by": "U12345",
+                "source": "slack",
+                "action": "Closed",
+                "timestamp": "2026-08-31T12:00:00+00:00",
+                "slack_action_id": "incident_closed",
+            },
+        )
+    )
+    assert result.closed is True
+    assert result.status == STATUS_CLOSED

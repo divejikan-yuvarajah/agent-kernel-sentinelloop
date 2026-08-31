@@ -398,3 +398,29 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+
+.ds-safety {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ds-safety__mark {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--chalk-muted);
+}
+
+.ds-safety--validated .ds-safety__mark {
+  background: var(--verified-teal);
+}
+
+.ds-safety--review .ds-safety__mark {
+  background: var(--signal-amber);
+}
+
+.ds-safety--blocked .ds-safety__mark {
+  background: var(--hazard-red);
+}

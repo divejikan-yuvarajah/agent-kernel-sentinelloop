@@ -1,4 +1,14 @@
-import type { AnalyticsSummary, IncidentSummary, RecurringHazard, RouterStatus } from "@ds/types";
+import type {
+  AnalyticsSummary,
+  GuardrailComplianceExport,
+  GuardrailConfigView,
+  GuardrailDebugEvent,
+  GuardrailStatus,
+  IncidentSummary,
+  RecurringHazard,
+  ReviewQueueItem,
+  RouterStatus,
+} from "@ds/types";
 
 const API_BASE = "/api";
 
@@ -57,6 +67,25 @@ export type IncidentDetail = {
   location_verified?: boolean;
   qr_equipment?: string | null;
   location_confidence?: number | null;
+  is_anonymous?: boolean;
+  safety_status?: string | null;
+  safety?: {
+    incident_id: string;
+    safety_status: string;
+    risk_level: string | null;
+    human_review: string;
+    guidance: string;
+    closure: string;
+    auto_close_disabled: boolean;
+    guidance_verification: {
+      knowledge_base_file: string | null;
+      supported_lines: string | null;
+      hallucination_check: string | null;
+      generated_guidance?: string | null;
+    };
+    timeline: { timestamp: string | null; title: string; detail: string | null }[];
+    assigned_reviewer: string | null;
+  } | null;
 };
 
 async function getJson<T>(path: string): Promise<T> {
@@ -210,4 +239,24 @@ export type AuditExport = {
 
 export function fetchAuditExport(id: string) {
   return getJson<AuditExport>(`/incidents/${encodeURIComponent(id)}/audit-export`);
+}
+
+export function fetchGuardrailStatus() {
+  return getJson<GuardrailStatus>("/guardrails/status");
+}
+
+export function fetchReviewQueue() {
+  return getJson<{ items: ReviewQueueItem[]; total: number }>("/guardrails/review-queue");
+}
+
+export function fetchGuardrailDebug() {
+  return getJson<GuardrailDebugEvent[]>("/guardrails/debug");
+}
+
+export function fetchGuardrailConfig() {
+  return getJson<GuardrailConfigView>("/guardrails/config");
+}
+
+export function fetchComplianceExport() {
+  return getJson<GuardrailComplianceExport>("/guardrails/compliance-export");
 }

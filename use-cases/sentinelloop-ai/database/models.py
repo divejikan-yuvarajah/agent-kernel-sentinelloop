@@ -51,6 +51,7 @@ class Incident(_RowModel):
     site_id: str | None = None
     duplicate_of: UUID | None = None
     reopen_count: int | None = None
+    is_anonymous: bool = False
 
     @field_validator("injury_occurred", "hazard_currently_active", mode="before")
     @classmethod

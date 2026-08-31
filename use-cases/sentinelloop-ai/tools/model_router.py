@@ -656,6 +656,9 @@ class ModelRouter:
                     "messages include image/audio content but no catalog model supports those modalities"
                 )
         log.info("[model-router] request role=%s", role)
+        from guardrails.output_validation import validate_model_budget
+
+        validate_model_budget(current_cost=self._cumulative, requested_cost=0, ceiling=self._budget_ceiling)
         free, paid = self._candidate_ids(role, modalities)
         attempted: list[str] = []
 
@@ -672,6 +675,11 @@ class ModelRouter:
                 allowed, _projected = await self._preflight_paid(model, messages, gen)
                 if not allowed:
                     budget_limited = True
+                    validate_model_budget(
+                        current_cost=self._cumulative,
+                        requested_cost=_projected,
+                        ceiling=self._budget_ceiling,
+                    )
                     log.info("[model-router] paid fallback=%s refused (budget)", model.id)
                     continue
                 attempts += 1

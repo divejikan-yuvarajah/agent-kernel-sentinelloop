@@ -31,4 +31,7 @@ npm run build
 - `/evidence` Evidence review
 - `/officers` Officers
 - `/analytics` Analytics
+- `/safety` AI Safety Center
+- `/safety/review` Review Required
+- `/safety/debug` Guardrail Debug Console (operators only)
 - `/settings` Settings

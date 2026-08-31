@@ -3,9 +3,12 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { DashboardPage } from "./pages/DashboardPage";
 import { EvidencePage } from "./pages/EvidencePage";
+import { GuardrailDebugPage } from "./pages/GuardrailDebugPage";
 import { IncidentDetailPage } from "./pages/IncidentDetailPage";
 import { IncidentsPage } from "./pages/IncidentsPage";
 import { OfficersPage } from "./pages/OfficersPage";
+import { ReviewQueuePage } from "./pages/ReviewQueuePage";
+import { SafetyCenterPage } from "./pages/SafetyCenterPage";
 import { SettingsPage } from "./pages/SettingsPage";
 
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage").then((module) => ({ default: module.AnalyticsPage })));
@@ -23,6 +26,9 @@ export function App() {
         <Route path="/evidence" element={<EvidencePage />} />
         <Route path="/officers" element={<OfficersPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/safety" element={<SafetyCenterPage />} />
+        <Route path="/safety/review" element={<ReviewQueuePage />} />
+        <Route path="/safety/debug" element={<GuardrailDebugPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/design-system" element={<DesignSystemPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

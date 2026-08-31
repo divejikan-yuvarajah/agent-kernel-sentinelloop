@@ -522,7 +522,9 @@ def build_audit_export(
             source=channel,
             message=redact_text(original),
             received_at=incident.created_at,
-            worker_identifier=mask_reporter(incident.reporter_id),
+            worker_identifier=mask_reporter(
+                incident.reporter_id, is_anonymous=bool(getattr(incident, "is_anonymous", False))
+            ),
             communication_channel=channel,
         ),
         language_processing=AuditLanguageProcessing(

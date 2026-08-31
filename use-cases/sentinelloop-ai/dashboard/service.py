@@ -109,7 +109,9 @@ def redact_text(value: str | None) -> str | None:
     return _PHONE_RE.sub("[redacted]", value)
 
 
-def mask_reporter(reporter_id: str) -> str:
+def mask_reporter(reporter_id: str, *, is_anonymous: bool = False) -> str:
+    if is_anonymous:
+        return "anonymous"
     raw = (reporter_id or "").strip()
     if len(raw) <= 4:
         return "••••"
@@ -386,6 +388,17 @@ class DashboardReadService:
             if isinstance(score, (int, float)):
                 similarity = float(score)
         origin = extract_qr_origin(incident.original_message_text)
+        from dashboard.safety import build_safety_panel, guidance_from_updates, safety_status_for_incident
+        from guardrails.events import list_guardrail_events
+
+        events = list_guardrail_events(incident_id=incident.incident_ref)
+        if not events:
+            events = list_guardrail_events(incident_id=str(incident.id))
+        status_label = safety_status_for_incident(
+            risk_level=incident.current_risk_level,
+            status=incident.status,
+            events=events,
+        )
         return IncidentDetail(
             incident_id=incident.incident_ref,
             record_id=incident.id,
@@ -394,7 +407,9 @@ class DashboardReadService:
             category=incident.hazard_category,
             location=incident.location,
             reporter=ReporterInfo(
-                reporter_id=mask_reporter(incident.reporter_id),
+                reporter_id=mask_reporter(
+                    incident.reporter_id, is_anonymous=bool(getattr(incident, "is_anonymous", False))
+                ),
                 source_channel=incident.source_channel,
                 language=incident.detected_language,
             ),
@@ -416,6 +431,16 @@ class DashboardReadService:
             location_verified=bool(origin["location_verified"]),
             qr_equipment=origin["qr_equipment"],
             location_confidence=1.0 if origin["location_verified"] else None,
+            is_anonymous=bool(getattr(incident, "is_anonymous", False)),
+            safety_status=status_label,
+            safety=build_safety_panel(
+                incident_id=incident.incident_ref,
+                risk_level=incident.current_risk_level,
+                status=incident.status,
+                assigned_officer=officer_label(assignment),
+                events=events,
+                guidance=guidance_from_updates(updates),
+            ),
         )
 
     def export_audit(self, incident_id: str):
@@ -623,6 +648,45 @@ class DashboardReadService:
             ledger_available=True,
         )
 
+    def _spend_snapshot(self) -> tuple[float, float | None]:
+        status = self.router_status()
+        spent = float(status.budget.spent or 0)
+        limit = status.budget.budget_limit
+        return spent, limit
+
+    def guardrail_status(self):
+        from dashboard.safety import build_guardrail_status
+
+        incidents = self._repo.list_all_incidents(IncidentFilters())
+        spent, limit = self._spend_snapshot()
+        anonymous = sum(1 for item in incidents if getattr(item, "is_anonymous", False))
+        return build_guardrail_status(incidents=incidents, budget_limit=limit, spent=spent, anonymous_count=anonymous)
+
+    def review_queue(self):
+        from dashboard.safety import build_review_queue
+
+        incidents = self._repo.list_all_incidents(IncidentFilters())
+        keys = [self._repo.row_key(item) for item in incidents]
+        assignments = _latest_by_incident(self._repo.list_assignments_for_incidents(keys))
+        return build_review_queue(incidents, assignments)
+
+    def guardrail_debug(self, *, limit: int = 100):
+        from dashboard.safety import build_debug_events
+
+        return build_debug_events(limit=limit)
+
+    def guardrail_config(self):
+        from dashboard.safety import build_config_view
+
+        return build_config_view()
+
+    def guardrail_compliance_export(self):
+        from dashboard.safety import build_compliance_export
+
+        incidents = self._repo.list_all_incidents(IncidentFilters())
+        spent, limit = self._spend_snapshot()
+        return build_compliance_export(incidents=incidents, spent=spent, budget_limit=limit)
+
     def _resolve_incident(self, incident_id: str) -> Incident | None:
         raw = incident_id.strip()
         try:
@@ -643,6 +707,8 @@ class DashboardReadService:
     ) -> IncidentSummary:
         ended = None if _is_open(incident) else incident.resolved_at or incident.closed_at
         origin = extract_qr_origin(incident.original_message_text)
+        from dashboard.safety import safety_status_for_incident
+
         return IncidentSummary(
             incident_id=incident.incident_ref,
             title=incident_title(incident),
@@ -660,6 +726,8 @@ class DashboardReadService:
             source=SOURCE_QR_TAGGED if origin["location_verified"] else origin["source"],
             location_verified=bool(origin["location_verified"]),
             qr_equipment=origin["qr_equipment"],
+            safety_status=safety_status_for_incident(risk_level=incident.current_risk_level, status=incident.status),
+            is_anonymous=bool(getattr(incident, "is_anonymous", False)),
         )
 
     def _risk_intelligence(self, incident: Incident, assessment: RiskAssessment | None) -> RiskIntelligence:

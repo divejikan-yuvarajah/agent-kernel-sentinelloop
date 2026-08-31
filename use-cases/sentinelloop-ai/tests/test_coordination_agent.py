@@ -11,6 +11,7 @@ import pytest
 from agents.coordination_agent import CoordinationService, MemoryCoordinationStore
 from integrations.slack_handler import (
     ACTION_ACCEPT,
+    ACTION_CLOSED,
     ACTION_ESCALATE,
     ACTION_REASSIGN,
     SlackHandler,
@@ -186,9 +187,11 @@ def test_structured_message_fields_and_buttons():
         "Accept",
         "Reassign",
         "Escalate",
+        "Closed",
         ACTION_ACCEPT,
         ACTION_REASSIGN,
         ACTION_ESCALATE,
+        ACTION_CLOSED,
     ):
         assert token in blob
     hidden = build_incident_blocks(
@@ -216,6 +219,7 @@ def test_structured_message_fields_and_buttons():
         ("in progress", {"command": "set_status", "status": STATUS_IN_PROGRESS}),
         ("reassign: Facilities", {"command": "reassign", "team": "Facilities"}),
         ("escalate", {"command": "escalate"}),
+        ("closed", {"command": "close"}),
         ("We are checking this now.", None),
     ],
 )

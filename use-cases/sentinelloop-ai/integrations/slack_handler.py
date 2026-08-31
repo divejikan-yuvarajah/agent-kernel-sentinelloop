@@ -29,6 +29,7 @@ log = logging.getLogger("sentinelloop.slack")
 ACTION_ACCEPT = "incident_accept"
 ACTION_REASSIGN = "incident_reassign"
 ACTION_ESCALATE = "incident_escalate"
+ACTION_CLOSED = "incident_closed"
 PERMANENT_SLACK_ERRORS = frozenset({"invalid_auth", "channel_not_found", "not_in_channel", "invalid_arguments"})
 MENTION_RE = re.compile(
     r"<!channel>|<!here>|<!everyone>|<@[^>]+>|@channel|@here|@everyone",
@@ -46,6 +47,7 @@ THREAD_COMMAND_ALIASES = {
     "in progress": {"command": "set_status", "status": STATUS_IN_PROGRESS},
     "in-progress": {"command": "set_status", "status": STATUS_IN_PROGRESS},
     "in_progress": {"command": "set_status", "status": STATUS_IN_PROGRESS},
+    "closed": {"command": "close"},
 }
 
 
@@ -127,6 +129,12 @@ def build_action_blocks(incident_id: str) -> list[dict[str, Any]]:
                     "text": {"type": "plain_text", "text": "Escalate"},
                     "value": incident_id,
                     "style": "danger",
+                },
+                {
+                    "type": "button",
+                    "action_id": ACTION_CLOSED,
+                    "text": {"type": "plain_text", "text": "Closed"},
+                    "value": incident_id,
                 },
             ],
         }

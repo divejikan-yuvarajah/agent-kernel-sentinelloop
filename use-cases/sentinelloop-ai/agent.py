@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib.util
 import os
 from pathlib import Path
+from typing import Any
 
 from openai import AsyncOpenAI
 
@@ -78,3 +79,10 @@ def build_agents() -> list[Agent]:
         coordination_agent,
         followup_agent,
     ]
+
+
+def register_safety_hooks(module: Any, agents: list[Any] | None = None) -> None:
+    """Attach Agent Kernel PreHook / PostHook validators. See guardrails.hooks."""
+    from guardrails.hooks import register_safety_hooks as _register
+
+    _register(module, agents or [])

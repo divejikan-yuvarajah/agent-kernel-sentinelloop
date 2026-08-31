@@ -51,6 +51,9 @@ export function IncidentOverviewCard({ incident, onOpen, loading = false }: Prop
           {incident.source === "QR_TAGGED" ? (
             <Badge title="Location verified by QR scan">QR Tagged</Badge>
           ) : null}
+          {incident.safety_status ? (
+            <Badge title="Responsible AI safety status">{incident.safety_status}</Badge>
+          ) : null}
         </header>
         <div className="ds-incident-card__body">
           <p style={{ margin: 0 }}>{incident.location ?? "Location unknown"}</p>
