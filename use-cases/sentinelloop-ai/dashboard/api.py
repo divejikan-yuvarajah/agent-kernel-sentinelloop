@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 
 from dashboard.schemas import (
     AnalyticsSummary,
+    AuditExport,
     IncidentDetail,
     IncidentListResponse,
     RecurringResponse,
@@ -153,6 +154,39 @@ class DashboardHandler(RESTRequestHandler):
             return detail
 
         @router.get(
+            "/incidents/{incident_id}/audit-export",
+            response_model=AuditExport,
+            summary="Explainable AI audit trail",
+            description=(
+                "Inspector-ready JSON for one incident: original report, language processing, "
+                "AI judgement, deterministic risk rules, guidance sources, human actions, "
+                "and resolution evidence. Read-only. Accepts incident_ref or UUID. "
+                "Never returns API keys or system prompts."
+            ),
+            responses={
+                404: {
+                    "description": "incident not found",
+                    "content": {"application/json": {"example": {"detail": "incident not found"}}},
+                },
+                500: {
+                    "description": "internal dashboard failure",
+                    "content": {"application/json": {"example": {"detail": "internal dashboard failure"}}},
+                },
+            },
+        )
+        async def audit_export(incident_id: str) -> AuditExport:
+            try:
+                packet = await asyncio.to_thread(self._reader().export_audit, incident_id)
+            except HTTPException:
+                raise
+            except Exception:
+                log.exception("dashboard audit_export failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+            if packet is None:
+                raise HTTPException(status_code=404, detail="incident not found")
+            return packet
+
+        @router.get(
             "/analytics/summary",
             response_model=AnalyticsSummary,
             summary="Operational KPIs",
@@ -238,6 +272,7 @@ class DashboardHandler(RESTRequestHandler):
         for path in (
             "/incidents",
             "/incidents/{incident_id}",
+            "/incidents/{incident_id}/audit-export",
             "/analytics/summary",
             "/analytics/recurring",
             "/router/status",

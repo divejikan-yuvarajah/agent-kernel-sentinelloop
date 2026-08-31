@@ -206,3 +206,137 @@ class RouterStatus(_Out):
     request_count: int = 0
     paid_call_count: int = 0
     ledger_available: bool = True
+
+
+AUDIT_EXPORT_VERSION = "1.0"
+
+
+class AuditIncidentInformation(_Out):
+    incident_id: str
+    title: str | None = None
+    category: str | None = None
+    location: str | None = None
+    equipment: str | None = None
+    created_at: datetime | None = None
+    current_status: str
+    current_risk_level: str | None = None
+    duplicate_count: int = 0
+
+
+class AuditOriginalReport(_Out):
+    source: str | None = None
+    message: str | None = None
+    received_at: datetime | None = None
+    worker_identifier: str | None = None
+    communication_channel: str | None = None
+
+
+class AuditLanguageProcessing(_Out):
+    detected_language: str | None = None
+    language: str | None = None
+    original_text: str | None = None
+    translated_text: str | None = None
+    translation_timestamp: datetime | None = None
+
+
+class ExtractedField(_Out):
+    field: str
+    value: str | None = None
+    confidence: float | None = None
+
+
+class AuditExtractedInformation(_Out):
+    fields: list[ExtractedField] = Field(default_factory=list)
+
+
+class AuditAiDecision(_Out):
+    severity: str | None = None
+    likelihood: str | None = None
+    confidence: float | None = None
+    detected_risks: list[str] = Field(default_factory=list)
+    reasoning_summary: str | None = None
+    ai_recommendation: str | None = None
+    human_final_decision: str | None = None
+    override_reason: str | None = None
+    explanation_label: str | None = None
+
+
+class AuditRiskAnalysis(_Out):
+    score: int | None = None
+    base_risk_level: str | None = None
+    final_risk_level: str | None = None
+    calculation_factors: list[str] = Field(default_factory=list)
+    explanation: str | None = None
+    rule_validation: str | None = None
+
+
+class AuditGuidanceItem(_Out):
+    guidance: str | None = None
+    language: str | None = None
+    timestamp: datetime | None = None
+    source: str | None = None
+    section: str | None = None
+    matched_text: str | None = None
+    line_reference: str | None = None
+    rule_id: str | None = None
+
+
+class AuditCoordinationEvent(_Out):
+    event: str
+    channel: str | None = None
+    time: datetime | None = None
+    detail: str | None = None
+
+
+class AuditAssignmentChange(_Out):
+    officer: str | None = None
+    previous_officer: str | None = None
+    assigned_at: datetime | None = None
+    reason: str | None = None
+
+
+class AuditTimelineEvent(_Out):
+    time: datetime | None = None
+    event: str
+    update_type: str | None = None
+    message: str | None = None
+    created_by: str | None = None
+
+
+class AuditResolution(_Out):
+    status: str | None = None
+    resolution_message: str | None = None
+    resolved_by: str | None = None
+    resolved_timestamp: datetime | None = None
+    evidence: list[str] = Field(default_factory=list)
+    verification_status: str | None = None
+    human_verification: str | None = None
+
+
+class AuditMetadata(_Out):
+    export_timestamp: datetime
+    system_version: str
+    audit_export_version: str = AUDIT_EXPORT_VERSION
+    models_used: list[str] = Field(default_factory=list)
+    ai_calls: int = 0
+    estimated_cost: str | None = None
+    total_processing_time: str | None = None
+    audit_hash: str | None = None
+    compliance: list[str] = Field(default_factory=list)
+
+
+class AuditExport(_Out):
+    """Inspector-ready explainable-AI packet for one incident. Read-only."""
+
+    incident_information: AuditIncidentInformation
+    original_report: AuditOriginalReport
+    language_processing: AuditLanguageProcessing
+    extracted_information: AuditExtractedInformation
+    ai_decision: AuditAiDecision
+    risk_analysis: AuditRiskAnalysis
+    guidance_history: list[AuditGuidanceItem] = Field(default_factory=list)
+    coordination_history: list[AuditCoordinationEvent] = Field(default_factory=list)
+    assignment_history: list[AuditAssignmentChange] = Field(default_factory=list)
+    incident_timeline: list[AuditTimelineEvent] = Field(default_factory=list)
+    resolution: AuditResolution
+    audit_metadata: AuditMetadata

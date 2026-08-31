@@ -5,9 +5,10 @@ type Props = {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  className?: string;
 };
 
-export function Modal({ open, title, onClose, children }: Props) {
+export function Modal({ open, title, onClose, children, className = "" }: Props) {
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
@@ -22,7 +23,7 @@ export function Modal({ open, title, onClose, children }: Props) {
   return (
     <div className="ds-modal-backdrop" role="presentation" onClick={onClose}>
       <div
-        className="ds-modal"
+        className={`ds-modal ${className}`.trim()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="ds-modal-title"

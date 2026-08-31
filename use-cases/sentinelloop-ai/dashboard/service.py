@@ -418,6 +418,23 @@ class DashboardReadService:
             location_confidence=1.0 if origin["location_verified"] else None,
         )
 
+    def export_audit(self, incident_id: str):
+        """Inspector packet for one incident. None when the incident does not exist."""
+        from dashboard.audit import build_audit_export
+
+        incident = self._resolve_incident(incident_id)
+        if incident is None:
+            return None
+        key = self._repo.row_key(incident)
+        return build_audit_export(
+            incident=incident,
+            assignments=self._repo.list_assignments_for_incidents([key]),
+            assessments=self._repo.list_risk_assessments_for_incident(key),
+            evidence=self._repo.list_evidence_for_incident(key),
+            updates=self._repo.list_updates_for_incident(key),
+            ledger_path=self._ledger_path,
+        )
+
     def analytics_summary(self) -> AnalyticsSummary:
         incidents = self._repo.list_all_incidents()
         assignments = _latest_by_incident(

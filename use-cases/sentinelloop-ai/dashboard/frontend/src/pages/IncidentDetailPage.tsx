@@ -4,8 +4,10 @@ import { Link, useParams } from "react-router-dom";
 import {
   AppShell,
   Badge,
+  Button,
   EvidenceViewer,
   IncidentTimeline,
+  Modal,
   Panel,
   RiskAssessmentPanel,
   RiskIndicator,
@@ -14,13 +16,28 @@ import {
 import type { EvidenceItem, RiskAssessment, TimelineEvent } from "@ds/types";
 import { normalizeRisk } from "@ds/colors";
 
-import { fetchIncident, type IncidentDetail } from "../api/client";
+import { fetchAuditExport, fetchIncident, type AuditExport, type IncidentDetail } from "../api/client";
+import { AuditTrailView } from "../components/AuditTrailView";
+
+function downloadAudit(audit: AuditExport) {
+  const blob = new Blob([JSON.stringify(audit, null, 2)], { type: "application/json" });
+  const href = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = `SentinelLoop_Audit_${audit.incident_information.incident_id}.json`;
+  link.click();
+  URL.revokeObjectURL(href);
+}
 
 export function IncidentDetailPage() {
   const { incidentId = "" } = useParams();
   const [detail, setDetail] = useState<IncidentDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [audit, setAudit] = useState<AuditExport | null>(null);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [auditLoading, setAuditLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,6 +61,20 @@ export function IncidentDetailPage() {
       cancelled = true;
     };
   }, [incidentId]);
+
+  function exportAudit() {
+    setAuditOpen(true);
+    setAuditLoading(true);
+    setAuditError(null);
+    setAudit(null);
+    fetchAuditExport(incidentId)
+      .then((payload) => {
+        setAudit(payload);
+        setAuditError(null);
+      })
+      .catch((err: Error) => setAuditError(err.message))
+      .finally(() => setAuditLoading(false));
+  }
 
   const assessment: RiskAssessment | null = detail
     ? {
@@ -108,6 +139,11 @@ export function IncidentDetailPage() {
               Reporter {detail.reporter.reporter_id}
               {detail.assigned_officer ? ` · Assigned to ${detail.assigned_officer}` : " · Unassigned"}
             </p>
+            <div className="ds-toolbar">
+              <Button variant="ghost" data-testid="audit-export" onClick={exportAudit}>
+                Export audit trail
+              </Button>
+            </div>
             <IncidentTimeline events={events} />
             {detail.duplicates.linked_incidents.length > 0 ? (
               <p style={{ marginTop: 24, fontSize: "var(--font-size-sm)", color: "var(--chalk-muted)" }}>
@@ -127,6 +163,29 @@ export function IncidentDetailPage() {
           </div>
         </div>
       )}
+      <Modal
+        open={auditOpen}
+        title="Incident audit trail"
+        className="ds-modal--audit"
+        onClose={() => setAuditOpen(false)}
+      >
+        {auditLoading ? (
+          <p className="ds-empty" role="status">
+            Generating audit trail...
+          </p>
+        ) : auditError ? (
+          <p className="ds-empty" role="alert">
+            {auditError}
+          </p>
+        ) : audit ? (
+          <AuditTrailView audit={audit} onDownload={() => downloadAudit(audit)} />
+        ) : null}
+        <div className="ds-toolbar" style={{ marginTop: 16, marginBottom: 0 }}>
+          <Button variant="quiet" onClick={() => setAuditOpen(false)}>
+            Close
+          </Button>
+        </div>
+      </Modal>
     </AppShell>
   );
 }

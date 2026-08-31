@@ -115,3 +115,99 @@ export function fetchRecurring() {
 export function fetchRouterStatus() {
   return getJson<RouterStatus>("/router/status");
 }
+
+export type AuditExport = {
+  incident_information: {
+    incident_id: string;
+    title: string | null;
+    category: string | null;
+    location: string | null;
+    equipment: string | null;
+    created_at: string | null;
+    current_status: string;
+    current_risk_level: string | null;
+    duplicate_count: number;
+  };
+  original_report: {
+    source: string | null;
+    message: string | null;
+    received_at: string | null;
+    worker_identifier: string | null;
+    communication_channel: string | null;
+  };
+  language_processing: {
+    detected_language: string | null;
+    language: string | null;
+    original_text: string | null;
+    translated_text: string | null;
+    translation_timestamp: string | null;
+  };
+  extracted_information: { fields: { field: string; value: string | null; confidence: number | null }[] };
+  ai_decision: {
+    severity: string | null;
+    likelihood: string | null;
+    confidence: number | null;
+    detected_risks: string[];
+    reasoning_summary: string | null;
+    ai_recommendation: string | null;
+    human_final_decision: string | null;
+    override_reason: string | null;
+    explanation_label: string | null;
+  };
+  risk_analysis: {
+    score: number | null;
+    base_risk_level: string | null;
+    final_risk_level: string | null;
+    calculation_factors: string[];
+    explanation: string | null;
+    rule_validation: string | null;
+  };
+  guidance_history: {
+    guidance: string | null;
+    language: string | null;
+    timestamp: string | null;
+    source: string | null;
+    section: string | null;
+    matched_text: string | null;
+    line_reference: string | null;
+    rule_id: string | null;
+  }[];
+  coordination_history: { event: string; channel: string | null; time: string | null; detail: string | null }[];
+  assignment_history: {
+    officer: string | null;
+    previous_officer: string | null;
+    assigned_at: string | null;
+    reason: string | null;
+  }[];
+  incident_timeline: {
+    time: string | null;
+    event: string;
+    update_type: string | null;
+    message: string | null;
+    created_by: string | null;
+  }[];
+  resolution: {
+    status: string | null;
+    resolution_message: string | null;
+    resolved_by: string | null;
+    resolved_timestamp: string | null;
+    evidence: string[];
+    verification_status: string | null;
+    human_verification: string | null;
+  };
+  audit_metadata: {
+    export_timestamp: string;
+    system_version: string;
+    audit_export_version: string;
+    models_used: string[];
+    ai_calls: number;
+    estimated_cost: string | null;
+    total_processing_time: string | null;
+    audit_hash: string | null;
+    compliance: string[];
+  };
+};
+
+export function fetchAuditExport(id: string) {
+  return getJson<AuditExport>(`/incidents/${encodeURIComponent(id)}/audit-export`);
+}
