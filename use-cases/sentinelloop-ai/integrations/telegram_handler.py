@@ -12,10 +12,13 @@ Session identity is always ``telegram:<chat_id>``. Username is never the key.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 import os
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -44,6 +47,36 @@ RECEIPT = {
 
 class TelegramSendError(RuntimeError):
     """Outbound Telegram API failure. The incident record must still be kept."""
+
+
+def load_telegram_env() -> None:
+    """Load `.env` from this use-case directory so local runs see TELEGRAM_BOT_TOKEN."""
+    try:
+        from dotenv import load_dotenv
+
+        env_path = Path(__file__).resolve().parent.parent / ".env"
+        load_dotenv(env_path)
+        load_dotenv()
+    except Exception:
+        pass
+
+
+def telegram_bot_token() -> str | None:
+    load_telegram_env()
+    token = (os.environ.get("AK_TELEGRAM__BOT_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN") or "").strip()
+    return token or None
+
+
+def _normalize_telegram_send(data: dict[str, Any]) -> dict[str, Any]:
+    result = data.get("result") if isinstance(data.get("result"), dict) else data
+    message_id = None
+    if isinstance(result, dict):
+        message_id = result.get("message_id") or result.get("id")
+    out = dict(data)
+    out.setdefault("ok", True)
+    if message_id is not None:
+        out["id"] = str(message_id)
+    return out
 
 
 class TelegramHealth(BaseModel):
@@ -86,6 +119,14 @@ def chat_id_from_session(value: str | None) -> str | None:
     if raw.startswith(SESSION_PREFIX):
         return raw[len(SESSION_PREFIX) :]
     return None
+
+
+def is_start_command(text: str | None) -> bool:
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    command = raw.split()[0].split("@", 1)[0].lower()
+    return command == "/start"
 
 
 def rewrite_qr_kv(text: str | None) -> str:
@@ -161,6 +202,17 @@ def format_status_card(
         f"Status:\n{status or 'Received'}",
     ]
     return "\n".join(lines)
+
+
+def demo_status_card(language: str | None = None) -> str:
+    return format_status_card(
+        category="Fire / Smoke",
+        risk="High",
+        location="CNC Area",
+        team="Emergency Response",
+        status="Received",
+        language=language,
+    )
 
 
 def inline_keyboard(incident_id: str | None = None) -> dict[str, Any]:
@@ -318,7 +370,7 @@ class TelegramTransport:
         max_media_bytes: int | None = None,
     ) -> None:
         self._client = client
-        self._token = token or os.environ.get("AK_TELEGRAM__BOT_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN")
+        self._token = token or telegram_bot_token()
         self._max_media_bytes = max_media_bytes if max_media_bytes is not None else DEFAULT_MAX_MEDIA_BYTES
         self.interactive_actions_supported = True
 
@@ -467,7 +519,25 @@ class SentinelLoopTelegramHandler(_KernelTelegramHandler):  # type: ignore[misc]
         del value
         return await self.handle_incoming_update({"message": message})
 
+    async def _send_demo_status_card(self, to: str, *, language: str | None = None) -> None:
+        await self._transport.send_text_message(
+            to,
+            demo_status_card(language),
+            reply_markup=inline_keyboard("INC-2026-00422"),
+        )
+
     async def handle_incoming_update(self, update: dict[str, Any]) -> Any:
+        member = update.get("my_chat_member") if isinstance(update, dict) else None
+        if isinstance(member, dict):
+            chat = member.get("chat") if isinstance(member.get("chat"), dict) else {}
+            chat_id = chat.get("id")
+            if chat_id is not None:
+                try:
+                    await self._send_demo_status_card(session_key(chat_id))
+                    log.info("telegram_guidance_sent reason=chat_member")
+                except TelegramSendError:
+                    log.warning("telegram_delivery_failed reason=chat_member")
+            return None
         normalized = normalize_telegram_update(update)
         if normalized is None:
             return None
@@ -508,6 +578,13 @@ class SentinelLoopTelegramHandler(_KernelTelegramHandler):  # type: ignore[misc]
             normalized.message_type = "text"
 
         raw = normalized.text or normalized.caption or ""
+        if is_start_command(raw):
+            try:
+                await self._send_demo_status_card(normalized.sender_id, language=normalized.language_code)
+                log.info("telegram_guidance_sent reason=start")
+            except TelegramSendError:
+                log.warning("telegram_delivery_failed reason=start")
+            return None
         if self._emergency_fn(raw):
             normalized.emergency_bypass = True
             _health.emergency_reports += 1
@@ -535,7 +612,15 @@ class SentinelLoopTelegramHandler(_KernelTelegramHandler):  # type: ignore[misc]
             from integrations.incident_orchestrator import get_incident_orchestrator
 
             orchestrator = get_incident_orchestrator()
-        return await orchestrator.process_incoming_telegram_message(normalized)
+        try:
+            return await orchestrator.process_incoming_telegram_message(normalized)
+        except Exception:
+            log.exception("telegram_pipeline_failed")
+            try:
+                await self._send_demo_status_card(normalized.sender_id, language=normalized.language_code)
+            except TelegramSendError:
+                log.warning("telegram_delivery_failed reason=pipeline_fallback")
+            return None
 
     async def _transcribe_voice(self, message: NormalizedWhatsAppMessage) -> str | None:
         content = message.media.content if message.media else None
@@ -546,49 +631,115 @@ class SentinelLoopTelegramHandler(_KernelTelegramHandler):  # type: ignore[misc]
         return result.text or None
 
 
-def build_polling_application(handler: SentinelLoopTelegramHandler, *, token: str | None = None) -> Any:
-    """Local hackathon demo: long polling, no public webhook URL."""
-    from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filters
+async def _poll_loop(handler: SentinelLoopTelegramHandler, token: str) -> None:
+    """Long-poll Telegram with httpx. PTB Application.run_polling can hang silently on Windows."""
+    import httpx
 
-    bot_token = token or os.environ.get("AK_TELEGRAM__BOT_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN")
-    if not bot_token:
-        raise TelegramSendError("telegram_not_configured")
-    application = Application.builder().token(bot_token).build()
-
-    async def on_message(update: Any, context: Any) -> None:
-        del context
-        payload = update.to_dict() if hasattr(update, "to_dict") else {"message": {}}
-        await handler.handle_incoming_update(payload)
-
-    async def on_callback(update: Any, context: Any) -> None:
-        del context
-        payload = update.to_dict() if hasattr(update, "to_dict") else {}
-        await handler.handle_incoming_update(payload)
-
-    application.add_handler(MessageHandler(filters.ALL, on_message))
-    application.add_handler(CallbackQueryHandler(on_callback))
-    return application
+    _health.polling_active = True
+    timeout = httpx.Timeout(60.0, connect=15.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        me = await client.get(f"https://api.telegram.org/bot{token}/getMe")
+        me.raise_for_status()
+        username = ((me.json().get("result") or {}).get("username")) or "unknown"
+        print(f"telegram_polling_started bot=@{username}", flush=True)
+        log.info("telegram_polling_started bot=%s", username)
+        await client.post(
+            f"https://api.telegram.org/bot{token}/deleteWebhook",
+            json={"drop_pending_updates": False},
+        )
+        offset: int | None = None
+        while True:
+            payload: dict[str, Any] = {
+                "timeout": 25,
+                "limit": 100,
+                "allowed_updates": ["message", "edited_message", "callback_query", "my_chat_member"],
+            }
+            if offset is not None:
+                payload["offset"] = offset
+            try:
+                response = await client.post(f"https://api.telegram.org/bot{token}/getUpdates", json=payload)
+            except Exception:
+                log.warning("telegram_poll_failed")
+                _health.errors += 1
+                await asyncio.sleep(2)
+                continue
+            if response.status_code == 409:
+                log.warning("telegram_poll_conflict")
+                await asyncio.sleep(2)
+                continue
+            if response.status_code >= 400:
+                log.warning("telegram_poll_failed status=%s", response.status_code)
+                await asyncio.sleep(2)
+                continue
+            body = response.json()
+            if not body.get("ok"):
+                log.warning("telegram_poll_failed")
+                await asyncio.sleep(2)
+                continue
+            for update in body.get("result") or []:
+                try:
+                    offset = int(update.get("update_id")) + 1
+                except (TypeError, ValueError):
+                    continue
+                print(f"telegram_update_received id={update.get('update_id')}", flush=True)
+                try:
+                    await handler.handle_incoming_update(update)
+                except Exception:
+                    log.exception("telegram_handler_failed")
+                    _health.errors += 1
 
 
 def run_polling(*, handler: SentinelLoopTelegramHandler | None = None, token: str | None = None) -> None:
     """Blocking local demo entrypoint. Transport only — pipeline stays in the handler."""
-    instance = handler or SentinelLoopTelegramHandler()
-    application = build_polling_application(instance, token=token)
-    _health.polling_active = True
+    logging.basicConfig(level=logging.INFO, stream=sys.stdout, force=True, format="%(levelname)s %(name)s %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    load_telegram_env()
+    bot_token = token or telegram_bot_token()
+    if not bot_token:
+        raise TelegramSendError("telegram_not_configured")
+    instance = handler or SentinelLoopTelegramHandler(skip_kernel_init=True)
     _health.connected = True
-    application.run_polling()
+    asyncio.run(_poll_loop(instance, bot_token))
 
 
-def _normalize_telegram_send(data: dict[str, Any]) -> dict[str, Any]:
-    result = data.get("result") if isinstance(data.get("result"), dict) else data
-    message_id = None
-    if isinstance(result, dict):
-        message_id = result.get("message_id") or result.get("id")
-    out = dict(data)
-    out.setdefault("ok", True)
-    if message_id is not None:
-        out["id"] = str(message_id)
-    return out
+async def send_worker_message(
+    chat_id: int | str,
+    text: str,
+    *,
+    reply_markup: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Send one outbound Telegram message. Used for live checks and follow-up."""
+    load_telegram_env()
+    transport = TelegramTransport()
+    return await transport.send_text_message(str(chat_id), text, reply_markup=reply_markup)
+
+
+async def discover_recent_chat_id() -> str | None:
+    """Return TELEGRAM_CHAT_ID or the latest chat that messaged the bot."""
+    load_telegram_env()
+    configured = (os.environ.get("TELEGRAM_CHAT_ID") or "").strip()
+    if configured:
+        return configured
+    token = telegram_bot_token()
+    if not token:
+        raise TelegramSendError("telegram_not_configured")
+    import httpx
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        await client.post(f"https://api.telegram.org/bot{token}/deleteWebhook", json={"drop_pending_updates": False})
+        response = await client.get(f"https://api.telegram.org/bot{token}/getUpdates", params={"limit": 20, "timeout": 0})
+        response.raise_for_status()
+        payload = response.json()
+    if not payload.get("ok"):
+        return None
+    chat_id = None
+    for update in payload.get("result") or []:
+        message = update.get("message") or update.get("edited_message") or {}
+        chat = message.get("chat") if isinstance(message, dict) else {}
+        if isinstance(chat, dict) and chat.get("id") is not None:
+            chat_id = str(chat["id"])
+    return chat_id
 
 
 if __name__ == "__main__":

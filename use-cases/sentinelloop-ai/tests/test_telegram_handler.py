@@ -8,6 +8,8 @@ import base64
 from integrations.telegram_handler import (
     SentinelLoopTelegramHandler,
     TelegramTransport,
+    discover_recent_chat_id,
+    is_start_command,
     largest_photo,
     normalize_telegram_update,
     reset_telegram_health,
@@ -147,6 +149,56 @@ def test_emergency_trigger_examples():
     assert is_emergency_trigger("machine explosion")
     assert is_emergency_trigger("electric shock")
     assert not is_emergency_trigger("good morning")
+
+
+def test_start_command_sends_status_card_not_incident():
+    reset_telegram_health()
+    orch = RecordingOrchestrator()
+    client = FakeTelegramClient()
+    handler = SentinelLoopTelegramHandler(
+        orchestrator=orch,
+        transport=TelegramTransport(client=client),
+        skip_kernel_init=True,
+    )
+    result = run(handler.handle_incoming_update(_text("/start")))
+    assert result is None
+    assert orch.messages == []
+    assert client.calls and client.calls[0][0] == "sendMessage"
+    payload = client.calls[0][1]
+    assert "Safety Report Received" in payload["text"]
+    assert payload["chat_id"] == "48291033"
+
+
+def test_my_chat_member_sends_status_card():
+    reset_telegram_health()
+    orch = RecordingOrchestrator()
+    client = FakeTelegramClient()
+    handler = SentinelLoopTelegramHandler(
+        orchestrator=orch,
+        transport=TelegramTransport(client=client),
+        skip_kernel_init=True,
+    )
+    result = run(
+        handler.handle_incoming_update(
+            {
+                "update_id": 9,
+                "my_chat_member": {
+                    "chat": {"id": 77, "type": "private"},
+                    "new_chat_member": {"status": "member"},
+                },
+            }
+        )
+    )
+    assert result is None
+    assert orch.messages == []
+    assert client.calls and client.calls[0][0] == "sendMessage"
+    assert client.calls[0][1]["chat_id"] == "77"
+
+
+def test_is_start_command():
+    assert is_start_command("/start")
+    assert is_start_command("/start@SentinelLoop_ReportBot")
+    assert not is_start_command("start the machine")
 
 
 def test_text_message_enters_pipeline():
@@ -420,3 +472,8 @@ def test_voice_tools_never_fabricates():
     empty = run(transcribe_voice_note("", audio_format="ogg"))
     assert empty.available is False
     assert empty.text == ""
+
+
+def test_discover_recent_chat_id_uses_env(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "48291033")
+    assert run(discover_recent_chat_id()) == "48291033"
