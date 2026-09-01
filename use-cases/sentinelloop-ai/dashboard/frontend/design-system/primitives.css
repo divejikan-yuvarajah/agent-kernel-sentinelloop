@@ -3,7 +3,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  min-height: 36px;
+  min-height: 40px;
   padding: var(--space-2) var(--space-4);
   border: 1px solid var(--maroon);
   border-radius: var(--radius-sm);
@@ -15,12 +15,19 @@
   cursor: pointer;
   transition:
     background-color var(--transition-duration) var(--transition-timing),
-    border-color var(--transition-duration) var(--transition-timing);
+    border-color var(--transition-duration) var(--transition-timing),
+    color var(--transition-duration) var(--transition-timing),
+    transform var(--transition-duration) var(--transition-timing);
 }
 
 .ds-btn:hover:not(:disabled) {
   background: var(--maroon-deep);
   border-color: var(--maroon-deep);
+}
+
+.ds-btn:focus-visible {
+  outline: 2px solid var(--maroon);
+  outline-offset: 2px;
 }
 
 .ds-btn:disabled {
@@ -449,12 +456,22 @@
 .ds-select,
 textarea.ds-input {
   width: 100%;
-  min-height: 36px;
+  min-height: 40px;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--ink);
   color: var(--chalk);
+  transition:
+    border-color var(--transition-duration) var(--transition-timing),
+    background-color var(--transition-duration) var(--transition-timing);
+}
+
+.ds-input:focus-visible,
+.ds-select:focus-visible,
+textarea.ds-input:focus-visible {
+  outline: 2px solid var(--maroon);
+  outline-offset: 2px;
 }
 
 textarea.ds-input {
@@ -498,6 +515,7 @@ textarea.ds-input {
 .ds-mono {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 .ds-timeline {

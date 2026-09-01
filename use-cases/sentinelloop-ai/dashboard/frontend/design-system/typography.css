@@ -1,17 +1,17 @@
 .ds-display {
-  font-family: var(--font-heading);
+  font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--chalk);
-  line-height: var(--line-tight);
+  line-height: var(--line-display);
 }
 
 .ds-display-semibold {
-  font-family: var(--font-heading);
+  font-family: var(--font-display);
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--chalk);
-  line-height: var(--line-tight);
+  line-height: var(--line-display);
 }
 
 .ds-body {
@@ -25,5 +25,22 @@
   font-family: var(--font-mono);
   font-weight: 400;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
   color: var(--chalk);
+}
+
+.ds-prose {
+  max-width: var(--measure);
+  line-height: var(--line-body);
+  color: var(--chalk);
+}
+
+.ds-kicker {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--maroon);
 }

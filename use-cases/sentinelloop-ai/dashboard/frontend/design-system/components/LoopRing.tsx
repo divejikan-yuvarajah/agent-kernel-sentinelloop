@@ -87,7 +87,7 @@ export function LoopRing({
           })}
         </svg>
         <div className="ds-loop__center">
-          <span className="ds-loop__count ds-mono">{centerValue ?? (loading ? "—" : padded)}</span>
+          <span className="ds-loop__count ds-display">{centerValue ?? (loading ? "—" : padded)}</span>
           <span className="ds-loop__center-label">{centerLabel ?? "Open incidents"}</span>
         </div>
       </div>

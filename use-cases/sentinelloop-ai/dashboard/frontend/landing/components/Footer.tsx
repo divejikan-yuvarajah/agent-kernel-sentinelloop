@@ -27,7 +27,7 @@ export function Footer() {
           </p>
         </div>
       </div>
-      <p className="sl-footer__powered ds-mono">
+      <p className="sl-footer__powered">
         Powered by{" "}
         <a href={AGENT_KERNEL_URL} target="_blank" rel="noopener noreferrer">
           Agent Kernel

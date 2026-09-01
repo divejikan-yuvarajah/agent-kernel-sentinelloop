@@ -9,6 +9,7 @@ import "../design-system/layout.css";
 import "./styles/base.css";
 import "./styles/command-center.css";
 import "./styles/incident-intel.css";
+import "./styles/shell.css";
 import { App } from "./App";
 
 const root = document.getElementById("root");

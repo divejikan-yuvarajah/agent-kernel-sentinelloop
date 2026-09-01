@@ -25,7 +25,7 @@
 .ii-header__id {
   margin: 0 0 var(--space-3);
   font-size: var(--font-size-lg);
-  letter-spacing: 0.04em;
+  letter-spacing: -0.01em;
 }
 
 .ii-header__badges {
@@ -38,9 +38,9 @@
 .ii-header__title {
   margin: var(--space-4) 0 var(--space-2);
   font-family: var(--font-display);
-  font-size: clamp(24px, 3vw, 36px);
+  font-size: var(--font-size-2xl);
   font-weight: 700;
-  line-height: 1.15;
+  line-height: var(--line-display);
   color: var(--chalk);
 }
 
@@ -48,6 +48,7 @@
   margin: 0;
   font-family: var(--font-display);
   font-size: var(--font-size-lg);
+  line-height: var(--line-display);
   color: var(--chalk);
 }
 
@@ -60,8 +61,9 @@
 .ii-kicker {
   display: block;
   margin: 0 0 var(--space-2);
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: var(--font-size-xs);
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--maroon);
@@ -75,9 +77,10 @@
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: var(--font-size-xs);
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
@@ -173,8 +176,9 @@
 
 .ii-overview__grid dt {
   margin: 0 0 var(--space-1);
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: var(--font-size-xs);
+  font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
@@ -274,16 +278,24 @@
 
 .ii-risk-callout__text {
   margin: 0;
+  max-width: var(--measure);
   white-space: pre-wrap;
-  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+  font-family: var(--font-body);
   font-size: var(--font-size-sm);
-  line-height: 1.5;
+  line-height: var(--line-body);
 }
 
 .ii-timeline__list {
   margin: 0;
   padding: 0;
   list-style: none;
+  max-height: min(52vh, 28rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: var(--space-2);
 }
 
 .ii-timeline__item {
@@ -374,6 +386,7 @@
   display: grid;
   gap: var(--space-3);
   width: 100%;
+  min-height: var(--tap-min);
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -381,11 +394,20 @@
   text-align: left;
   cursor: pointer;
   overflow: hidden;
+  transition: border-color var(--transition-duration) var(--transition-timing);
 }
 
 .ii-evidence__card:hover,
 .ii-evidence__card:focus-visible {
   border-color: var(--maroon);
+}
+
+.ii-evidence__card img,
+.ii-evidence__card svg {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  aspect-ratio: 4 / 3;
 }
 
 .ii-evidence__meta {
@@ -400,8 +422,9 @@
 .ii-evidence__state {
   display: inline-flex;
   margin-top: var(--space-2);
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: var(--font-size-xs);
+  font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }

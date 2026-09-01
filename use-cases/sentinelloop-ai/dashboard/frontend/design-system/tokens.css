@@ -1,10 +1,16 @@
 /* SentinelLoop design tokens. Hex values live only in this file and colors.ts. */
 
 :root {
+  /* Breakpoints (reference for media queries) */
+  --bp-mobile: 640px;
+  --bp-tablet: 1024px;
+  --bp-desktop: 1440px;
+
   --ink: #ffffff;
   --panel: #ffffff;
   --panel-raised: #f6f1f0;
   --chalk: #1f1114;
+  /* Prompt 25 muted — ~6:1 on --ink (WCAG AA for body). Prefer --chalk for primary copy. */
   --muted: #7a5c5a;
   --maroon: #7c1f2e;
   --maroon-deep: #5c1620;
@@ -22,37 +28,52 @@
   --border: color-mix(in srgb, var(--muted) 32%, var(--panel));
   --border-strong: color-mix(in srgb, var(--muted) 48%, var(--panel));
 
-  --font-heading: "Space Grotesk", sans-serif;
+  /* Font stacks: branded faces first, system fallbacks, font-display:swap via Google CSS. */
+  --font-heading: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
   --font-display: var(--font-heading);
-  --font-body: "IBM Plex Sans", sans-serif;
-  --font-mono: "IBM Plex Mono", monospace;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
 
-  --font-size-xs: 11px;
-  --font-size-sm: 13px;
-  --font-size-md: 15px;
-  --font-size-lg: 18px;
-  --font-size-xl: 24px;
-  --font-size-2xl: 32px;
+  /* Fluid type scale — smooth between ~320px and ~1440px+ */
+  --font-size-xs: clamp(0.6875rem, 0.66rem + 0.12vw, 0.75rem);
+  --font-size-sm: clamp(0.8125rem, 0.78rem + 0.14vw, 0.875rem);
+  --font-size-md: clamp(0.9375rem, 0.9rem + 0.18vw, 1rem);
+  --font-size-lg: clamp(1.0625rem, 0.95rem + 0.45vw, 1.25rem);
+  --font-size-xl: clamp(1.25rem, 1.05rem + 0.85vw, 1.75rem);
+  --font-size-2xl: clamp(1.5rem, 1.15rem + 1.35vw, 2.25rem);
+  --font-size-hero: clamp(2rem, 1.15rem + 3.2vw, 4rem);
 
-  --line-tight: 1.25;
-  --line-body: 1.45;
+  --line-tight: 1.15;
+  --line-display: 1.2;
+  --line-body: 1.55;
+  --measure: 70ch;
 
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --space-7: 48px;
+  --space-4: clamp(0.875rem, 0.8rem + 0.3vw, 1rem);
+  --space-5: clamp(1.25rem, 1.1rem + 0.5vw, 1.5rem);
+  --space-6: clamp(1.5rem, 1.2rem + 0.9vw, 2rem);
+  --space-7: clamp(2rem, 1.5rem + 1.5vw, 3rem);
+
+  /* Semantic spacing aliases for the unified shell */
+  --space-xs: var(--space-1);
+  --space-sm: var(--space-2);
+  --space-md: var(--space-4);
+  --space-lg: var(--space-5);
+  --space-xl: var(--space-6);
 
   --radius-sm: 6px;
   --radius-md: 8px;
 
   --risk-tab-width: 5px;
 
-  --transition-duration: 120ms;
-  --transition-timing: ease;
+  /* One app-wide interaction timing */
+  --transition-duration: 180ms;
+  --transition-timing: ease-out;
   --shadow: none;
+
+  --tap-min: 44px;
 
   --risk-low: var(--verified-teal);
   --risk-medium: var(--signal-amber);
@@ -67,6 +88,7 @@
   --sidebar-width: 248px;
   --sidebar-collapsed: 72px;
   --header-height: 64px;
+  --content-max: 1440px;
 }
 
 @media (prefers-reduced-motion: reduce) {

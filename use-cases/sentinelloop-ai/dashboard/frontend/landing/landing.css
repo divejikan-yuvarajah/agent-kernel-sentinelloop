@@ -4,8 +4,11 @@
   height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
   background: var(--ink);
   color: var(--chalk);
+  scrollbar-gutter: stable;
 }
 
 .sl-skip {
@@ -13,6 +16,7 @@
   left: var(--space-4);
   top: var(--space-4);
   z-index: 30;
+  min-height: var(--tap-min);
   padding: var(--space-2) var(--space-3);
   background: var(--maroon);
   color: var(--on-brand);
@@ -30,9 +34,10 @@
 
 .sl-kicker {
   margin: 0 0 var(--space-3);
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: var(--font-size-xs);
-  letter-spacing: 0.1em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--maroon);
 }
@@ -42,7 +47,7 @@
   font-family: var(--font-display);
   font-size: var(--font-size-2xl);
   font-weight: 700;
-  line-height: var(--line-tight);
+  line-height: var(--line-display);
   color: var(--chalk);
 }
 
@@ -51,12 +56,14 @@
   font-family: var(--font-display);
   font-size: var(--font-size-lg);
   font-weight: 600;
+  line-height: var(--line-display);
 }
 
 .sl-section__lede {
-  max-width: 62ch;
+  max-width: var(--measure);
   margin: 0 0 var(--space-6);
   color: var(--muted);
+  line-height: var(--line-body);
 }
 
 .sl-section {
@@ -72,9 +79,11 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-3);
+  min-height: var(--tap-min);
   font-family: var(--font-display);
   font-size: var(--font-size-lg);
   font-weight: 700;
+  line-height: var(--line-display);
   color: var(--chalk);
 }
 
@@ -85,7 +94,7 @@
 }
 
 .sl-landing a.ds-btn {
-  min-height: 44px;
+  min-height: var(--tap-min);
   text-decoration: none;
 }
 
@@ -102,7 +111,7 @@
 
 .sl-hero__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr);
+  grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
   gap: var(--space-7);
   align-items: center;
 }
@@ -110,16 +119,18 @@
 .sl-hero__headline {
   margin: 0 0 var(--space-5);
   font-family: var(--font-display);
-  font-size: clamp(36px, 5vw, 64px);
+  font-size: var(--font-size-hero);
   font-weight: 700;
-  line-height: 1.08;
+  line-height: var(--line-tight);
   color: var(--chalk);
 }
 
 .sl-hero__lede {
   margin: 0 0 var(--space-5);
-  max-width: 46ch;
+  max-width: var(--measure);
+  font-family: var(--font-body);
   font-size: var(--font-size-lg);
+  line-height: var(--line-body);
   color: var(--muted);
 }
 
@@ -133,6 +144,7 @@
   margin: var(--space-4) 0 0;
   color: var(--muted);
   font-size: var(--font-size-xs);
+  letter-spacing: -0.01em;
 }
 
 .sl-loop-hero {
@@ -146,14 +158,15 @@
 }
 
 .sl-loop-hero .ds-loop__ring {
-  width: min(100%, 420px);
+  width: min(100%, clamp(220px, 42vw, 420px));
 }
 
 .sl-loop-hero .ds-loop__count {
   font-family: var(--font-display);
   font-size: var(--font-size-lg);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
+  line-height: var(--line-display);
 }
 
 .sl-loop-hero .ds-loop__controls {
@@ -176,15 +189,17 @@
 .sl-loop-hero__identity strong {
   display: block;
   margin-bottom: var(--space-2);
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: var(--font-size-xs);
-  letter-spacing: 0.12em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--maroon);
 }
 
 .sl-loop-hero__identity span {
   color: var(--muted);
+  line-height: var(--line-body);
 }
 
 .sl-timeline {
@@ -231,7 +246,9 @@
 
 .sl-timeline p {
   margin-top: var(--space-2);
+  max-width: var(--measure);
   color: var(--muted);
+  line-height: var(--line-body);
 }
 
 .sl-steps {
@@ -269,8 +286,10 @@
 
 .sl-steps p {
   margin: 0;
+  max-width: var(--measure);
   color: var(--muted);
   font-size: var(--font-size-sm);
+  line-height: var(--line-body);
 }
 
 .sl-features {
@@ -304,8 +323,10 @@
 
 .sl-feature p {
   margin: 0;
+  max-width: var(--measure);
   color: var(--muted);
   font-size: var(--font-size-sm);
+  line-height: var(--line-body);
 }
 
 .sl-feature__badge {
@@ -339,7 +360,9 @@
 
 .sl-pillar p {
   margin: 0;
+  max-width: var(--measure);
   color: var(--muted);
+  line-height: var(--line-body);
 }
 
 .sl-footer {
@@ -393,9 +416,11 @@
 }
 
 .sl-sdg span {
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: var(--font-size-xs);
+  font-weight: 600;
   letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--maroon);
 }
 
@@ -467,11 +492,7 @@
 
 @media (max-width: 640px) {
   .sl-wrap {
-    width: min(100% - var(--space-4), 390px);
-  }
-
-  .sl-hero__headline {
-    font-size: 32px;
+    width: min(100% - var(--space-4), 100%);
   }
 
   .sl-hero__actions .ds-btn {
@@ -485,6 +506,12 @@
 
   .sl-loop-hero .ds-loop__controls {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .sl-mobile-nav__link,
+  .sl-brand,
+  .sl-hero__actions .ds-btn {
+    min-height: var(--tap-min);
   }
 }
 

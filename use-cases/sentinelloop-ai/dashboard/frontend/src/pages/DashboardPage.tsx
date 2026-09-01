@@ -201,7 +201,7 @@ export function DashboardPage() {
         ))}
       </div>
       <Panel title="Telegram Activity" style={{ marginBottom: 24 }}>
-        <p className="ds-mono">Today</p>
+        <p className="ds-metric__label">Today</p>
         <div className="ds-grid ds-grid--metrics-3" style={{ marginTop: 12 }}>
           <Card variant="analytics-card">
             <p className="ds-metric__label">Messages</p>
@@ -216,10 +216,11 @@ export function DashboardPage() {
             <p className="ds-metric__value">{telegramHealth?.image_reports ?? (demo ? 21 : 0)}</p>
           </Card>
         </div>
-        <p className="ds-mono" style={{ marginTop: 12 }}>
+        <p style={{ marginTop: 12 }}>
           Telegram Bot Status: {telegramHealth?.connected ? "Connected ✓" : "Offline"} · Polling{" "}
-          {telegramHealth?.polling_active ? "Active ✓" : "Idle"} · Last message {telegramHealth?.last_message ?? "—"} ·
-          Errors {telegramHealth?.errors ?? 0}
+          {telegramHealth?.polling_active ? "Active ✓" : "Idle"} · Last message{" "}
+          <span className="ds-mono">{telegramHealth?.last_message ?? "—"}</span> · Errors{" "}
+          <span className="ds-mono">{telegramHealth?.errors ?? 0}</span>
         </p>
       </Panel>
       <div className="ds-grid ds-grid--metrics-3" style={{ marginBottom: 24 }}>
@@ -296,7 +297,9 @@ export function DashboardPage() {
                   ratio="16/9"
                 />
                 <p style={{ margin: "12px 0 0" }}>{critical.location}</p>
-                <p className="ds-mono">{critical.category} · {critical.risk_level} risk</p>
+                <p>
+                  {critical.category} · {critical.risk_level} risk
+                </p>
               </button>
             );
           })()}
@@ -312,8 +315,8 @@ export function DashboardPage() {
               <EvidenceImage src={item.src} alt={item.title} ratio="1/1" />
               <span>
                 <strong>{item.title}</strong>
-                <span className="ds-mono" style={{ display: "block", fontSize: "var(--font-size-xs)" }}>
-                  {item.channel === "telegram" ? "📱 Telegram Image" : item.channel} · {item.location}
+                <span style={{ display: "block", fontSize: "var(--font-size-xs)" }}>
+                  {item.channel === "telegram" ? "Telegram Image" : item.channel} · {item.location}
                 </span>
                 <span className="ds-mono" style={{ fontSize: "var(--font-size-xs)", color: "var(--chalk-muted)" }}>
                   {item.when}

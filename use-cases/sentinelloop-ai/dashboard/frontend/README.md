@@ -27,6 +27,7 @@ npm run build
 
 - `/` Public marketing landing
 - `/dashboard` Operations command center
+- Authenticated pages share `src/components/Shell` (TopNav, router pill, breadcrumbs, page container)
 - `/incidents` Active incidents
 - `/incidents/:incidentId` Incident workspace
 - `/evidence` Evidence review

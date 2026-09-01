@@ -306,7 +306,7 @@ export function IncidentDetailPage() {
                       ? "Source: Telegram 💬"
                       : detail.input_channel || detail.reporter.source_channel || "Workshop"}
                   </p>
-                  <p className="ds-mono">AI Processing: Completed</p>
+                  <p>AI Processing: Completed</p>
                   <EvidenceImage src={pair.before} alt={detail.title || "Worker evidence"} ratio="16/9" />
                 </Panel>
 
@@ -320,7 +320,7 @@ export function IncidentDetailPage() {
                     <article>
                       <p className="ds-metric__label">AI Analysis</p>
                       <EvidenceImage src={pair.before} alt="AI analysis of hazard image" />
-                      <p className="ds-mono">{(detail.vision?.hazard_category || vision.hazard)} suggestion</p>
+                      <p>{(detail.vision?.hazard_category || vision.hazard)} suggestion</p>
                     </article>
                     <article>
                       <p className="ds-metric__label">Resolution Evidence</p>
@@ -374,7 +374,7 @@ export function IncidentDetailPage() {
                   <p>
                     <strong>Final Category:</strong> {detail.vision?.final_category || detail.category}
                   </p>
-                  <p className="ds-mono">Suggestion only. Worker text and human review remain in control.</p>
+                  <p>Suggestion only. Worker text and human review remain in control.</p>
                 </Panel>
               </div>
 
@@ -477,7 +477,7 @@ export function IncidentDetailPage() {
                   <p>Guidance: {detail.safety.guidance}</p>
                   <p>Closure: {detail.safety.closure}</p>
                   {detail.safety.auto_close_disabled ? (
-                    <p className="ds-mono">Human approval required according to SPEC.md</p>
+                    <p>Human approval required according to SPEC.md</p>
                   ) : null}
                   <div className="ds-toolbar">
                     <Button disabled={detail.safety.auto_close_disabled} title="Auto Close is blocked for High/Critical">
@@ -511,7 +511,7 @@ export function IncidentDetailPage() {
 
               {detail.incident_id === slackThread.incident ? (
                 <Panel title={`Slack · ${slackThread.channel}`}>
-                  <p className="ds-mono">
+                  <p>
                     {detail.assigned_team} · {slackThread.actions.join(" · ")}
                   </p>
                   <ul className="ds-slack">

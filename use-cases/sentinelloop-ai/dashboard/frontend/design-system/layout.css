@@ -59,11 +59,11 @@
 .ds-sidebar__copy span {
   display: block;
   margin-top: var(--space-1);
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: var(--font-size-xs);
-  font-weight: 400;
+  font-weight: 500;
   color: var(--chalk-muted);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 
 .ds-icon {
@@ -93,8 +93,9 @@
 .ds-nav__group-label {
   margin: 0;
   padding: var(--space-2) var(--space-3) 2px;
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-family: var(--font-body);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--chalk-muted);
@@ -104,18 +105,27 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  min-height: 36px;
+  min-height: 40px;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
   background: var(--panel);
-  color: var(--chalk);
+  color: var(--muted);
   font-size: var(--font-size-sm);
+  transition:
+    color var(--transition-duration) var(--transition-timing),
+    background-color var(--transition-duration) var(--transition-timing),
+    border-color var(--transition-duration) var(--transition-timing);
 }
 
 .ds-nav__link:hover {
   color: var(--chalk);
   background: var(--panel-raised);
+}
+
+.ds-nav__link:focus-visible {
+  outline: 2px solid var(--maroon);
+  outline-offset: 2px;
 }
 
 .ds-nav__link[aria-current="page"] {
@@ -210,8 +220,9 @@
 
 .ds-header__subtitle {
   margin: 2px 0 0;
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-family: var(--font-body);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
@@ -220,8 +231,8 @@
 .ds-header__menu {
   display: none;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: var(--tap-min);
+  height: var(--tap-min);
   flex-shrink: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -303,6 +314,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
+  scrollbar-gutter: stable;
 }
 
 .ds-page-title {
@@ -310,12 +322,14 @@
   font-family: var(--font-display);
   font-size: var(--font-size-xl);
   font-weight: 700;
+  line-height: var(--line-display);
 }
 
 .ds-page-lead {
   margin: 0 0 var(--space-5);
   color: var(--chalk-muted);
-  max-width: 64ch;
+  max-width: var(--measure);
+  line-height: var(--line-body);
 }
 
 .ds-grid {
@@ -341,9 +355,11 @@
 
 .ds-metric__value {
   margin: var(--space-2) 0 0;
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
   font-size: var(--font-size-xl);
-  font-weight: 500;
+  font-weight: 700;
+  line-height: var(--line-display);
+  letter-spacing: -0.02em;
 }
 
 .ds-metric__label {
@@ -367,8 +383,9 @@
   padding: 2px 8px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-family: var(--font-body);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--verified-teal);
 }
@@ -427,6 +444,11 @@
   list-style: none;
   margin: 0;
   padding: 0;
+  max-height: min(40vh, 22rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .ds-feed__item {
@@ -531,8 +553,8 @@
 
 .ds-chart__label {
   margin-top: var(--space-2);
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-family: var(--font-body);
+  font-size: var(--font-size-xs);
   color: var(--chalk-muted);
   text-align: center;
 }
@@ -798,8 +820,23 @@
 
 .ds-table-wrap {
   max-width: 100%;
-  overflow: auto;
-  overscroll-behavior: contain;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(to right, var(--panel) 30%, transparent),
+    linear-gradient(to right, transparent, var(--panel) 70%) 100% 0,
+    linear-gradient(to right, color-mix(in srgb, var(--chalk) 12%, transparent), transparent),
+    linear-gradient(to left, color-mix(in srgb, var(--chalk) 12%, transparent), transparent) 100% 0;
+  background-repeat: no-repeat;
+  background-size:
+    40px 100%,
+    40px 100%,
+    12px 100%,
+    12px 100%;
+  background-attachment: local, local, scroll, scroll;
 }
 
 .ds-table-wrap .ds-table {
