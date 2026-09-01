@@ -274,6 +274,19 @@ export function IncidentDetailPage() {
               </p>
               <p className="ds-mono">Suggestion only. Worker text and human review remain in control.</p>
             </Panel>
+            {detail.included_in_handovers && detail.included_in_handovers.length > 0 ? (
+              <Panel title="Included in Handover" style={{ marginBottom: 24 }}>
+                {detail.included_in_handovers.map((item) => (
+                  <p key={item.handover_id}>
+                    This incident was highlighted in:
+                    <br />
+                    {item.shift_label} Handover
+                    <br />
+                    {item.generated_at ? new Date(item.generated_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                  </p>
+                ))}
+              </Panel>
+            ) : null}
             {detail.voice_report ? (
               <Panel title="🎤 Voice Report" style={{ marginBottom: 24 }}>
                 <p>Duration: {detail.voice_report.duration_seconds ?? "—"} seconds</p>

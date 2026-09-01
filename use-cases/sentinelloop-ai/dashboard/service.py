@@ -25,6 +25,7 @@ from dashboard.schemas import (
     EmergencyMetrics,
     EmergencyTimelineEvent,
     EvidenceItem,
+    HandoverMention,
     IncidentDetail,
     IncidentListResponse,
     IncidentSummary,
@@ -489,6 +490,45 @@ def _safe_storage_available(reference: str | None) -> bool:
     return True
 
 
+def _handover_mentions(repo: Any, incident_ref: str) -> list[HandoverMention]:
+    if not hasattr(repo, "list_handover_summaries"):
+        return []
+    try:
+        rows = repo.list_handover_summaries() or []
+    except Exception:
+        return []
+    found: list[HandoverMention] = []
+    for row in rows:
+        payload = getattr(row, "payload", None)
+        if payload is None and isinstance(row, dict):
+            payload = row.get("payload")
+        payload = payload or {}
+        ids: list[str] = []
+        for key in ("open_incident_rows", "new_incident_rows", "critical_rows", "top_risks"):
+            for item in payload.get(key) or []:
+                if isinstance(item, dict) and item.get("incident_id"):
+                    ids.append(str(item["incident_id"]))
+        if incident_ref not in ids:
+            continue
+        found.append(
+            HandoverMention(
+                handover_id=str(
+                    getattr(row, "handover_id", None) or (row.get("handover_id") if isinstance(row, dict) else "")
+                ),
+                shift_label=getattr(row, "shift_label", None)
+                or (row.get("shift_label") if isinstance(row, dict) else None),
+                generated_at=getattr(row, "generated_at", None)
+                or (row.get("generated_at") if isinstance(row, dict) else None),
+                critical_open_count=int(
+                    getattr(row, "critical_open_count", 0)
+                    or (row.get("critical_open_count") if isinstance(row, dict) else 0)
+                    or 0
+                ),
+            )
+        )
+    return found
+
+
 class DashboardReadService:
     def __init__(self, repository: IncidentRepository, *, ledger_path: Path | None = None) -> None:
         self._repo = repository
@@ -639,6 +679,7 @@ class DashboardReadService:
                 events=events,
                 guidance=guidance_from_updates(updates),
             ),
+            included_in_handovers=_handover_mentions(self._repo, incident.incident_ref),
         )
 
     def export_audit(self, incident_id: str):

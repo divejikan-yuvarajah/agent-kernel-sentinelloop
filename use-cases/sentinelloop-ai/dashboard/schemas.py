@@ -144,6 +144,7 @@ class IncidentDetail(_Out):
     input_channel: str | None = None
     voice_report: VoiceReport | None = None
     vision: VisionInsight | None = None
+    included_in_handovers: list["HandoverMention"] = Field(default_factory=list)
 
 
 class ChannelShare(_Out):
@@ -672,6 +673,56 @@ class GuardrailComplianceExport(_Out):
     ai_spend_usd: float = 0.0
     budget_ceiling_usd: float | None = None
     audit_note: str | None = None
+
+
+class HandoverMention(_Out):
+    handover_id: str
+    shift_label: str | None = None
+    generated_at: datetime | str | None = None
+    critical_open_count: int = 0
+
+
+class HandoverGenerateIn(_Out):
+    shift_label: str = "Evening Shift"
+
+
+class HandoverRecord(_Out):
+    handover_id: str
+    shift_label: str | None = None
+    summary_text: str | None = None
+    open_incident_count: int = 0
+    critical_open_count: int = 0
+    generated_at: datetime | str | None = None
+    generated_by: str | None = None
+    new_incidents: int = 0
+    human_review_required: int = 0
+    awaiting_verification_overdue: int = 0
+    top_risks: list[dict[str, Any]] = Field(default_factory=list)
+    timeline: list[dict[str, Any]] = Field(default_factory=list)
+    explainability: dict[str, Any] = Field(default_factory=dict)
+    slack_posted: bool = False
+    structured: dict[str, Any] = Field(default_factory=dict)
+    incident_ids: list[str] = Field(default_factory=list)
+    acknowledged: dict[str, Any] | None = None
+
+
+class HandoverGenerateOut(_Out):
+    success: bool = True
+    handover: HandoverRecord
+
+
+class HandoverHistoryOut(_Out):
+    items: list[HandoverRecord] = Field(default_factory=list)
+    total: int = 0
+
+
+class HandoverAnalyticsOut(_Out):
+    total_handovers: int = 0
+    average_open_incidents: float = 0.0
+    average_critical_alerts: float = 0.0
+    most_common_shift_risks: list[dict[str, Any]] = Field(default_factory=list)
+    compare: dict[str, Any] = Field(default_factory=dict)
+    items: list[HandoverRecord] = Field(default_factory=list)
 
 
 IncidentDetail.model_rebuild()

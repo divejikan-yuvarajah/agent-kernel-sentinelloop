@@ -148,6 +148,7 @@ flowchart TD
 | `coordination_agent` | Routes incident to the correct team in Slack | — (no LLM) |
 | `followup_agent` | Tracks resolution, requests worker confirmation before closing | — (no LLM) |
 | `prevention_agent` | Detects recurring hazard patterns, recommends inspection | `role_reasoning` |
+| `handover_agent` | Shift briefing from live incident facts; **one** `role_fast` phrasing call | `role_fast` |
 | `vision_tools` *(bonus)* | Suggests hazard category from a photo when text is sparse | `role_vision` |
 
 ---
@@ -205,7 +206,21 @@ Typography: `Space Grotesk` (headers/KPIs), `IBM Plex Sans` (UI text), `IBM Plex
 * 📈 **Predictive hazard forecasting** — recurring category+location patterns surface as "recommend inspection before next shift," turning the system reactive → preventive.
 * 🖼️ **Vision-based triage** — a hazard photo with little/no caption still gets a category suggestion via a vision-capable model.
 * 🎙️ **Voice message reporting** — Telegram voice notes transcribed via OpenRouter's unified audio endpoint, in the worker's own language.
-* 🗒️ **Automated shift handover briefings** — auto-generated summary of open/pending incidents posted to Slack at shift change.
+* 🗒️ **Automated shift handover briefings** — `handover_agent` collects open/critical/review/overdue incidents, calls `role_fast` **once** to phrase a bullet briefing, stores it in `handover_summaries`, and posts it to the Slack Safety Channel. Judges can trigger **Generate Shift Handover** from the dashboard. Agent Kernel has no in-process cron/scheduler, so automatic shift-end jobs are not wired here.
+
+```
+Phase 2:
+Automatic shift-end scheduling using Agent Kernel scheduler.
+```
+
+Configured shift-end times in `config.yaml`:
+
+```yaml
+handover:
+  morning_shift_end: "14:00"
+  evening_shift_end: "22:00"
+  verification_timeout_hours: 24
+```
 
 ---
 
@@ -317,7 +332,8 @@ use-cases/sentinelloop_ai/
 │   ├── guidance_agent.py
 │   ├── coordination_agent.py
 │   ├── followup_agent.py
-│   └── prevention_agent.py
+│   ├── prevention_agent.py
+│   └── handover_agent.py
 ├── tools/
 │   ├── risk_tools.py
 │   ├── model_router.py
@@ -342,7 +358,9 @@ use-cases/sentinelloop_ai/
 │   ├── schemas.py
 │   ├── repository.py
 │   ├── client.py
-│   └── schema.sql
+│   ├── schema.sql
+│   └── migrations/
+│       └── 002_handover_summaries.sql
 ├── dashboard/
 │   ├── api.py
 │   └── frontend/

@@ -120,8 +120,14 @@ export type IncidentDetail = {
     vision_override: boolean;
     override_reason: string | null;
     changed_by: string | null;
-    confidence_band: string | null;
+    confidence_band?: string | null;
   } | null;
+  included_in_handovers?: {
+    handover_id: string;
+    shift_label: string | null;
+    generated_at: string | null;
+    critical_open_count?: number;
+  }[];
 };
 
 async function getJson<T>(path: string): Promise<T> {
@@ -429,4 +435,77 @@ export type TelegramBotStatus = {
 export function fetchTelegramHealth() {
   if (isDemoMode()) return demo.fetchTelegramHealth();
   return getJson<TelegramBotStatus>("/telegram/health");
+}
+
+export type HandoverRisk = {
+  location?: string;
+  category?: string;
+  risk?: string;
+  incident_id?: string;
+};
+
+export type HandoverRecord = {
+  handover_id: string;
+  shift_label: string;
+  summary_text: string;
+  open_incident_count: number;
+  critical_open_count: number;
+  generated_at: string | null;
+  generated_by?: string | null;
+  new_incidents?: number;
+  human_review_required?: number;
+  awaiting_verification_overdue?: number;
+  top_risks?: HandoverRisk[];
+  timeline?: { time: string; event: string }[];
+  explainability?: {
+    open_incidents?: number;
+    critical_incidents?: number;
+    pending_reviews?: number;
+    overdue_verification?: number;
+    note?: string;
+  };
+  slack_posted?: boolean;
+};
+
+export type HandoverAnalytics = {
+  total_handovers: number;
+  average_open_incidents: number;
+  average_critical_alerts: number;
+  most_common_shift_risks: { label: string; count: number }[];
+  compare: {
+    morning?: { shift: string; critical: number; open: number };
+    evening?: { shift: string; critical: number; open: number };
+  };
+};
+
+export function fetchLatestHandover() {
+  if (isDemoMode()) return demo.fetchLatestHandover();
+  return getJson<HandoverRecord | null>("/handover/latest");
+}
+
+export function fetchHandoverHistory() {
+  if (isDemoMode()) return demo.fetchHandoverHistory();
+  return getJson<{ items: HandoverRecord[]; total: number }>("/handover/history");
+}
+
+export function fetchHandoverAnalytics() {
+  if (isDemoMode()) return demo.fetchHandoverAnalytics();
+  return getJson<HandoverAnalytics>("/handover/analytics");
+}
+
+export function generateHandover(shift_label: string) {
+  if (isDemoMode()) return demo.generateHandover(shift_label);
+  return postJson<{ success: boolean; handover: HandoverRecord }>("/handover/generate", { shift_label });
+}
+
+export function exportHandoverJson(handoverId: string) {
+  if (isDemoMode()) return demo.exportHandoverJson(handoverId);
+  return getJson<HandoverRecord>(`/handover/${handoverId}/export.json`);
+}
+
+export async function exportHandoverPdf(handoverId: string) {
+  if (isDemoMode()) return demo.exportHandoverPdf(handoverId);
+  const response = await fetch(`${API_BASE}/handover/${handoverId}/export.pdf`);
+  if (!response.ok) throw new Error("Export failed");
+  return response.blob();
 }

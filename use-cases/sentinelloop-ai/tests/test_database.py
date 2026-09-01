@@ -118,6 +118,7 @@ class FakeBackend:
             "assignments": [],
             "incident_updates": [],
             "risk_assessments": [],
+            "handover_summaries": [],
         }
         self.uploads: list[dict] = []
         self.removes: list[str] = []
@@ -139,7 +140,7 @@ class FakeBackend:
 
     def execute(self, query: FakeQuery) -> FakeResponse:
         self.last_query = query
-        rows = self.tables[query.table]
+        rows = self.tables.setdefault(query.table, [])
         if query.op == "insert":
             if query.table == "incident_evidence" and self.fail_evidence_insert:
                 raise APIError({"message": "insert failed", "code": "23503", "hint": None, "details": None})

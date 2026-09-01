@@ -107,6 +107,20 @@ class Assignment(_RowModel):
     updated_at: datetime | None = None
 
 
+class HandoverSummary(_RowModel):
+    """Row from `handover_summaries`."""
+
+    handover_id: UUID
+    shift_label: str
+    generated_at: datetime | None = None
+    summary_text: str
+    open_incident_count: int = 0
+    critical_open_count: int = 0
+    generated_by: str | None = None
+    slack_posted: bool = False
+    payload: dict[str, Any] | None = None
+
+
 class IncidentUpdate(_RowModel):
     """Row from `incident_updates` (durable timeline)."""
 

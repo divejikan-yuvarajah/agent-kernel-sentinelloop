@@ -16,10 +16,11 @@ import {
 } from "@ds/index";
 import type { AnalyticsSummary, IncidentSummary, LoopStage, RecurringHazard, RouterStatus, PredictionItem, PredictionsResponse } from "@ds/types";
 
-import { fetchAnalyticsSummary, fetchIncidents, fetchPredictions, fetchRecurring, fetchRouterStatus, requestInspection } from "../api/client";
+import { fetchAnalyticsSummary, fetchIncidents, fetchLatestHandover, fetchPredictions, fetchRecurring, fetchRouterStatus, generateHandover, requestInspection, type HandoverRecord } from "../api/client";
 import { organization } from "../data/demoData";
 import { incidentThumbnail, recentEvidenceFeed, locationRiskDemo } from "../data/demoImages";
 import { EvidenceImage } from "../components/EvidenceImage";
+import { HandoverPanel } from "../components/HandoverPanel";
 import { useDemoMode } from "../demo/useDemoMode";
 
 const FALLBACK_STAGES: LoopStage[] = [
@@ -52,6 +53,9 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [inspectingId, setInspectingId] = useState<string | null>(null);
   const [inspectNote, setInspectNote] = useState<string | null>(null);
+  const [handover, setHandover] = useState<HandoverRecord | null>(null);
+  const [generatingHandover, setGeneratingHandover] = useState(false);
+  const [handoverNote, setHandoverNote] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,14 +66,16 @@ export function DashboardPage() {
       fetchRecurring(),
       fetchRouterStatus(),
       fetchPredictions(),
+      fetchLatestHandover(),
     ])
-      .then(([list, analytics, repeats, routerStatus, forecast]) => {
+      .then(([list, analytics, repeats, routerStatus, forecast, latestHandover]) => {
         if (cancelled) return;
         setIncidents(list.items);
         setSummary(analytics);
         setRecurring(repeats.items);
         setRouter(routerStatus);
         setPredictions(forecast);
+        setHandover(latestHandover);
         setError(null);
       })
       .catch((err: Error) => {
@@ -133,6 +139,26 @@ export function DashboardPage() {
     }
   }
 
+  async function onGenerateHandover() {
+    setGeneratingHandover(true);
+    setHandoverNote(null);
+    try {
+      const hour = new Date().getHours();
+      const shift = hour >= 14 ? "Evening Shift" : "Morning Shift";
+      const result = await generateHandover(shift);
+      setHandover(result.handover);
+      setHandoverNote(
+        result.handover.critical_open_count
+          ? "🚨 Critical items require attention before shift start."
+          : "Handover generated for the incoming shift.",
+      );
+    } catch (err) {
+      setHandoverNote(err instanceof Error ? err.message : "Handover generation failed.");
+    } finally {
+      setGeneratingHandover(false);
+    }
+  }
+
   return (
     <AppShell
       title="Operations overview"
@@ -175,6 +201,7 @@ export function DashboardPage() {
           </Card>
         ))}
       </div>
+      <HandoverPanel latest={handover} generating={generatingHandover} note={handoverNote} onGenerate={onGenerateHandover} />
       <Panel title="AI Vision Insights" titleTooltip="Suggestion only. Humans remain in control.">
         <div className="ds-grid ds-grid--metrics">
           <Card variant="analytics-card">

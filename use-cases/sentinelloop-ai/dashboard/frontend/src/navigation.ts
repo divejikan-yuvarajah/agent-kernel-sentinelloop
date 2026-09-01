@@ -4,6 +4,7 @@ export const NAV_GROUPS = [
     links: [
       { to: "/", label: "Dashboard", icon: "dashboard" as const },
       { to: "/emergency", label: "Emergency Command Center", icon: "emergency" as const },
+      { to: "/handover/history", label: "Shift Handover History", icon: "clock" as const },
       { to: "/incidents", label: "Incident Management", icon: "incidents" as const },
       { to: "/follow-up", label: "Follow-up", icon: "followup" as const },
       { to: "/evidence", label: "Evidence Review", icon: "evidence" as const },
@@ -48,6 +49,7 @@ export const ROUTE_CRUMBS: { prefix: string; label: string; to?: string }[] = [
   { prefix: "/", label: "Dashboard", to: "/" },
   { prefix: "/emergency/history", label: "Emergency Response History", to: "/emergency/history" },
   { prefix: "/emergency", label: "Emergency Command Center", to: "/emergency" },
+  { prefix: "/handover/history", label: "Shift Handover History", to: "/handover/history" },
   { prefix: "/incidents/", label: "Investigation", to: "/incidents" },
   { prefix: "/incidents", label: "Incidents", to: "/incidents" },
   { prefix: "/follow-up", label: "Follow-up", to: "/follow-up" },

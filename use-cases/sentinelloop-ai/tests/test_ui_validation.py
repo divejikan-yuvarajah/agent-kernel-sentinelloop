@@ -16,6 +16,7 @@ from database.repository import IncidentRepository
 from tests.test_database import FakeBackend, _create_payload
 
 FRONTEND = Path(__file__).resolve().parents[1] / "dashboard" / "frontend"
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _app(repo: IncidentRepository) -> TestClient:
@@ -249,3 +250,22 @@ def test_emergency_command_center_surfaces_on_dashboard_and_audit():
     assert "ds-emergency-card" in layout
     assert "ds-shell--collapsed" in layout
     assert "overscroll-behavior: contain" in layout
+
+
+def test_shift_handover_surfaces_on_dashboard_and_history():
+    dashboard = (FRONTEND / "src" / "pages" / "DashboardPage.tsx").read_text(encoding="utf-8")
+    assert "HandoverPanel" in dashboard
+    panel = (FRONTEND / "src" / "components" / "HandoverPanel.tsx").read_text(encoding="utf-8")
+    assert "Safety Shift Handover Panel" in panel
+    assert "Generate Shift Handover" in panel
+    assert "Top Safety Concerns" in panel
+    history = (FRONTEND / "src" / "pages" / "HandoverHistoryPage.tsx").read_text(encoding="utf-8")
+    assert "Shift Handover History" in history
+    assert "Compare Shifts" in history
+    assert "How this handover was generated" in history
+    assert "Export Handover Report" in history
+    detail = (FRONTEND / "src" / "pages" / "IncidentDetailPage.tsx").read_text(encoding="utf-8")
+    assert "Included in Handover" in detail
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "Phase 2:" in readme
+    assert "Automatic shift-end scheduling using Agent Kernel scheduler." in readme

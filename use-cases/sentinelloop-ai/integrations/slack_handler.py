@@ -30,6 +30,10 @@ ACTION_ACCEPT = "incident_accept"
 ACTION_REASSIGN = "incident_reassign"
 ACTION_ESCALATE = "incident_escalate"
 ACTION_CLOSED = "incident_closed"
+ACTION_HANDOVER_VIEW = "handover_view_incidents"
+ACTION_HANDOVER_ASSIGN = "handover_assign_reviewer"
+ACTION_HANDOVER_ACK = "handover_acknowledge"
+ACTION_HANDOVER_ESCALATE = "handover_escalate"
 PERMANENT_SLACK_ERRORS = frozenset({"invalid_auth", "channel_not_found", "not_in_channel", "invalid_arguments"})
 MENTION_RE = re.compile(
     r"<!channel>|<!here>|<!everyone>|<@[^>]+>|@channel|@here|@everyone",
@@ -48,6 +52,9 @@ THREAD_COMMAND_ALIASES = {
     "in-progress": {"command": "set_status", "status": STATUS_IN_PROGRESS},
     "in_progress": {"command": "set_status", "status": STATUS_IN_PROGRESS},
     "closed": {"command": "close"},
+    "acknowledged": {"command": "handover_ack"},
+    "acknowledge": {"command": "handover_ack"},
+    "assign": {"command": "handover_assign"},
 }
 
 
@@ -230,6 +237,129 @@ def inspection_request_fallback_text(*, location: str, reason: str) -> str:
         "Recommended Action:\nSchedule safety inspection.\n\n"
         "Priority:\nAttention Needed"
     )
+
+
+def _dashboard_incident_url(incident_id: str) -> str:
+    base = (os.environ.get("DASHBOARD_PUBLIC_URL") or "http://localhost:8000/dashboard").rstrip("/")
+    return f"{base}/incidents/{incident_id}"
+
+
+def build_handover_action_blocks(handover_id: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "type": "actions",
+            "block_id": f"handover_actions_{handover_id}",
+            "elements": [
+                {
+                    "type": "button",
+                    "action_id": ACTION_HANDOVER_VIEW,
+                    "text": {"type": "plain_text", "text": "View Incidents"},
+                    "value": handover_id,
+                    "url": (os.environ.get("DASHBOARD_PUBLIC_URL") or "http://localhost:8000/dashboard").rstrip("/")
+                    + "/incidents",
+                },
+                {
+                    "type": "button",
+                    "action_id": ACTION_HANDOVER_ASSIGN,
+                    "text": {"type": "plain_text", "text": "Assign Reviewer"},
+                    "value": handover_id,
+                },
+                {
+                    "type": "button",
+                    "action_id": ACTION_HANDOVER_ACK,
+                    "text": {"type": "plain_text", "text": "Acknowledge Handover"},
+                    "value": handover_id,
+                    "style": "primary",
+                },
+                {
+                    "type": "button",
+                    "action_id": ACTION_HANDOVER_ESCALATE,
+                    "text": {"type": "plain_text", "text": "Escalate"},
+                    "value": handover_id,
+                    "style": "danger",
+                },
+            ],
+        }
+    ]
+
+
+def build_handover_blocks(*, record: dict[str, Any], snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+    shift = sanitize_slack_text(str(record.get("shift_label") or snapshot.get("shift") or "Shift"))
+    generated = sanitize_slack_text(str(record.get("generated_at") or ""))
+    summary = sanitize_slack_text(str(record.get("summary_text") or ""))
+    open_count = int(record.get("open_incident_count") or snapshot.get("open_incidents") or 0)
+    critical = int(record.get("critical_open_count") or snapshot.get("critical_open_incidents") or 0)
+    reviews = int(snapshot.get("human_review_required") or 0)
+    header = f"🛡️ {shift} Safety Handover"
+    counts = (
+        f"*Open:* {open_count}   *Critical:* {critical}   *Human reviews:* {reviews}\n"
+        f"*Generated:* {generated or 'now'}"
+    )
+    blocks: list[dict[str, Any]] = [
+        {"type": "header", "text": {"type": "plain_text", "text": header[:150]}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": counts}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": summary[:2900] or "No summary."}},
+    ]
+    if critical > 0:
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "*🚨 Critical items require attention before shift start.*"},
+            }
+        )
+    for item in (snapshot.get("critical_rows") or snapshot.get("top_risks") or [])[:3]:
+        ident = sanitize_slack_text(str(item.get("incident_id") or ""))
+        location = sanitize_slack_text(str(item.get("location") or "Unknown"))
+        category = sanitize_slack_text(str(item.get("category") or item.get("risk") or ""))
+        risk = sanitize_slack_text(str(item.get("risk") or item.get("risk_level") or "Critical"))
+        status = sanitize_slack_text(str(item.get("status") or "Awaiting Review"))
+        owner = sanitize_slack_text(str(item.get("assigned_team") or "Safety Supervisor"))
+        link = _dashboard_incident_url(ident) if ident else ""
+        badge = "🔴 Critical" if risk.lower() == "critical" else f"🟠 {risk}"
+        body = (
+            f"*{badge}:*\n<{link}|{ident}> {category} {location}\n\n" f"*Status:*\n{status}\n\n" f"*Owner:*\n{owner}"
+            if ident and link
+            else f"*{badge}:*\n{category} {location}\n\n*Status:*\n{status}\n\n*Owner:*\n{owner}"
+        )
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": body}})
+    handover_id = str(record.get("handover_id") or "handover")
+    blocks.extend(build_handover_action_blocks(handover_id))
+    blocks.append(
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": "Thread commands: `acknowledged` · `assign` · `escalate`",
+                }
+            ],
+        }
+    )
+    return blocks
+
+
+def handover_fallback_text(*, record: dict[str, Any], snapshot: dict[str, Any]) -> str:
+    shift = record.get("shift_label") or snapshot.get("shift") or "Shift"
+    open_count = int(record.get("open_incident_count") or snapshot.get("open_incidents") or 0)
+    critical = int(record.get("critical_open_count") or snapshot.get("critical_open_incidents") or 0)
+    reviews = int(snapshot.get("human_review_required") or 0)
+    top = (snapshot.get("top_risks") or [{}])[0]
+    priority = f"{top.get('category') or 'hazard'} inspection required at {top.get('location') or 'priority location'}."
+    lines = [
+        f"🛡️ {shift} Safety Handover",
+        "",
+        f"• {snapshot.get('new_incidents', 0)} new incidents",
+        f"• {critical} Critical incident still open" if critical else f"• {open_count} incidents remain open",
+        f"• {reviews} human reviews required",
+        "",
+        "Priority Action:",
+        "",
+        priority,
+    ]
+    if critical:
+        lines.append("")
+        lines.append("🚨 Critical items require attention before shift start.")
+    return "\n".join(lines)
 
 
 class SlackHandler:

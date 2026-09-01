@@ -20,6 +20,10 @@ from integrations.slack_handler import (
     ACTION_ACCEPT,
     ACTION_CLOSED,
     ACTION_ESCALATE,
+    ACTION_HANDOVER_ACK,
+    ACTION_HANDOVER_ASSIGN,
+    ACTION_HANDOVER_ESCALATE,
+    ACTION_HANDOVER_VIEW,
     ACTION_REASSIGN,
     MESSAGE_INSPECTION_REQUEST,
     SlackHandler,
@@ -714,6 +718,11 @@ class CoordinationService:
             None,
         )
         if record is None:
+            command = parse_thread_command(event.get("text"))
+            if command and str(command.get("command") or "").startswith("handover_"):
+                from agents.handover_agent import handle_handover_thread_command
+
+                await handle_handover_thread_command(event, command)
             return None
         command = parse_thread_command(event.get("text"))
         if command is None:
@@ -759,6 +768,12 @@ class CoordinationService:
         self, payload: dict[str, Any], *, mapping: dict[str, Any] | None = None
     ) -> CoordinationResult:
         action_id, incident_id, selected_team = extract_action(payload)
+        if action_id in {ACTION_HANDOVER_ACK, ACTION_HANDOVER_ASSIGN, ACTION_HANDOVER_ESCALATE, ACTION_HANDOVER_VIEW}:
+            from agents.handover_agent import handle_handover_action
+
+            actor = (payload.get("user") or {}).get("id") if isinstance(payload.get("user"), dict) else None
+            await handle_handover_action(action_id, incident_id or "", actor=actor)
+            return CoordinationResult(incident_id=incident_id or "", slack_reply="Handover action recorded.")
         if not incident_id or not action_id:
             return CoordinationResult(coordination_error=ERROR_ACTION)
         record = self._record(incident_id)

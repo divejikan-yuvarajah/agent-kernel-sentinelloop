@@ -24,6 +24,11 @@ from dashboard.schemas import (
     GuardrailConfigView,
     GuardrailDebugEvent,
     GuardrailStatus,
+    HandoverAnalyticsOut,
+    HandoverGenerateIn,
+    HandoverGenerateOut,
+    HandoverHistoryOut,
+    HandoverRecord,
     IncidentDetail,
     IncidentListResponse,
     InspectionRequestIn,
@@ -61,6 +66,7 @@ class DashboardHandler(RESTRequestHandler):
         self._ledger_path = ledger_path
         self._call_model_fn = call_model_fn
         self._coordination_service = coordination_service
+        self._slack = None
         self._cache: dict[str, tuple[float, Any]] = {}
 
     def _reader(self) -> DashboardReadService:
@@ -353,6 +359,145 @@ class DashboardHandler(RESTRequestHandler):
                 log.exception("dashboard emergencies failed")
                 raise HTTPException(status_code=500, detail="internal dashboard failure") from None
 
+        @router.post(
+            "/handover/generate",
+            response_model=HandoverGenerateOut,
+            summary="Generate shift handover",
+            description="Manual demo trigger. Collects incident facts, calls role_fast once, stores the briefing, and posts to Slack Safety Channel.",
+        )
+        async def generate_handover(body: HandoverGenerateIn) -> HandoverGenerateOut:
+            try:
+                from agents.handover_agent import generate_handover_summary
+                from integrations.slack_handler import SlackHandler
+
+                repo = self._repository or self._reader()._repo
+                slack = self._slack
+                if slack is None:
+                    slack = getattr(self._coordination_service, "slack", None) or SlackHandler()
+                record = await generate_handover_summary(
+                    body.shift_label,
+                    repository=repo,
+                    call_model_fn=self._call_model_fn,
+                    slack=slack,
+                    generated_by="dashboard_officer",
+                )
+                self._cache.pop("handover.latest", None)
+                self._cache.pop("handover.history", None)
+                self._cache.pop("handover.analytics", None)
+                return HandoverGenerateOut(success=True, handover=HandoverRecord.model_validate(record))
+            except HTTPException:
+                raise
+            except Exception:
+                log.exception("dashboard handover_generate failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
+        @router.get(
+            "/handover/latest",
+            response_model=HandoverRecord | None,
+            summary="Latest shift handover",
+        )
+        async def latest_handover() -> HandoverRecord | None:
+            try:
+                from agents.handover_agent import get_latest_handover
+
+                repo = self._repository or self._reader()._repo
+                record = get_latest_handover(repo)
+                return HandoverRecord.model_validate(record) if record else None
+            except Exception:
+                log.exception("dashboard handover_latest failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
+        @router.get(
+            "/handover/history",
+            response_model=HandoverHistoryOut,
+            summary="Shift handover history",
+        )
+        async def handover_history() -> HandoverHistoryOut:
+            try:
+                from agents.handover_agent import _public_record, list_stored_handovers
+
+                repo = self._repository or self._reader()._repo
+                rows = [_public_record(item) for item in list_stored_handovers(repo)]
+                return HandoverHistoryOut(items=[HandoverRecord.model_validate(item) for item in rows], total=len(rows))
+            except Exception:
+                log.exception("dashboard handover_history failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
+        @router.get(
+            "/handover/analytics",
+            response_model=HandoverAnalyticsOut,
+            summary="Handover analytics",
+        )
+        async def handover_analytics() -> HandoverAnalyticsOut:
+            try:
+                from agents.handover_agent import handover_analytics as build_analytics
+
+                repo = self._repository or self._reader()._repo
+                return HandoverAnalyticsOut.model_validate(build_analytics(repo))
+            except Exception:
+                log.exception("dashboard handover_analytics failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
+        @router.get(
+            "/handover/compare",
+            summary="Compare morning and evening shifts",
+        )
+        async def handover_compare() -> dict[str, Any]:
+            try:
+                from agents.handover_agent import handover_analytics as build_analytics
+
+                repo = self._repository or self._reader()._repo
+                return build_analytics(repo).get("compare") or {}
+            except Exception:
+                log.exception("dashboard handover_compare failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
+        @router.get(
+            "/handover/{handover_id}/export.json",
+            summary="Export handover JSON",
+        )
+        async def handover_export_json(handover_id: str) -> dict[str, Any]:
+            try:
+                from agents.handover_agent import _public_record, list_stored_handovers
+
+                repo = self._repository or self._reader()._repo
+                for item in list_stored_handovers(repo):
+                    public = _public_record(item)
+                    if str(public.get("handover_id")) == str(handover_id):
+                        return public
+                raise HTTPException(status_code=404, detail="handover not found")
+            except HTTPException:
+                raise
+            except Exception:
+                log.exception("dashboard handover_export_json failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
+        @router.get(
+            "/handover/{handover_id}/export.pdf",
+            summary="Export handover PDF",
+        )
+        async def handover_export_pdf(handover_id: str):
+            try:
+                from fastapi.responses import Response
+
+                from agents.handover_agent import _public_record, handover_pdf_bytes, list_stored_handovers
+
+                repo = self._repository or self._reader()._repo
+                for item in list_stored_handovers(repo):
+                    public = _public_record(item)
+                    if str(public.get("handover_id")) == str(handover_id):
+                        return Response(
+                            content=handover_pdf_bytes(public),
+                            media_type="application/pdf",
+                            headers={"Content-Disposition": f'attachment; filename="handover-{handover_id}.pdf"'},
+                        )
+                raise HTTPException(status_code=404, detail="handover not found")
+            except HTTPException:
+                raise
+            except Exception:
+                log.exception("dashboard handover_export_pdf failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
         @router.get(
             "/telegram/health",
             response_model=TelegramBotStatus,
@@ -475,6 +620,10 @@ class DashboardHandler(RESTRequestHandler):
             "/analytics/recurring",
             "/analytics/predictions",
             "/emergencies",
+            "/handover/latest",
+            "/handover/history",
+            "/handover/analytics",
+            "/handover/compare",
             "/telegram/health",
             "/router/status",
             "/guardrails/status",

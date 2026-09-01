@@ -326,6 +326,12 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
             ? "medium"
             : "low",
     },
+    included_in_handovers:
+      row.incident_id === "INC-2026-00421"
+        ? [{ handover_id: "ho-evening", shift_label: "Evening Shift", generated_at: "2026-09-01T22:01:00+00:00", critical_open_count: 1 }]
+        : row.incident_id === "INC-2026-00420"
+          ? [{ handover_id: "ho-morning", shift_label: "Morning Shift", generated_at: "2026-09-01T14:01:00+00:00", critical_open_count: 2 }]
+          : [],
   };
   return wait(detail);
 }
@@ -871,4 +877,138 @@ export function fetchTelegramHealth() {
     message_types: { Text: 60, Image: 25, Voice: 15 },
     language_distribution: { Sinhala: 45, Tamil: 35, English: 20 },
   });
+}
+
+const DEMO_HANDOVERS: Array<{
+  handover_id: string;
+  shift_label: string;
+  summary_text: string;
+  open_incident_count: number;
+  critical_open_count: number;
+  generated_at: string;
+  generated_by: string;
+  new_incidents: number;
+  human_review_required: number;
+  awaiting_verification_overdue: number;
+  top_risks: { location: string; category: string; risk: string; incident_id: string }[];
+  timeline: { time: string; event: string }[];
+  explainability: {
+    open_incidents: number;
+    critical_incidents: number;
+    pending_reviews: number;
+    overdue_verification: number;
+    note: string;
+  };
+  slack_posted: boolean;
+}> = [
+  {
+    handover_id: "ho-evening",
+    shift_label: "Evening Shift",
+    summary_text:
+      "Evening Shift Safety Handover\n\n• 3 new incidents reported\n• 8 incidents remain open\n• 1 Critical electrical incident requires attention\n• 2 High/Critical incidents awaiting human review\n• 1 verification request overdue\n\nPriority:\nInspect CNC Area electrical issue before next shift.",
+    open_incident_count: 8,
+    critical_open_count: 1,
+    generated_at: "2026-09-01T22:01:00+00:00",
+    generated_by: "handover_agent",
+    new_incidents: 3,
+    human_review_required: 2,
+    awaiting_verification_overdue: 1,
+    top_risks: [
+      { location: "CNC Area", category: "Electrical", risk: "Critical", incident_id: "INC-2026-00421" },
+      { location: "Chemical Storage", category: "Chemical Leak", risk: "High", incident_id: "INC-2026-00420" },
+    ],
+    timeline: [
+      { time: "22:00", event: "Previous shift ended" },
+      { time: "22:01", event: "Incidents collected" },
+      { time: "22:01", event: "AI summary generated" },
+      { time: "22:02", event: "Slack posted" },
+    ],
+    explainability: {
+      open_incidents: 8,
+      critical_incidents: 1,
+      pending_reviews: 2,
+      overdue_verification: 1,
+      note: "The model only rewrote structured counts. It did not add incidents or risks.",
+    },
+    slack_posted: true,
+  },
+  {
+    handover_id: "ho-morning",
+    shift_label: "Morning Shift",
+    summary_text:
+      "Morning Shift Safety Handover\n\n• 5 new incidents reported\n• 9 incidents remain open\n• 2 Critical incidents still open\n• 3 High/Critical incidents awaiting human review\n• 1 verification request overdue\n\nPriority:\nInspect Chemical Storage leak verification before next shift.",
+    open_incident_count: 9,
+    critical_open_count: 2,
+    generated_at: "2026-09-01T14:01:00+00:00",
+    generated_by: "handover_agent",
+    new_incidents: 5,
+    human_review_required: 3,
+    awaiting_verification_overdue: 1,
+    top_risks: [
+      { location: "Chemical Storage", category: "Chemical Leak", risk: "Critical", incident_id: "INC-2026-00420" },
+      { location: "Welding Section", category: "Fire", risk: "Critical", incident_id: "INC-2026-00419" },
+    ],
+    timeline: [
+      { time: "14:00", event: "Previous shift ended" },
+      { time: "14:01", event: "Incidents collected" },
+      { time: "14:01", event: "AI summary generated" },
+      { time: "14:02", event: "Slack posted" },
+    ],
+    explainability: {
+      open_incidents: 9,
+      critical_incidents: 2,
+      pending_reviews: 3,
+      overdue_verification: 1,
+      note: "The model only rewrote structured counts. It did not add incidents or risks.",
+    },
+    slack_posted: true,
+  },
+];
+
+export function fetchLatestHandover() {
+  return wait(DEMO_HANDOVERS[0]);
+}
+
+export function fetchHandoverHistory() {
+  return wait({ items: DEMO_HANDOVERS, total: DEMO_HANDOVERS.length });
+}
+
+export function fetchHandoverAnalytics() {
+  return wait({
+    total_handovers: DEMO_HANDOVERS.length,
+    average_open_incidents: 8.5,
+    average_critical_alerts: 1.5,
+    most_common_shift_risks: [
+      { label: "CNC Area / Electrical", count: 1 },
+      { label: "Chemical Storage / Chemical Leak", count: 2 },
+    ],
+    compare: {
+      morning: { shift: "Morning Shift", critical: 2, open: 9 },
+      evening: { shift: "Evening Shift", critical: 1, open: 8 },
+    },
+  });
+}
+
+export function generateHandover(shift_label: string) {
+  const template = DEMO_HANDOVERS.find((item) => item.shift_label === shift_label) || DEMO_HANDOVERS[0];
+  const created = {
+    ...template,
+    handover_id: `ho-${Date.now()}`,
+    shift_label,
+    generated_at: new Date().toISOString(),
+    generated_by: "dashboard_officer",
+  };
+  DEMO_HANDOVERS.unshift(created);
+  return wait({ success: true, handover: created });
+}
+
+export function exportHandoverJson(handoverId: string) {
+  const found = DEMO_HANDOVERS.find((item) => item.handover_id === handoverId) || DEMO_HANDOVERS[0];
+  return wait(found);
+}
+
+export async function exportHandoverPdf(handoverId: string) {
+  const found = DEMO_HANDOVERS.find((item) => item.handover_id === handoverId) || DEMO_HANDOVERS[0];
+  const text = found.summary_text;
+  return new Blob([text], { type: "application/pdf" });
 }

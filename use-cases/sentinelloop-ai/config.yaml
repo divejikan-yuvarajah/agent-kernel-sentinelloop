@@ -91,6 +91,11 @@ features:
   visual_hazard_analysis: true
   analytics_dashboard: false
 
+handover:
+  morning_shift_end: "14:00"
+  evening_shift_end: "22:00"
+  verification_timeout_hours: 24
+
 storage:
   provider: supabase
 

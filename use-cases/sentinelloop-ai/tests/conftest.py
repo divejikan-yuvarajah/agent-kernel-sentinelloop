@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import pytest
 
+from agents.handover_agent import reset_handover_stats
 from agents.prevention_agent import reset_prevention_stats
 from guardrails.emergency_bypass import reset_emergency_stats
 from guardrails.events import reset_guardrail_events
@@ -35,6 +36,7 @@ def _isolate_guardrail_and_duplicate_state():
     reset_prevention_stats()
     reset_vision_stats()
     reset_emergency_stats()
+    reset_handover_stats()
     yield
     reset_guardrail_events()
     reset_duplicate_detection_stats()
@@ -42,6 +44,7 @@ def _isolate_guardrail_and_duplicate_state():
     reset_prevention_stats()
     reset_vision_stats()
     reset_emergency_stats()
+    reset_handover_stats()
 
 
 class FakeRepository:
@@ -56,6 +59,7 @@ class FakeRepository:
         self.fields: list[dict] = []
         self.create_calls: list[object] = []
         self.assignments: list[object] = []
+        self.handovers: list[dict] = []
         self.fail_create = False
         self.fail_update = False
         self.incident_status = "RESOLVED"
@@ -158,6 +162,24 @@ class FakeRepository:
             raise RuntimeError("db down")
         self.statuses.append(fields.get("assignment_status"))
         return fields
+
+    def create_handover_summary(self, data):
+        payload = dict(data) if not hasattr(data, "model_dump") else data.model_dump()
+        payload.setdefault("handover_id", uuid4())
+        self.handovers.append(payload)
+        return payload
+
+    def list_handover_summaries(self, *, limit=50):
+        return list(self.handovers)[-limit:][::-1]
+
+    def get_latest_handover(self):
+        return self.handovers[-1] if self.handovers else None
+
+    def get_handover(self, handover_id):
+        for row in self.handovers:
+            if str(row.get("handover_id")) == str(handover_id):
+                return row
+        return None
 
 
 class MockWhatsAppClient:

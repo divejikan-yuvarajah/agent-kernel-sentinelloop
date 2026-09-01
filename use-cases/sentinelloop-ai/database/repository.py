@@ -10,6 +10,7 @@ this client has no RPC/transaction wrapper in the existing schema.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from pathlib import PurePosixPath
@@ -26,7 +27,7 @@ from database.exceptions import (
     PersistenceError,
     RecordNotFoundError,
 )
-from database.models import Assignment, Incident, IncidentEvidence, IncidentUpdate, RiskAssessment
+from database.models import Assignment, HandoverSummary, Incident, IncidentEvidence, IncidentUpdate, RiskAssessment
 from database.schema_map import (
     normalize_assignment_row,
     normalize_evidence_row,
@@ -82,6 +83,17 @@ def _execute(builder, operation: str):
         return builder.execute()
     except APIError as exc:
         raise PersistenceError(f"{operation} failed") from exc
+
+
+def _handover(row: dict) -> HandoverSummary:
+    payload = dict(row)
+    inner = payload.get("payload")
+    if isinstance(inner, str):
+        try:
+            payload["payload"] = json.loads(inner)
+        except json.JSONDecodeError:
+            payload["payload"] = {}
+    return HandoverSummary.model_validate(payload)
 
 
 def _incident(row: dict) -> Incident:
@@ -462,6 +474,39 @@ class IncidentRepository:
             raise PartialPersistenceError("evidence uploaded but incident_evidence insert failed") from exc
         return _evidence(_first_row(response.data, "add_evidence"))
 
+    def create_handover_summary(self, data: dict) -> HandoverSummary:
+        payload = dict(data)
+        hid = payload.get("handover_id") or uuid4()
+        payload["handover_id"] = str(hid)
+        generated = payload.get("generated_at")
+        if hasattr(generated, "isoformat"):
+            payload["generated_at"] = generated.isoformat()
+        log.info("create_handover_summary shift=%s", payload.get("shift_label"))
+        response = _execute(self._client.table("handover_summaries").insert(payload), "create_handover_summary")
+        return _handover(_first_row(response.data, "create_handover_summary"))
+
+    def list_handover_summaries(self, *, limit: int = 50) -> list[HandoverSummary]:
+        cap = min(max(limit, 1), MAX_LIST_LIMIT)
+        response = _execute(
+            self._client.table("handover_summaries").select("*").order("generated_at", desc=True).limit(cap),
+            "list_handover_summaries",
+        )
+        return [_handover(row) for row in (response.data or [])]
+
+    def get_latest_handover(self) -> HandoverSummary | None:
+        rows = self.list_handover_summaries(limit=1)
+        return rows[0] if rows else None
+
+    def get_handover(self, handover_id: UUID | str) -> HandoverSummary | None:
+        response = _execute(
+            self._client.table("handover_summaries").select("*").eq("handover_id", str(handover_id)).limit(1),
+            "get_handover",
+        )
+        rows = response.data or []
+        if not rows:
+            return None
+        return _handover(rows[0])
+
     def increment_duplicate_count(self, incident_id: UUID) -> Incident:
         """Increment incidents.duplicate_count with optimistic concurrency.
 
@@ -564,3 +609,15 @@ def add_evidence(
 
 def increment_duplicate_count(incident_id: UUID) -> Incident:
     return _repo().increment_duplicate_count(incident_id)
+
+
+def create_handover_summary(data: dict) -> HandoverSummary:
+    return _repo().create_handover_summary(data)
+
+
+def list_handover_summaries(*, limit: int = 50) -> list[HandoverSummary]:
+    return _repo().list_handover_summaries(limit=limit)
+
+
+def get_latest_handover() -> HandoverSummary | None:
+    return _repo().get_latest_handover()

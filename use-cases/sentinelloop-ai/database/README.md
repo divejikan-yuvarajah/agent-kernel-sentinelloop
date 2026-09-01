@@ -44,6 +44,8 @@ client-side transaction.
 4. `assignments`
 5. `incident_updates`
 
+Additive migration `database/migrations/002_handover_summaries.sql` creates `handover_summaries` for shift briefings. It does not alter the five incident tables.
+
 Part 2 SQL was not checked into this repository. Models follow `SPEC.md` plus
 the persistence prompt (`duplicate_count`, evidence `stage`). Extra columns
 returned by PostgREST are ignored.
