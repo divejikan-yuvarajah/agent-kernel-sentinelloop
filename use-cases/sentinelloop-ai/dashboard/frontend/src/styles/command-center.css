@@ -78,6 +78,11 @@
   stroke-width: 1;
 }
 
+.ds-loop__segment--maroon {
+  fill: var(--maroon);
+  stroke: var(--maroon);
+}
+
 .ds-loop__segment--amber {
   fill: var(--signal-amber);
   stroke: var(--signal-amber);
@@ -86,6 +91,11 @@
 .ds-loop__segment--teal {
   fill: var(--verified-teal);
   stroke: var(--verified-teal);
+}
+
+.ds-loop__segment--critical {
+  fill: var(--hazard-red);
+  stroke: var(--hazard-red);
 }
 
 .ds-loop__segment--empty {
@@ -129,17 +139,22 @@
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--chalk-muted);
+  color: var(--muted);
   cursor: pointer;
   text-align: left;
 }
 
 .ds-loop__hit:hover,
-.ds-loop__hit:focus-visible,
-.ds-loop__hit.is-active {
+.ds-loop__hit:focus-visible {
   color: var(--chalk);
   border-color: var(--border);
-  background: var(--ink);
+  background: var(--panel-raised);
+}
+
+.ds-loop__hit.is-active {
+  color: var(--chalk);
+  border-color: var(--maroon);
+  background: color-mix(in srgb, var(--maroon) 22%, var(--panel));
 }
 
 .ds-loop__hit-label {
@@ -212,12 +227,39 @@
   color: var(--verified-teal);
 }
 
+.ds-incident-card__meta {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.ds-incident-card__meta div {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.ds-incident-card__meta dt {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ds-incident-card__meta dd {
+  margin: 0;
+  color: var(--chalk);
+}
+
 .ds-incident-card__foot {
   display: flex;
   justify-content: space-between;
   gap: var(--space-3);
   font-size: var(--font-size-sm);
-  color: var(--chalk-muted);
+  color: var(--muted);
 }
 
 .ds-incident-card__photo {
@@ -232,6 +274,10 @@
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.ds-card--incident-critical {
+  border-color: var(--hazard-red);
 }
 
 .ds-card--incident-resolved {
@@ -445,7 +491,7 @@
   padding: var(--space-3);
   border: 1px solid var(--border);
   border-left: 4px solid var(--signal-amber);
-  background: var(--ink);
+  background: var(--panel-raised);
 }
 
 .ds-predict__kicker {
@@ -493,8 +539,12 @@
 }
 
 .ds-weekbars__bar {
-  background: var(--signal-amber);
+  background: var(--maroon);
   min-height: 8px;
+}
+
+.ds-weekbars--attention .ds-weekbars__bar {
+  background: var(--signal-amber);
 }
 
 .ds-forecast-why {

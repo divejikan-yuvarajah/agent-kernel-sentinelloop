@@ -165,7 +165,8 @@ export function DashboardPage() {
   return (
     <AppShell
       title="Operations overview"
-      brand="SENTINELLOOP"
+      brand="SentinelLoop AI"
+      subtitle="Safety Intelligence Center"
       operationalStatus={operationalStatus}
       notificationCount={summary?.critical_incidents ?? 0}
       openIncidentCount={openCount}
@@ -433,7 +434,7 @@ export function DashboardPage() {
               <Card variant="incident-card" loading />
             </div>
           ) : incidents.length === 0 ? (
-            <p className="ds-empty">No active incidents. All safety issues are currently resolved.</p>
+            <p className="ds-empty">No active incidents. All safety conditions are currently stable.</p>
           ) : (
             <div className="ds-grid ds-grid--cards">
               {incidents.slice(0, 4).map((incident) => (

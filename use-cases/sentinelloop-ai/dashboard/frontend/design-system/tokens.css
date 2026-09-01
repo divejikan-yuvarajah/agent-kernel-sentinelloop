@@ -1,22 +1,29 @@
-/* SentinelLoop design tokens. Saturated hues are reserved for operational state. */
+/* SentinelLoop design tokens. Hex values live only in this file and colors.ts. */
 
 :root {
-  --ink: #1c2024;
-  --panel: #262b31;
-  --chalk: #f2f0ea;
-
-  --signal-amber: #e8a33d;
-  --ember-orange: #c9642e;
-  --hazard-red: #d64545;
-  --signal-red: #ff2a2a;
+  --ink: #ffffff;
+  --panel: #ffffff;
+  --panel-raised: #f6f1f0;
+  --chalk: #1f1114;
+  --muted: #7a5c5a;
+  --maroon: #7c1f2e;
+  --maroon-deep: #5c1620;
   --verified-teal: #3fa796;
+  --signal-amber: #e0a83d;
+  --ember-orange: #c9642e;
+  --hazard-red: #e63946;
+  --on-brand: #ffffff;
 
-  --chalk-muted: #b7b5ae;
-  --border: #3a4047;
-  --border-strong: #4d555e;
-  --focus-ring: #f2f0ea;
+  /* Backward-compatible aliases used by existing components. */
+  --chalk-muted: var(--muted);
+  --panel-elevated: var(--panel-raised);
+  --signal-red: var(--hazard-red);
+  --focus-ring: var(--maroon);
+  --border: color-mix(in srgb, var(--muted) 32%, var(--panel));
+  --border-strong: color-mix(in srgb, var(--muted) 48%, var(--panel));
 
-  --font-display: "Space Grotesk", sans-serif;
+  --font-heading: "Space Grotesk", sans-serif;
+  --font-display: var(--font-heading);
   --font-body: "IBM Plex Sans", sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
 
@@ -59,8 +66,7 @@
 
   --sidebar-width: 248px;
   --sidebar-collapsed: 72px;
-  --header-height: 56px;
-  --panel-elevated: #2e343c;
+  --header-height: 64px;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -33,9 +33,24 @@ export function AuditTrailView({ audit, onDownload }: Props) {
   const ai = audit.ai_decision;
   const risk = audit.risk_analysis;
   const resolution = audit.resolution;
+  const status = (info.current_status || "").toUpperCase();
+  const rail = [
+    { label: "Reported", state: "is-done" },
+    { label: "Assessed", state: /INVESTIGAT|ASSIGN|ASSESS|PROGRESS|VERIF|RESOLV|CLOSED/.test(status) ? "is-done" : "is-active" },
+    { label: "Assigned", state: /ASSIGN|PROGRESS|VERIF|RESOLV|CLOSED/.test(status) ? "is-done" : "" },
+    { label: "Verified", state: /VERIF|RESOLV|CLOSED/.test(status) ? "is-done" : "" },
+    { label: "Closed", state: /RESOLV|CLOSED/.test(status) ? "is-done" : "" },
+  ];
 
   return (
     <div className="ds-audit-flow">
+      <ol className="ds-audit-rail" aria-label="Audit lifecycle">
+        {rail.map((step) => (
+          <li key={step.label} className={step.state || undefined}>
+            {step.label}
+          </li>
+        ))}
+      </ol>
       <p className="ds-empty" role="status" style={{ padding: 0, textAlign: "left" }}>
         Audit generated successfully
       </p>

@@ -31,7 +31,16 @@ const DesignSystemPage = lazy(() =>
 
 export function App() {
   return (
-    <Suspense fallback={<p className="ds-empty">Loading…</p>}>
+    <Suspense
+      fallback={
+        <div className="ds-boot" role="status">
+          <img src="/images/sentinelloop-logo.png" alt="" width={56} height={56} />
+          <p>SentinelLoop AI</p>
+          <p className="ds-mono">Loading command center</p>
+          <span className="ds-ai-processing">Processing</span>
+        </div>
+      }
+    >
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/emergency" element={<EmergencyPage />} />

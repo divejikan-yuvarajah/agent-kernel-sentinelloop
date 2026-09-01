@@ -1,6 +1,8 @@
+import { normalizeRisk } from "../colors";
 import type { IncidentSummary } from "../types";
 import { Badge } from "./Badge";
 import { Card } from "./Card";
+import { RiskIndicator } from "./RiskIndicator";
 import { StatusIndicator } from "./StatusIndicator";
 
 type Props = {
@@ -73,7 +75,27 @@ export function IncidentOverviewCard({ incident, onOpen, loading = false, imageS
           ) : null}
         </header>
         <div className="ds-incident-card__body">
-          <p style={{ margin: 0 }}>{incident.location ?? "Location unknown"}</p>
+          <dl className="ds-incident-card__meta">
+            <div>
+              <dt>Location</dt>
+              <dd>{incident.location ?? "Location unknown"}</dd>
+            </div>
+            <div>
+              <dt>Risk</dt>
+              <dd>
+                <RiskIndicator level={incident.risk_level ?? "MEDIUM"} />
+                <span className={`ds-badge ds-badge--risk-${normalizeRisk(incident.risk_level ?? "MEDIUM")}`}>
+                  {normalizeRisk(incident.risk_level ?? "MEDIUM")}
+                </span>
+              </dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>
+                <StatusIndicator status={incident.status} />
+              </dd>
+            </div>
+          </dl>
           {incident.location_verified ? (
             <p className="ds-verified ds-mono" title="Location verified by QR tag">
               Location verified
@@ -81,7 +103,6 @@ export function IncidentOverviewCard({ incident, onOpen, loading = false, imageS
             </p>
           ) : null}
           <div className="ds-meta-row" style={{ marginTop: 8 }}>
-            <StatusIndicator status={incident.status} />
             <span className="ds-mono">{incident.elapsed_time ?? "—"}</span>
           </div>
         </div>

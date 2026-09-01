@@ -89,7 +89,7 @@ export function ForecastPage() {
             </ul>
           </Panel>
           <Panel title="Risk trend" style={{ marginTop: 24 }}>
-            <div className="ds-weekbars" role="img" aria-label="Incident frequency over four weeks">
+            <div className="ds-weekbars ds-weekbars--attention" role="img" aria-label="Incident frequency over four weeks">
               {(item.weekly_counts.length ? item.weekly_counts : [0, 0, 0, 0]).map((value, index) => (
                 <div key={`week-${index}`} className="ds-weekbars__col">
                   <div className="ds-weekbars__bar" style={{ height: `${Math.max(8, Math.round((value / maxWeek) * 100))}px` }} />

@@ -14,7 +14,7 @@ import {
 export function DesignSystemPage() {
   return (
     <AppShell title="Design system" operationalStatus="VERIFIED">
-      <p className="ds-page-lead">Token and primitive catalog. Saturated color appears only on risk and status indicators.</p>
+      <p className="ds-page-lead">Token and primitive catalog. Maroon is brand. Saturated risk color appears only on status.</p>
       <div className="ds-grid ds-grid--split">
         <Panel title="Surfaces">
           <div className="ds-grid ds-grid--cards">

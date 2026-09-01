@@ -8,22 +8,26 @@ Exact tokens:
 
 | Token | Value | Allowed use |
 | --- | --- | --- |
-| `--ink` | `#1C2024` | Application background |
-| `--panel` | `#262B31` | Cards, panels, controls |
-| `--chalk` | `#F2F0EA` | Text and high-contrast chrome |
-| `--signal-amber` | `#E8A33D` | Medium risk, investigating |
-| `--ember-orange` | `#C9642E` | High risk |
-| `--hazard-red` | `#D64545` | Critical risk, open incidents, alert presence |
+| `--ink` | `#FFFFFF` | Application background |
+| `--panel` | `#FFFFFF` | Cards, panels, controls |
+| `--panel-raised` | `#F6F1F0` | Elevated cards and table headers |
+| `--chalk` | `#1F1114` | Text and high-contrast chrome |
+| `--muted` | `#7A5C5A` | Secondary information |
+| `--maroon` | `#7C1F2E` | Brand only: logo, primary buttons, active nav, links |
+| `--maroon-deep` | `#5C1620` | Pressed / hover brand |
+| `--signal-amber` | `#E0A83D` | Attention: pending review, predicted risk |
+| `--ember-orange` | `#C9642E` | High / elevated risk |
+| `--hazard-red` | `#E63946` | Critical / emergency only |
 | `--verified-teal` | `#3FA796` | Low risk, verified, resolved |
 
-Saturated colors (amber / ember / red / teal) may only represent:
+Saturated risk colors (amber / ember / red / teal) may only represent:
 
 - risk severity
 - emergency states
 - verification states
 - resolution states
 
-Never use them for buttons, branding, hover, gradients, or decoration.
+`--maroon` is the brand accent. Do not use risk colors for buttons, navigation, or decoration.
 
 Primary surfaces: background `--ink`, cards `--panel`, text `--chalk`.
 

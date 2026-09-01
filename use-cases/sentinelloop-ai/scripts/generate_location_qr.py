@@ -27,9 +27,9 @@ if str(ROOT) not in sys.path:
 from tools.location_catalog import LocationConfigError, LocationEntry, load_locations  # noqa: E402
 from tools.qr_tags import format_loc_prefix  # noqa: E402
 
-INK = "#1C2024"
-CHALK = "#F2F0EA"
-MUTED = "#B7B5AE"
+INK = "#FFFFFF"
+CHALK = "#1F1114"
+MUTED = "#7A5C5A"
 
 A4_PX = (1240, 1754)  # 150 dpi
 STICKER_PX = (720, 900)

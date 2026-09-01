@@ -1,6 +1,16 @@
 import type { LoopStage } from "../types";
 
-const TEAL_STAGES = new Set(["verify", "learn"]);
+const TEAL_STAGES = new Set(["verify"]);
+const AMBER_STAGES = new Set(["assess"]);
+const CRITICAL_STAGES = new Set(["alert"]);
+
+function segmentTone(stage: string, filled: boolean) {
+  if (!filled) return "ds-loop__segment--empty";
+  if (TEAL_STAGES.has(stage)) return "ds-loop__segment--teal";
+  if (CRITICAL_STAGES.has(stage)) return "ds-loop__segment--critical";
+  if (AMBER_STAGES.has(stage)) return "ds-loop__segment--amber";
+  return "ds-loop__segment--maroon";
+}
 
 type Props = {
   stages: LoopStage[];
@@ -46,11 +56,10 @@ export function LoopRing({ stages, openCount, activeStage, onSelectStage, loadin
             const start = index * sweep + gap / 2;
             const end = (index + 1) * sweep - gap / 2;
             const filled = stage.count > 0;
-            const teal = TEAL_STAGES.has(stage.stage);
             const selected = activeStage === stage.stage;
             const className = [
               "ds-loop__segment",
-              filled ? (teal ? "ds-loop__segment--teal" : "ds-loop__segment--amber") : "ds-loop__segment--empty",
+              segmentTone(stage.stage, filled),
               selected ? "ds-loop__segment--active" : "",
             ]
               .filter(Boolean)

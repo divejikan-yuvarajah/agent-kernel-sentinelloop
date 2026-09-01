@@ -350,7 +350,7 @@ export function IncidentDetailPage() {
               </Panel>
             ) : null}
             {detail.safety ? (
-              <Panel title="AI Decision Safety Panel">
+              <Panel className="ds-ai-explain" title="AI Decision Safety Panel">
                 <p>Risk Level: {detail.safety.risk_level ?? "Unknown"}</p>
                 <p>Human Review: {detail.safety.human_review}</p>
                 <p>Guidance: {detail.safety.guidance}</p>

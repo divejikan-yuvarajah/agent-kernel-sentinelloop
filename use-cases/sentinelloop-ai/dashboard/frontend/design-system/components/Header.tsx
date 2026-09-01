@@ -10,6 +10,7 @@ type Props = {
   operatorName: string;
   operatorRole: string;
   brand?: string;
+  subtitle?: string;
   openIncidentCount?: number;
   demo?: boolean;
   notifyHref?: string;
@@ -24,6 +25,7 @@ export function Header({
   operatorName,
   operatorRole,
   brand,
+  subtitle,
   openIncidentCount,
   demo = false,
   notifyHref = "/notifications",
@@ -46,10 +48,17 @@ export function Header({
             <Icon name={navOpen ? "close" : "menu"} />
           </button>
         ) : null}
+        <img className="ds-header__mark" src="/images/sentinelloop-logo.png" alt="" width={28} height={28} />
         {brand ? (
-          <p className="ds-brand ds-display ds-header__title">{brand}</p>
+          <div className="ds-header__brand-block">
+            <p className="ds-brand ds-display ds-header__title">{brand}</p>
+            {subtitle ? <p className="ds-header__subtitle">{subtitle}</p> : null}
+          </div>
         ) : (
-          <p className="ds-header__title">{title}</p>
+          <div className="ds-header__brand-block">
+            <p className="ds-header__title">{title}</p>
+            {subtitle ? <p className="ds-header__subtitle">{subtitle}</p> : null}
+          </div>
         )}
       </div>
       <div className="ds-header__status">

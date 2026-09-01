@@ -15,6 +15,7 @@ type Props = {
   notificationCount?: number;
   children: ReactNode;
   brand?: string;
+  subtitle?: string;
   openIncidentCount?: number;
 };
 
@@ -32,6 +33,7 @@ export function AppShell({
   notificationCount,
   children,
   brand,
+  subtitle,
   openIncidentCount,
 }: Props) {
   const [demo] = useDemoMode();
@@ -86,6 +88,7 @@ export function AppShell({
         operatorName={demo ? organization.operator.name : "A. Perera"}
         operatorRole={demo ? organization.operator.role : "Duty officer"}
         brand={brand}
+        subtitle={subtitle}
         openIncidentCount={openIncidentCount}
         demo={demo}
         notifyHref="/notifications"

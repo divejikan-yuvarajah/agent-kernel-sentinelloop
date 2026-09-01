@@ -1,3 +1,5 @@
+import { colors } from "../../design-system/colors";
+
 const STORAGE_KEY = "sentinelloop.theme";
 const EVENT = "sentinelloop-theme";
 
@@ -10,17 +12,14 @@ export function readTheme(): ThemeName {
   } catch {
     /* private mode */
   }
-  if (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: light)").matches) {
-    return "light";
-  }
-  return "dark";
+  return "light";
 }
 
 export function applyTheme(theme: ThemeName): void {
   document.documentElement.setAttribute("data-theme", theme);
-  document.documentElement.style.colorScheme = theme;
+  document.documentElement.style.colorScheme = "light";
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", theme === "light" ? "#F3F6FB" : "#0B1220");
+  if (meta) meta.setAttribute("content", colors.ink);
 }
 
 export function setTheme(theme: ThemeName): void {

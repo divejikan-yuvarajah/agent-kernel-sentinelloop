@@ -73,7 +73,7 @@ body {
   top: 0;
   height: 100vh;
   z-index: 20;
-  background: color-mix(in srgb, var(--ink) 92%, #000);
+  background: var(--ink);
 }
 
 .ds-sidebar__brand {
@@ -130,8 +130,8 @@ body {
 }
 
 .ds-nav__link[aria-current="page"] {
-  background: color-mix(in srgb, var(--safety-blue) 14%, var(--panel));
-  border-color: color-mix(in srgb, var(--safety-blue) 35%, var(--border));
+  background: color-mix(in srgb, var(--maroon) 14%, var(--panel));
+  border-color: color-mix(in srgb, var(--maroon) 35%, var(--border));
   color: var(--chalk);
 }
 
@@ -255,8 +255,8 @@ body {
   place-items: center;
   font-size: 9px;
   font-weight: 700;
-  color: #fff;
-  background: var(--emergency-red);
+  color: var(--chalk);
+  background: var(--hazard-red);
 }
 
 .ds-profile {
@@ -287,7 +287,7 @@ body {
 
 .ds-profile__mark {
   border-radius: 50%;
-  background: color-mix(in srgb, var(--safety-blue) 18%, var(--panel));
+  background: color-mix(in srgb, var(--maroon) 18%, var(--panel));
 }
 
 .ds-menu {
@@ -387,7 +387,7 @@ body {
 
 .ds-palette__list button:hover,
 .ds-palette__list button:focus-visible {
-  background: color-mix(in srgb, var(--safety-blue) 12%, var(--panel));
+  background: color-mix(in srgb, var(--maroon) 12%, var(--panel));
 }
 
 .ds-palette__list strong {
@@ -467,8 +467,8 @@ body {
   height: 32px;
   margin-bottom: 10px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--safety-blue) 14%, var(--panel));
-  color: var(--safety-blue);
+  background: color-mix(in srgb, var(--maroon) 14%, var(--panel));
+  color: var(--maroon);
 }
 
 .ds-metric__value {
@@ -486,7 +486,7 @@ body {
 }
 
 .ds-metric__trend--down {
-  color: var(--emergency-red);
+  color: var(--hazard-red);
 }
 
 .ds-metric__hint {
@@ -545,7 +545,7 @@ body {
 }
 
 .ds-table tbody tr:hover td {
-  background: color-mix(in srgb, var(--safety-blue) 8%, var(--panel));
+  background: color-mix(in srgb, var(--maroon) 8%, var(--panel));
 }
 
 .ds-pagination {
@@ -592,7 +592,7 @@ body {
 }
 
 .ds-risk-meter[data-level="CRITICAL"] span:nth-child(-n + 4) {
-  background: var(--emergency-red);
+  background: var(--hazard-red);
 }
 
 .ds-ai-badge {
@@ -601,7 +601,7 @@ body {
   gap: 6px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--safety-blue) 16%, var(--panel));
+  background: color-mix(in srgb, var(--maroon) 16%, var(--panel));
   color: var(--chalk);
   font-size: 11px;
   font-weight: 600;
@@ -624,7 +624,7 @@ body {
 
 .ds-confidence-meter__fill {
   height: 100%;
-  background: var(--safety-blue);
+  background: var(--maroon);
   transform-origin: left;
   animation: ds-grow 600ms var(--transition-timing);
 }
@@ -684,7 +684,7 @@ body {
 
 .ds-lightbox__meta {
   margin-top: 12px;
-  color: #fff;
+  color: var(--chalk);
   text-align: center;
 }
 
@@ -718,15 +718,15 @@ body {
 }
 
 .ds-theme-switch button[aria-pressed="true"] {
-  border-color: var(--safety-blue);
-  background: color-mix(in srgb, var(--safety-blue) 14%, var(--panel));
+  border-color: var(--maroon);
+  background: color-mix(in srgb, var(--maroon) 14%, var(--panel));
 }
 
 .ds-input:focus,
 .ds-select:focus {
   outline: none;
-  border-color: var(--safety-blue);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--safety-blue) 28%, transparent);
+  border-color: var(--maroon);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--maroon) 28%, transparent);
 }
 
 .ds-field__help {
@@ -736,7 +736,7 @@ body {
 
 .ds-field__error {
   font-size: var(--font-size-sm);
-  color: var(--emergency-red);
+  color: var(--hazard-red);
 }
 
 .ds-btn:active:not(:disabled) {
@@ -749,7 +749,7 @@ body {
 }
 
 .ds-timeline__item::before {
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--safety-blue) 18%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--maroon) 18%, transparent);
 }
 
 @keyframes ds-fade-up {

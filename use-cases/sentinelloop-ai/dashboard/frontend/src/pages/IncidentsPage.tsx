@@ -175,7 +175,7 @@ export function IncidentsPage() {
           />
         </div>
       ) : visible.length === 0 ? (
-        <p className="ds-empty">No active incidents. All safety issues are currently resolved.</p>
+        <p className="ds-empty">No active incidents. All safety conditions are currently stable.</p>
       ) : (
         <>
           <div className="ds-table-wrap">

@@ -44,19 +44,23 @@ export function PredictedRiskZones({ items, lastUpdated, loading = false, inspec
             const id = item.prediction_id || `${item.location}-${item.category}`;
             return (
               <li key={id} className="ds-predict__card">
-                <p className="ds-predict__kicker">⚠ {item.location}</p>
+                <p className="ds-predict__kicker">Predicted Risk Zone</p>
+                <p>
+                  <strong>{item.location}</strong>
+                </p>
                 <p>
                   {item.category} Hazard
                 </p>
                 <p className="ds-mono">
-                  {item.incident_count} reports in {item.span_days || 30} days
+                  {item.incident_count} incidents in {item.span_days || 30} days
                 </p>
                 <p>
                   Trend: {item.trend === "increasing" ? "Increasing" : "Stable"}
                 </p>
                 <p>{item.reason}</p>
                 <p>
-                  <strong>Recommendation:</strong> {item.recommendation}
+                  <strong>Inspection Recommended</strong>
+                  {item.recommendation ? ` · ${item.recommendation}` : ""}
                 </p>
                 <div className="ds-predict__actions">
                   <Button

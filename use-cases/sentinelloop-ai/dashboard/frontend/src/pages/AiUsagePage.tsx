@@ -42,25 +42,26 @@ export function AiUsagePage() {
         <>
           <div className="ds-grid ds-grid--metrics">
             <Card variant="analytics-card">
-              <p className="ds-metric__label">Text Cost</p>
+              <p className="ds-metric__label">Model Calls</p>
               <p className="ds-metric__value">{money(usage?.text_cost_usd)}</p>
             </Card>
             <Card variant="analytics-card">
-              <p className="ds-metric__label">Vision Cost</p>
+              <p className="ds-metric__label">Budget Usage</p>
+              <p className="ds-metric__value">{money(usage?.total_cost_usd)}</p>
+            </Card>
+            <Card variant="analytics-card">
+              <p className="ds-metric__label">Vision Reports</p>
               <p className="ds-metric__value">{money(usage?.vision_cost_usd)}</p>
             </Card>
             <Card variant="analytics-card">
-              <p className="ds-metric__label">Voice Cost</p>
+              <p className="ds-metric__label">Voice Reports</p>
               <p className="ds-metric__value">{money(usage?.voice_cost_usd)}</p>
-            </Card>
-            <Card variant="analytics-card">
-              <p className="ds-metric__label">Remaining Budget</p>
-              <p className="ds-metric__value">{money(usage?.remaining_budget_usd)}</p>
             </Card>
           </div>
           <Panel title="Budget" style={{ marginTop: 24 }}>
             <p>Total spend: {money(usage?.total_cost_usd)}</p>
             <p>Ceiling: {money(usage?.budget_ceiling_usd)}</p>
+            <p>Remaining: {money(usage?.remaining_budget_usd)}</p>
           </Panel>
         </>
       )}

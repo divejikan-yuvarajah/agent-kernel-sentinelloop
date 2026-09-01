@@ -33,20 +33,30 @@ export function EvidenceViewer({ items, renderImage }: Props) {
               </p>
             ) : null}
             <p style={{ margin: "4px 0 0", fontSize: "var(--font-size-sm)" }}>{item.label}</p>
-            <p className="ds-mono" style={{ margin: "8px 0 0", fontSize: "var(--font-size-xs)", color: "var(--chalk-muted)" }}>
+            <p className="ds-mono" style={{ margin: "8px 0 0", fontSize: "var(--font-size-xs)", color: "var(--muted)" }}>
               {item.timestamp}
             </p>
-            <p style={{ margin: "4px 0 0", fontSize: "var(--font-size-xs)", color: "var(--chalk-muted)" }}>
+            <p style={{ margin: "4px 0 0", fontSize: "var(--font-size-xs)", color: "var(--muted)" }}>
               Source: {item.channel || item.source}
             </p>
             {item.kind === "voice" ? (
-              <p style={{ margin: "4px 0 0", fontSize: "var(--font-size-xs)", color: "var(--chalk-muted)" }}>Type: Voice Evidence</p>
+              <p style={{ margin: "4px 0 0", fontSize: "var(--font-size-xs)", color: "var(--muted)" }}>Type: Voice Evidence</p>
             ) : item.kind === "image" ? (
-              <p style={{ margin: "4px 0 0", fontSize: "var(--font-size-xs)", color: "var(--chalk-muted)" }}>Type: Image Evidence</p>
+              <p style={{ margin: "4px 0 0", fontSize: "var(--font-size-xs)", color: "var(--muted)" }}>Type: Image Evidence</p>
             ) : null}
             {item.uploaded_by ? (
-              <p style={{ margin: "4px 0 0", fontSize: "var(--font-size-xs)", color: "var(--chalk-muted)" }}>Uploader: {item.uploaded_by}</p>
+              <p style={{ margin: "4px 0 0", fontSize: "var(--font-size-xs)", color: "var(--muted)" }}>Uploader: {item.uploaded_by}</p>
             ) : null}
+            <p
+              className="ds-mono"
+              style={{
+                margin: "8px 0 0",
+                fontSize: "var(--font-size-xs)",
+                color: item.stage === "verification" ? "var(--verified-teal)" : "var(--signal-amber)",
+              }}
+            >
+              {item.stage === "verification" ? "Verified" : "Pending Verification"}
+            </p>
           </div>
         </Card>
       ))}

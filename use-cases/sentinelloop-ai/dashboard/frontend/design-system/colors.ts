@@ -1,14 +1,20 @@
 export const colors = {
-  ink: "#1C2024",
-  panel: "#262B31",
-  chalk: "#F2F0EA",
-  signalAmber: "#E8A33D",
-  emberOrange: "#C9642E",
-  hazardRed: "#D64545",
+  ink: "#FFFFFF",
+  panel: "#FFFFFF",
+  panelRaised: "#F6F1F0",
+  chalk: "#1F1114",
+  muted: "#7A5C5A",
+  maroon: "#7C1F2E",
+  maroonDeep: "#5C1620",
   verifiedTeal: "#3FA796",
-  chalkMuted: "#B7B5AE",
-  border: "#3A4047",
+  signalAmber: "#E0A83D",
+  emberOrange: "#C9642E",
+  hazardRed: "#E63946",
+  onBrand: "#FFFFFF",
 } as const;
+
+/** @deprecated Use colors.muted */
+export const chalkMuted = colors.muted;
 
 export type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type IncidentStatusKey = "OPEN" | "INVESTIGATING" | "VERIFIED" | "RESOLVED";

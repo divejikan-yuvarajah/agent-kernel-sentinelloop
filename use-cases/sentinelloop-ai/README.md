@@ -185,15 +185,18 @@ Rather than hardcoding a single LLM provider, SentinelLoop routes every call thr
 
 | Token | Hex | Use |
 |---|---|---|
-| `--ink` | `#1C2024` | Primary background |
-| `--panel` | `#262B31` | Card / surface |
-| `--chalk` | `#F2F0EA` | Text on dark |
-| `--signal-amber` | `#E8A33D` | Medium risk |
+| `--ink` | `#FFFFFF` | Primary background |
+| `--panel` | `#FFFFFF` | Card / surface |
+| `--panel-raised` | `#F6F1F0` | Elevated cards |
+| `--chalk` | `#1F1114` | Text on light |
+| `--muted` | `#7A5C5A` | Secondary text |
+| `--maroon` | `#7C1F2E` | Brand, primary actions, active nav |
+| `--signal-amber` | `#E0A83D` | Attention / medium risk |
 | `--ember-orange` | `#C9642E` | High risk |
-| `--hazard-red` | `#D64545` | Critical risk **only** |
+| `--hazard-red` | `#E63946` | Critical risk **only** |
 | `--verified-teal` | `#3FA796` | Low risk / resolved |
 
-Typography: `Space Grotesk` (headers/KPIs), `IBM Plex Sans` (UI text), `IBM Plex Mono` (incident IDs, timestamps, risk scores). Saturated color appears **only** to indicate risk or resolution state. Signature element: a radial "Loop" ring (Report → Understand → Assess → Alert → Act → Verify → Learn) on the dashboard home screen.
+Typography: `Space Grotesk` (headers/KPIs), `IBM Plex Sans` (UI text), `IBM Plex Mono` (incident IDs, timestamps, risk scores). Maroon is brand. Saturated risk color appears **only** to indicate risk, attention, emergency, or resolution. Signature element: a radial "Loop" ring (Report → Understand → Assess → Alert → Act → Verify → Learn) on the dashboard home screen.
 
 ---
 

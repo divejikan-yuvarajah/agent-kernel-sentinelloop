@@ -108,25 +108,26 @@
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
-  color: var(--chalk-muted);
+  background: var(--panel);
+  color: var(--chalk);
   font-size: var(--font-size-sm);
 }
 
 .ds-nav__link:hover {
   color: var(--chalk);
-  background: var(--panel);
+  background: var(--panel-raised);
 }
 
 .ds-nav__link[aria-current="page"] {
-  color: var(--chalk);
-  background: var(--panel);
-  border-color: var(--border);
+  color: var(--on-brand);
+  background: var(--maroon);
+  border-color: var(--maroon-deep);
 }
 
 .ds-nav__link--emergency[aria-current="page"] {
-  color: var(--signal-red);
-  background: color-mix(in srgb, var(--signal-red) 14%, var(--panel));
-  border-color: color-mix(in srgb, var(--signal-red) 45%, var(--border));
+  color: var(--on-brand);
+  background: var(--hazard-red);
+  border-color: var(--hazard-red);
 }
 
 .ds-nav__text {
@@ -183,7 +184,7 @@
   flex-shrink: 0;
   padding: 0 var(--space-5);
   border-bottom: 1px solid var(--border);
-  background: var(--ink);
+  background: var(--panel);
   overflow: hidden;
 }
 
@@ -192,6 +193,28 @@
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
+}
+
+.ds-header__mark {
+  display: block;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: contain;
+}
+
+.ds-header__brand-block {
+  min-width: 0;
+}
+
+.ds-header__subtitle {
+  margin: 2px 0 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .ds-header__menu {
@@ -367,13 +390,13 @@
   height: 8px;
   background: var(--ink);
   border: 1px solid var(--border);
-  border-radius: 99px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .ds-share__fill {
   height: 100%;
-  background: var(--chalk-muted);
+  background: var(--maroon);
 }
 
 .ds-slack {
@@ -486,7 +509,7 @@
 
 .ds-chart__bar {
   width: 100%;
-  background: var(--chalk-muted);
+  background: var(--maroon);
   border-radius: 1px 1px 0 0;
 }
 
@@ -569,7 +592,7 @@
     transform: translateX(-105%);
     transition: transform var(--transition-duration) var(--transition-timing);
     border-right: 1px solid var(--border);
-    box-shadow: 8px 0 24px color-mix(in srgb, #000 35%, transparent);
+    box-shadow: 8px 0 24px color-mix(in srgb, var(--ink) 65%, transparent);
   }
 
   .ds-shell--nav-open .ds-sidebar {
@@ -703,24 +726,24 @@
   display: inline-block;
   margin-left: 0.35rem;
   padding: 0.1rem 0.45rem;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .ds-confidence--high {
-  color: var(--ink);
+  color: var(--on-brand);
   background: var(--verified-teal);
 }
 
 .ds-confidence--medium {
-  color: var(--ink);
+  color: var(--chalk);
   background: var(--signal-amber);
 }
 
 .ds-confidence--low {
-  color: #fff;
+  color: var(--on-brand);
   background: var(--hazard-red);
 }
 
@@ -734,15 +757,15 @@
 }
 
 .ds-emergency-card {
-  border: 1px solid var(--signal-red);
-  background: color-mix(in srgb, var(--signal-red) 16%, var(--panel));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--signal-red) 45%, transparent);
+  border: 1px solid var(--hazard-red);
+  background: color-mix(in srgb, var(--hazard-red) 16%, var(--panel));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--hazard-red) 45%, transparent);
 }
 
 .ds-emergency-card h3,
 .ds-emergency-card .ds-metric__value,
 .ds-emergency-kicker {
-  color: var(--signal-red);
+  color: var(--hazard-red);
 }
 
 .ds-emergency-kicker {
@@ -770,7 +793,7 @@
 
 .ds-emergency-timeline time {
   font-family: var(--font-mono);
-  color: var(--signal-red);
+  color: var(--hazard-red);
 }
 
 .ds-table-wrap {
@@ -798,11 +821,12 @@
 }
 
 .ds-emergency-table th {
-  color: var(--chalk-muted);
+  color: var(--muted);
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  background: var(--panel-raised);
 }
 
 @media (max-width: 720px) {
