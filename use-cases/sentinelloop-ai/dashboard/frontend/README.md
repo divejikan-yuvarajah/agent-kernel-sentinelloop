@@ -23,6 +23,23 @@ npm run dev      # http://localhost:5173  (proxies /api to port 8000)
 npm run build
 ```
 
+## Vercel (frontend)
+
+The React dashboard deploys as a static Vite site. Demo mode works without the Python API.
+
+```bash
+cd use-cases/sentinelloop-ai/dashboard/frontend
+npm run build
+npx vercel --prod
+```
+
+Production project: `sentinelloop-dashboard`  
+Live URL: https://sentinelloop-dashboard.vercel.app
+
+`vercel.json` sets SPA rewrites so routes like `/incidents` resolve to `index.html`.
+
+The FastAPI agents, Telegram bot, Slack, and Supabase API are **not** hosted on Vercel — run those separately and point `/api` at that backend when demo mode is off.
+
 ## Routes
 
 - `/` Public marketing landing
