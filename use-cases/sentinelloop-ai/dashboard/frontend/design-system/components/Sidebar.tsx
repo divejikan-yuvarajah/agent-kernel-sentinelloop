@@ -20,9 +20,13 @@ export function Sidebar({ collapsed = false, onToggleCollapsed, onNavigate }: Pr
   return (
     <aside className="ds-sidebar" aria-label="Primary">
       <div className="ds-sidebar__brand">
-        <span className="ds-sidebar__mark" aria-hidden="true">
-          SL
-        </span>
+        <img
+          className="ds-sidebar__mark"
+          src="/images/sentinelloop-logo.png"
+          alt=""
+          width={44}
+          height={44}
+        />
         <div className="ds-sidebar__copy">
           SentinelLoop
           <span>COMMAND CENTER</span>

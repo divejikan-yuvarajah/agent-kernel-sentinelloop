@@ -84,16 +84,13 @@ body {
 }
 
 .ds-sidebar__mark {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
+  display: block;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
-  border-radius: 10px;
-  background: var(--safety-blue);
-  color: #fff;
-  font-family: var(--font-display);
-  font-weight: 700;
+  border-radius: 50%;
+  background: transparent;
+  object-fit: contain;
 }
 
 .ds-sidebar__copy {
