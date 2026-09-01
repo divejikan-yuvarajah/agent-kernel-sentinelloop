@@ -31,6 +31,7 @@ from dashboard.schemas import (
     AuditRiskAnalysis,
     AuditTimelineEvent,
     AuditVisionSuggestion,
+    AuditVoiceReport,
     ExtractedField,
 )
 from dashboard.service import (
@@ -570,6 +571,49 @@ def _emergency_bypass(incident: Incident, updates: list[IncidentUpdate]) -> Audi
     )
 
 
+def _voice_meta(updates: list) -> dict[str, Any]:
+    for update in updates:
+        meta = _meta(update)
+        if meta.get("voice_used") or meta.get("audio_used") or (update.update_type or "") == "voice_report":
+            return meta
+    return {}
+
+
+def _voice_input_method(updates: list) -> str | None:
+    return "Voice" if _voice_meta(updates) else "Text"
+
+
+def _voice_audit(incident: Incident, updates: list) -> AuditVoiceReport | None:
+    from tools.voice_tools import confidence_band, language_display_name
+
+    meta = _voice_meta(updates)
+    if not meta:
+        return None
+    language = str(meta.get("detected_language") or incident.detected_language or "") or None
+    cost = _as_float(meta.get("transcription_cost"))
+    confidence = _as_float(meta.get("transcription_confidence"))
+    band = confidence_band(confidence)
+    label = None
+    if confidence is not None and band:
+        label = f"{band.capitalize()} confidence {round(confidence * 100)}%"
+    override = "No"
+    for update in updates:
+        row = _meta(update)
+        if row.get("override_reason") or row.get("human_override"):
+            override = "Yes"
+            break
+    return AuditVoiceReport(
+        input_method="Voice",
+        audio_language=language_display_name(language) or language,
+        transcription=redact_text(incident.hazard_description or incident.original_message_text),
+        ai_cost=f"${cost:.3f}" if cost is not None else None,
+        human_override=override,
+        duration_seconds=_as_float(meta.get("duration_seconds")),
+        confidence_label=label,
+        audio_format=str(meta.get("audio_format") or "ogg"),
+    )
+
+
 def build_audit_export(
     *,
     incident: Incident,
@@ -609,6 +653,7 @@ def build_audit_export(
                 incident.reporter_id, is_anonymous=bool(getattr(incident, "is_anonymous", False))
             ),
             communication_channel=channel,
+            input_method=_voice_input_method(ordered),
         ),
         language_processing=AuditLanguageProcessing(
             detected_language=incident.detected_language,
@@ -621,6 +666,7 @@ def build_audit_export(
         ai_decision=_ai_decision(incident, assessment, ordered),
         vision_suggestion=_vision_suggestion(incident, ordered),
         emergency_bypass=_emergency_bypass(incident, ordered),
+        voice_report=_voice_audit(incident, ordered),
         risk_analysis=_risk_analysis(incident, assessment),
         guidance_history=_guidance(ordered),
         coordination_history=_coordination(ordered),

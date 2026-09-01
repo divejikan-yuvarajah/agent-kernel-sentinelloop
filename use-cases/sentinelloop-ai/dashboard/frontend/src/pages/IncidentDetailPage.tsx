@@ -289,9 +289,28 @@ export function IncidentDetailPage() {
             ) : null}
             {detail.voice_report ? (
               <Panel title="🎤 Voice Report" style={{ marginBottom: 24 }}>
+                <p>
+                  Language: {detail.voice_report.language_name || detail.voice_report.language || detail.language || "—"}
+                </p>
                 <p>Duration: {detail.voice_report.duration_seconds ?? "—"} seconds</p>
-                <p>Language: {detail.voice_report.language ?? detail.language ?? "—"}</p>
                 <p>Transcript: {detail.voice_report.transcript ? `"${detail.voice_report.transcript}"` : "—"}</p>
+                {detail.voice_report.confidence_label ? (
+                  <p>Voice Understanding: {detail.voice_report.confidence_label}</p>
+                ) : null}
+                <p>AI Processing: {detail.voice_report.processing_status || "Completed"}</p>
+                <div style={{ marginTop: 16 }}>
+                  <p style={{ marginBottom: 8 }}>▶ Play Voice Report</p>
+                  {detail.voice_report.playback_url ? (
+                    <audio controls src={detail.voice_report.playback_url} preload="none">
+                      Voice report
+                    </audio>
+                  ) : (
+                    <p className="ds-mono">
+                      00:{String(Math.round(detail.voice_report.duration_seconds ?? 18)).padStart(2, "0")}
+                    </p>
+                  )}
+                  <p style={{ marginTop: 8 }}>Uploaded by: {detail.voice_report.uploaded_by || "Worker"}</p>
+                </div>
               </Panel>
             ) : null}
             {detail.equipment || detail.people_exposed != null ? (

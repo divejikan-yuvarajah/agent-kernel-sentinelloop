@@ -30,6 +30,10 @@ log = logging.getLogger("sentinelloop.model_router")
 
 MODELS_URL = "https://openrouter.ai/api/v1/models"
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
+TRANSCRIPTIONS_URL = "https://openrouter.ai/api/v1/audio/transcriptions"
+DEFAULT_AUDIO_MODEL = "openai/whisper-large-v3"
+DEFAULT_AUDIO_ESTIMATED_COST_USD = Decimal("0.002")
+BUDGET_BLOCK_REASON = "AI budget ceiling reached"
 
 ROLE_FAST = "role_fast"
 ROLE_REASONING = "role_reasoning"
@@ -210,6 +214,24 @@ def _decimal_env(name: str) -> Decimal | None:
     if value < _ZERO:
         raise ModelRouterConfigError(f"{name} must be a non-negative number")
     return value
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _cost_from_transcription_usage(usage: dict[str, Any], fallback: Decimal) -> Decimal:
+    for key in ("cost", "total_cost", "cost_usd"):
+        raw = usage.get(key)
+        parsed = _optional_float(raw)
+        if parsed is not None and parsed >= 0:
+            return Decimal(str(parsed))
+    return fallback
 
 
 def _estimate_prompt_tokens(messages: list[dict[str, Any]]) -> int:
@@ -523,6 +545,7 @@ class ModelRouter:
                 "request_count": 0,
                 "paid_call_count": 0,
                 "per_model_spend_usd": {},
+                "per_type_spend_usd": {},
                 "recent_calls": [],
             }
             _atomic_write_json(self._ledger_path, self._ledger)
@@ -742,6 +765,140 @@ class ModelRouter:
         paid = [m for m in self._paid_chain(role, modalities) if not self._on_circuit(m.id)]
         return free, paid
 
+    def estimated_audio_cost(self, duration_seconds: float | None = None) -> Decimal:
+        configured = _decimal_env("OPENROUTER_AUDIO_ESTIMATED_COST_USD")
+        if configured is not None:
+            return configured
+        if duration_seconds is not None and duration_seconds > 0:
+            minutes = Decimal(str(duration_seconds)) / Decimal("60")
+            return max(Decimal("0.001"), minutes * Decimal("0.006"))
+        return DEFAULT_AUDIO_ESTIMATED_COST_USD
+
+    def _audio_model_id(self) -> str:
+        return (os.environ.get("OPENROUTER_AUDIO_MODEL") or "").strip() or DEFAULT_AUDIO_MODEL
+
+    def _audio_timeout(self) -> float:
+        raw = os.environ.get("OPENROUTER_AUDIO_TIMEOUT")
+        if raw is None or str(raw).strip() == "":
+            return min(self._timeout, 20.0)
+        try:
+            value = float(str(raw).strip())
+        except (TypeError, ValueError):
+            return min(self._timeout, 20.0)
+        return value if value > 0 else min(self._timeout, 20.0)
+
+    async def preflight_audio(self, estimated: Decimal) -> tuple[bool, Decimal]:
+        """Return (allowed, estimated). Must run before the transcription HTTP call."""
+        async with self._ledger_lock:
+            if self._budget_ceiling is None or self._ledger_corrupt:
+                return False, estimated
+            if self._cumulative + self._reserved + estimated > self._budget_ceiling:
+                return False, estimated
+        return True, estimated
+
+    async def transcribe_audio(
+        self,
+        *,
+        audio_base64: str,
+        audio_format: str,
+        language_hint: str | None = None,
+        duration_seconds: float | None = None,
+    ) -> Any:
+        """POST OpenRouter /audio/transcriptions and record spend. Never invents text."""
+        from tools.voice_tools import BUDGET_BLOCK_REASON, TranscriptionResult
+
+        model_id = self._audio_model_id()
+        estimated = self.estimated_audio_cost(duration_seconds)
+        allowed, _projected = await self.preflight_audio(estimated)
+        if not allowed:
+            log.info("[model-router] audio transcription refused (budget)")
+            return TranscriptionResult(
+                audio_format=audio_format,
+                blocked=True,
+                reason=BUDGET_BLOCK_REASON,
+                error="budget_exceeded",
+                model=model_id,
+            )
+
+        payload: dict[str, Any] = {"audio": audio_base64, "format": audio_format}
+        if language_hint:
+            payload["language"] = language_hint
+        started = time.monotonic()
+        try:
+            response = await self._client.post(
+                TRANSCRIPTIONS_URL,
+                headers=self._headers(),
+                json=payload,
+                timeout=self._audio_timeout(),
+            )
+        except httpx.TimeoutException:
+            log.warning("[model-router] audio transcription timeout")
+            return TranscriptionResult(audio_format=audio_format, error="timeout", model=model_id)
+        except httpx.HTTPError:
+            log.warning("[model-router] audio transcription transport failed")
+            return TranscriptionResult(audio_format=audio_format, error="transcription_failed", model=model_id)
+
+        latency = time.monotonic() - started
+        if response.status_code in {401, 403}:
+            raise ModelRouterAuthError("OpenRouter rejected OPENROUTER_API_KEY")
+        if response.status_code >= 400:
+            log.info("[model-router] audio transcription HTTP %s", response.status_code)
+            return TranscriptionResult(
+                audio_format=audio_format,
+                error="transcription_failed",
+                model=model_id,
+                latency_s=latency,
+            )
+        try:
+            body = response.json()
+        except ValueError:
+            return TranscriptionResult(
+                audio_format=audio_format,
+                error="transcription_failed",
+                model=model_id,
+                latency_s=latency,
+            )
+        if not isinstance(body, dict):
+            return TranscriptionResult(
+                audio_format=audio_format,
+                error="transcription_failed",
+                model=model_id,
+                latency_s=latency,
+            )
+        text = str(body.get("text") or body.get("transcript") or "").strip()
+        language = body.get("language") or body.get("detected_language")
+        lang = str(language).strip().lower() if language else None
+        confidence = _optional_float(body.get("confidence") or body.get("transcription_confidence"))
+        usage = body.get("usage") if isinstance(body.get("usage"), dict) else {}
+        served = body.get("model") if isinstance(body.get("model"), str) else model_id
+        cost = _cost_from_transcription_usage(usage, estimated)
+        if text:
+            await self._commit_paid(served, cost, _ZERO, kind="audio")
+            await self._note_recent_call(
+                role="audio_transcription",
+                model=served,
+                latency_s=latency,
+                usage=usage,
+                cost=cost,
+                paid=True,
+                call_type="audio_transcription",
+            )
+            self._maybe_budget_warning()
+        else:
+            log.info("[model-router] audio transcription empty; not charging")
+        return TranscriptionResult(
+            text=text,
+            detected_language=lang,
+            language=lang,
+            cost_usd=float(cost) if text else 0.0,
+            available=bool(text),
+            audio_format=audio_format,
+            error=None if text else "empty_transcript",
+            transcription_confidence=confidence,
+            model=served,
+            latency_s=round(latency, 3),
+        )
+
     async def call_model(self, role: str, messages: list, **kwargs: Any) -> ModelCallResult:
         await self.ensure_catalog()
         if role not in REQUIRED_ROLES:
@@ -928,7 +1085,9 @@ class ModelRouter:
             served = body.get("model") if isinstance(body.get("model"), str) else model.id
             cost = self._cost_for_response(model, usage, gen, messages, paid=paid)
             if paid:
-                await self._commit_paid(model.id, cost, reservation)
+                await self._commit_paid(
+                    model.id, cost, reservation, kind="vision" if role == ROLE_VISION else "text"
+                )
             else:
                 if reservation:
                     await self._release(reservation)
@@ -1029,7 +1188,9 @@ class ModelRouter:
         async with self._ledger_lock:
             self._reserved = max(_ZERO, self._reserved - reservation)
 
-    async def _commit_paid(self, model_id: str, actual: Decimal, reservation: Decimal) -> None:
+    async def _commit_paid(
+        self, model_id: str, actual: Decimal, reservation: Decimal, *, kind: str = "text"
+    ) -> None:
         async with self._ledger_lock:
             self._reserved = max(_ZERO, self._reserved - reservation)
             self._cumulative += actual
@@ -1038,6 +1199,9 @@ class ModelRouter:
             per = dict(self._ledger.get("per_model_spend_usd") or {})
             per[model_id] = str(Decimal(str(per.get(model_id, "0"))) + actual)
             self._ledger["per_model_spend_usd"] = per
+            types = dict(self._ledger.get("per_type_spend_usd") or {})
+            types[kind] = str(Decimal(str(types.get(kind, "0"))) + actual)
+            self._ledger["per_type_spend_usd"] = types
             prices = dict(self._ledger.get("price_snapshots") or {})
             model = self._catalog.get(model_id)
             if model is not None:
@@ -1064,22 +1228,28 @@ class ModelRouter:
         usage: dict[str, Any] | None,
         cost: Decimal,
         paid: bool,
+        call_type: str | None = None,
     ) -> None:
         usage_safe = {
             "prompt_tokens": (usage or {}).get("prompt_tokens"),
             "completion_tokens": (usage or {}).get("completion_tokens"),
             "total_tokens": (usage or {}).get("total_tokens"),
         }
+        kind = call_type or ("vision" if role == ROLE_VISION else "text")
         entry = {
             "timestamp": _now_iso(),
+            "type": "audio_transcription" if kind in {"audio", "audio_transcription"} else kind,
             "model": model,
             "model_role": role,
             "latency_s": round(float(latency_s), 3),
             "token_usage": usage_safe,
-            "cost_usd": str(cost),
+            "cost_usd": float(cost) if kind in {"audio", "audio_transcription"} else str(cost),
             "paid": paid,
             "tier": "PAID" if paid else "FREE",
         }
+        if kind in {"audio", "audio_transcription"}:
+            entry["type"] = "audio_transcription"
+            entry["cost_usd"] = float(cost)
         async with self._ledger_lock:
             calls = list(self._ledger.get("recent_calls") or [])
             calls.append(entry)

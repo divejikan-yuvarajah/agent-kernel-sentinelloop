@@ -790,8 +790,14 @@ class IncidentOrchestrator:
             intake_data["skip_clarification"] = True
         if getattr(message, "voice_used", False):
             intake_data["voice_used"] = True
+            intake_data["audio_used"] = True
+            intake_data["input_method"] = "voice"
             intake_data["audio_format"] = message.audio_format or "ogg"
             intake_data["transcription_available"] = bool(message.transcription_available)
+            intake_data["detected_language"] = message.detected_language
+            intake_data["transcription_cost"] = message.transcription_cost
+            intake_data["transcription_confidence"] = message.transcription_confidence
+            intake_data["duration_seconds"] = message.voice_duration_seconds
         if getattr(message, "media_unavailable", False):
             intake_data["media_unavailable"] = True
         intake_data["input_channel"] = self._channel(message)
@@ -960,15 +966,25 @@ class IncidentOrchestrator:
         await self._persist_vision_audit(merged)
         evidence_attached = await self.persist_initial_evidence(message, session, merged)
         if getattr(message, "voice_used", False):
+            source_label = "WhatsApp" if self._channel(message) == "whatsapp" else "Telegram"
             await self._audit(
                 merged,
                 "voice_report",
+                message="Voice message received",
                 metadata={
                     "voice_used": True,
+                    "audio_used": True,
+                    "input_method": "voice",
                     "audio_format": message.audio_format or "ogg",
                     "transcription_available": bool(message.transcription_available),
                     "duration_seconds": message.voice_duration_seconds,
+                    "detected_language": message.detected_language or merged.get("language"),
+                    "transcription_cost": message.transcription_cost,
+                    "transcription_confidence": message.transcription_confidence,
+                    "transcription_latency_s": message.transcription_latency_s,
                     "input_channel": self._channel(message),
+                    "source": source_label,
+                    "type": "audio",
                 },
             )
         if persist_error and not merged.get("incident_id"):
@@ -1179,13 +1195,14 @@ class IncidentOrchestrator:
             self._processed_evidence.add(mid)
             return True
         mime = blob.get("mime_type") or "image/jpeg"
+        is_audio = isinstance(mime, str) and ("audio" in mime or mime.startswith("audio/"))
         try:
             self.repository.add_evidence(
                 EvidenceFile(content=content, filename=None, content_type=mime),
                 incident_uuid,
                 "report",
                 metadata=EvidenceCreate(
-                    evidence_type="before",
+                    evidence_type="audio" if is_audio else "before",
                     source=blob.get("input_channel") or merged.get("input_channel") or "whatsapp",
                     caption_or_description=blob.get("caption") or merged.get("translated_text"),
                     external_message_id=mid,

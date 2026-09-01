@@ -205,7 +205,7 @@ Typography: `Space Grotesk` (headers/KPIs), `IBM Plex Sans` (UI text), `IBM Plex
 * 🆘 **Deterministic emergency bypass** — "SOS"/🆘 in any supported language triggers an instant, hardcoded Critical alert with **zero LLM calls** in the critical path.
 * 📈 **Predictive hazard forecasting** — recurring category+location patterns surface as "recommend inspection before next shift," turning the system reactive → preventive.
 * 🖼️ **Vision-based triage** — a hazard photo with little/no caption still gets a category suggestion via a vision-capable model.
-* 🎙️ **Voice message reporting** — Telegram voice notes transcribed via OpenRouter's unified audio endpoint, in the worker's own language.
+* 🎙️ **Voice message reporting** — WhatsApp and Telegram voice notes transcribed via OpenRouter's unified audio endpoint, in the worker's own language, with spend tracked against the same OpenRouter budget ceiling as text and vision.
 * 🗒️ **Automated shift handover briefings** — `handover_agent` collects open/critical/review/overdue incidents, calls `role_fast` **once** to phrase a bullet briefing, stores it in `handover_summaries`, and posts it to the Slack Safety Channel. Judges can trigger **Generate Shift Handover** from the dashboard. Agent Kernel has no in-process cron/scheduler, so automatic shift-end jobs are not wired here.
 
 ```

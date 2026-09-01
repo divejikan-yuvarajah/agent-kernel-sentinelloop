@@ -82,12 +82,12 @@ features:
   whatsapp: true
   slack: true
   multimodal_images: true
-  voice_reports: false
+  voice_reports: true
   worker_verification: true
   dashboard: true
   semantic_duplicate_detection: false
   slack_interactions: false
-  voice_transcription: false
+  voice_transcription: true
   visual_hazard_analysis: true
   analytics_dashboard: false
 
@@ -179,6 +179,13 @@ guardrails:
     - image/gif
     - image/heic
     - image/heif
+    - audio/ogg
+    - audio/opus
+    - audio/mpeg
+    - audio/wav
+    - audio/mp4
+    - audio/m4a
+    - audio/webm
   forbidden_media_suffixes:
     - .exe
     - .bat

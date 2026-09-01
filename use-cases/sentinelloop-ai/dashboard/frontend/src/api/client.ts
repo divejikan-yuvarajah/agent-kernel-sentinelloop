@@ -103,11 +103,22 @@ export type IncidentDetail = {
   severity?: number | null;
   likelihood?: number | null;
   input_channel?: string | null;
+  input_method?: string | null;
   voice_report?: {
     duration_seconds?: number | null;
     language?: string | null;
+    language_name?: string | null;
     transcript?: string | null;
     audio_format?: string | null;
+    input_method?: string;
+    audio_used?: boolean;
+    transcription_cost?: number | null;
+    transcription_confidence?: number | null;
+    confidence_label?: string | null;
+    processing_status?: string;
+    playback_url?: string | null;
+    uploaded_by?: string;
+    source?: string | null;
   } | null;
   vision?: {
     hazard_category: string | null;
@@ -212,6 +223,20 @@ export function fetchAnalyticsSummary() {
   return getJson<AnalyticsSummary>("/analytics/summary");
 }
 
+export type AiUsageBreakdown = {
+  text_cost_usd: number;
+  vision_cost_usd: number;
+  voice_cost_usd: number;
+  total_cost_usd: number;
+  remaining_budget_usd: number | null;
+  budget_ceiling_usd: number | null;
+};
+
+export function fetchAiUsage() {
+  if (isDemoMode()) return demo.fetchAiUsage();
+  return getJson<AiUsageBreakdown>("/ai-usage");
+}
+
 export function fetchRecurring() {
   if (isDemoMode()) return demo.fetchRecurring();
   return getJson<{ items: RecurringHazard[] }>("/analytics/recurring");
@@ -258,6 +283,7 @@ export type AuditExport = {
     received_at: string | null;
     worker_identifier: string | null;
     communication_channel: string | null;
+    input_method?: string | null;
   };
   language_processing: {
     detected_language: string | null;
@@ -332,6 +358,16 @@ export type AuditExport = {
     detection_time: string | null;
     bypass_used: boolean;
     normal_ai_delayed: boolean;
+  } | null;
+  voice_report?: {
+    input_method: string;
+    audio_language: string | null;
+    transcription: string | null;
+    ai_cost: string | null;
+    human_override: string;
+    duration_seconds: number | null;
+    confidence_label: string | null;
+    audio_format: string | null;
   } | null;
   resolution: {
     status: string | null;

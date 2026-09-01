@@ -62,6 +62,7 @@ export function AuditTrailView({ audit, onDownload }: Props) {
         <h3>2. Worker report</h3>
         <p>
           {report.source || "Channel unknown"} · {stamp(report.received_at)}
+          {report.input_method ? ` · ${report.input_method}` : ""}
         </p>
         <p className="ds-mono">{report.message || "No original message stored."}</p>
       </section>
@@ -99,6 +100,22 @@ export function AuditTrailView({ audit, onDownload }: Props) {
         ) : null}
       </section>
 
+      {audit.voice_report ? (
+        <section className="ds-audit-step">
+          <h3>Voice report</h3>
+          <dl className="ds-audit-dl">
+            <Pair label="Input Method" value={audit.voice_report.input_method} />
+            <Pair label="Audio Language" value={audit.voice_report.audio_language} />
+            <Pair
+              label="Transcription"
+              value={audit.voice_report.transcription ? `"${audit.voice_report.transcription}"` : null}
+            />
+            <Pair label="AI Cost" value={audit.voice_report.ai_cost} />
+            <Pair label="Human Override" value={audit.voice_report.human_override} />
+            <Pair label="Voice Understanding" value={audit.voice_report.confidence_label} />
+          </dl>
+        </section>
+      ) : null}
       {audit.vision_suggestion ? (
         <section className="ds-audit-step">
           <h3>AI Vision Suggestion</h3>

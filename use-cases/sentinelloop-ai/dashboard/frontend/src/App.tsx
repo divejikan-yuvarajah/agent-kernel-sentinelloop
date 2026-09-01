@@ -22,6 +22,7 @@ import { ReviewQueuePage } from "./pages/ReviewQueuePage";
 import { SafetyCenterPage } from "./pages/SafetyCenterPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TelegramBotPage } from "./pages/TelegramBotPage";
+import { AiUsagePage } from "./pages/AiUsagePage";
 
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage").then((module) => ({ default: module.AnalyticsPage })));
 const DesignSystemPage = lazy(() =>
@@ -48,6 +49,7 @@ export function App() {
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/ai-usage" element={<AiUsagePage />} />
         <Route path="/forecast/:predictionId" element={<ForecastPage />} />
         <Route path="/telegram" element={<TelegramBotPage />} />
         <Route path="/safety" element={<SafetyCenterPage />} />

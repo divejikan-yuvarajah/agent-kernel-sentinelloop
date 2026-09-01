@@ -89,6 +89,69 @@ export function AnalyticsPage() {
           />
         </Suspense>
       )}
+      <Panel title="Voice Safety Reports" style={{ marginTop: 24 }}>
+        <div className="ds-grid ds-grid--metrics">
+          <Card variant="analytics-card">
+            <p className="ds-metric__label">Voice Reports Today</p>
+            <p className="ds-metric__value">{summary?.voice_analytics?.reports_today ?? 0}</p>
+          </Card>
+          <Card variant="analytics-card">
+            <p className="ds-metric__label">Average Transcription Time</p>
+            <p className="ds-metric__value">
+              {summary?.voice_analytics?.average_transcription_seconds != null
+                ? `${summary.voice_analytics.average_transcription_seconds} sec`
+                : "—"}
+            </p>
+          </Card>
+          <Card variant="analytics-card">
+            <p className="ds-metric__label">Most Used Language</p>
+            <p className="ds-metric__value">{summary?.voice_analytics?.most_used_language ?? "—"}</p>
+          </Card>
+        </div>
+      </Panel>
+      <Panel title="Incident Sources" style={{ marginTop: 24 }}>
+        <div className="ds-share">
+          {Object.entries(summary?.voice_analytics?.incident_sources ?? { Text: 55, Voice: 30, Image: 15 }).map(
+            ([label, value]) => (
+              <div key={label} className="ds-share__row">
+                <span>{label}</span>
+                <span className="ds-share__track">
+                  <span className="ds-share__fill" style={{ width: `${Math.round(Number(value))}%` }} />
+                </span>
+                <span className="ds-mono">{value}%</span>
+              </div>
+            ),
+          )}
+        </div>
+      </Panel>
+      <Panel title="Voice reports completion rate" style={{ marginTop: 24 }}>
+        <p>Voice: {summary?.voice_analytics?.completion_rate_voice ?? "—"}%</p>
+        <p>Text: {summary?.voice_analytics?.completion_rate_text ?? "—"}%</p>
+      </Panel>
+      <Panel title="Voice Languages" style={{ marginTop: 24 }}>
+        <div className="ds-share">
+          {Object.entries(summary?.voice_analytics?.languages ?? {}).map(([label, value]) => (
+            <div key={label} className="ds-share__row">
+              <span>{label}</span>
+              <span className="ds-share__track">
+                <span className="ds-share__fill" style={{ width: `${Math.round(Number(value))}%` }} />
+              </span>
+              <span className="ds-mono">{value}%</span>
+            </div>
+          ))}
+        </div>
+      </Panel>
+      <Panel title="AI Usage Dashboard" style={{ marginTop: 24 }}>
+        <p>Text Cost: ${Number(summary?.ai_usage?.text_cost_usd ?? 0).toFixed(2)}</p>
+        <p>Vision Cost: ${Number(summary?.ai_usage?.vision_cost_usd ?? 0).toFixed(2)}</p>
+        <p>Voice Cost: ${Number(summary?.ai_usage?.voice_cost_usd ?? 0).toFixed(2)}</p>
+        <p>
+          Remaining Budget:{" "}
+          {summary?.ai_usage?.remaining_budget_usd != null
+            ? `$${summary.ai_usage.remaining_budget_usd.toFixed(2)}`
+            : "—"}
+        </p>
+      </Panel>
       <Panel title="Most reported hazard" style={{ marginTop: 24 }}>
         <div className="ds-share">
           {(summary?.category_share ?? [

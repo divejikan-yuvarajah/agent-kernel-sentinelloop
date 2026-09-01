@@ -14,20 +14,44 @@ import hashlib
 import hmac
 import logging
 from datetime import datetime, timezone
+import base64
 from typing import Any
 
 import httpx
 from pydantic import BaseModel, ConfigDict
 
 from integrations.whatsapp import WhatsAppHandler, WhatsAppSendError, extract_interactive_reply, parse_action_id
+from tools.voice_tools import (
+    VOICE_UNAVAILABLE_MESSAGE,
+    audio_format_from_mime,
+    is_low_confidence,
+    transcribe_voice_note,
+    worker_voice_fallback_message,
+)
 
 log = logging.getLogger("sentinelloop.whatsapp")
 
-SUPPORTED_TYPES = frozenset({"text", "image", "interactive"})
+SUPPORTED_TYPES = frozenset({"text", "image", "interactive", "audio", "voice"})
 UNSUPPORTED_TYPES = frozenset(
-    {"audio", "video", "sticker", "document", "location", "reaction", "contacts", "unknown", "button", "order"}
+    {"video", "sticker", "document", "location", "reaction", "contacts", "unknown", "button", "order"}
 )
 ALLOWED_IMAGE_TYPES = frozenset({"image/jpeg", "image/png", "image/webp", "image/gif", "image/jpg"})
+ALLOWED_AUDIO_TYPES = frozenset(
+    {
+        "audio/ogg",
+        "audio/opus",
+        "audio/mpeg",
+        "audio/mp3",
+        "audio/wav",
+        "audio/x-wav",
+        "audio/wave",
+        "audio/mp4",
+        "audio/m4a",
+        "audio/x-m4a",
+        "audio/aac",
+        "audio/webm",
+    }
+)
 DEFAULT_MAX_MEDIA_BYTES = 16 * 1024 * 1024
 UNSUPPORTED_WORKER_REPLY = (
     "I can take a workplace hazard report as text or a photo. Please send a short description or an image."
@@ -76,6 +100,12 @@ class NormalizedWhatsAppMessage(BaseModel):
     longitude: float | None = None
     language_code: str | None = None
     voice_duration_seconds: float | None = None
+    audio_used: bool = False
+    input_method: str | None = None
+    detected_language: str | None = None
+    transcription_cost: float | None = None
+    transcription_confidence: float | None = None
+    transcription_latency_s: float | None = None
 
 
 class ResolvedMedia(BaseModel):
@@ -156,6 +186,7 @@ def normalize_incoming_message(
     media: WhatsAppMedia | None = None
     interactive_action_id: str | None = None
     interactive_title: str | None = None
+    voice_duration: float | None = None
     supported = message_type in SUPPORTED_TYPES
 
     if message_type == "text":
@@ -177,6 +208,30 @@ def normalize_incoming_message(
             provider_reference=str(media_id) if media_id else None,
             sha256=str(sha) if sha else None,
         )
+    elif message_type in {"audio", "voice"}:
+        blob_raw = message.get("audio") if message_type == "audio" else message.get("voice")
+        if not isinstance(blob_raw, dict):
+            blob_raw = message.get("audio") if isinstance(message.get("audio"), dict) else message.get("voice")
+        blob: dict[str, Any] = blob_raw if isinstance(blob_raw, dict) else {}
+        caption_raw = blob.get("caption")
+        caption = str(caption_raw).strip() if caption_raw else None
+        text = caption
+        media_id = blob.get("id")
+        mime = _safe_mime(blob.get("mime_type")) or "audio/ogg"
+        sha = blob.get("sha256")
+        media = WhatsAppMedia(
+            media_id=str(media_id) if media_id else None,
+            mime_type=mime,
+            filename=None,
+            provider_reference=str(media_id) if media_id else None,
+            sha256=str(sha) if sha else None,
+        )
+        try:
+            voice_duration = float(blob["duration"]) if blob.get("duration") is not None else None
+        except (TypeError, ValueError):
+            voice_duration = None
+        supported = True
+        message_type = "voice"
     elif message_type == "interactive":
         parsed = extract_interactive_reply(message) or {}
         interactive_action_id = parsed.get("action") or parsed.get("id")
@@ -208,6 +263,8 @@ def normalize_incoming_message(
         interactive_title=interactive_title,
         supported=supported,
         raw_timestamp=str(message["timestamp"]) if message.get("timestamp") is not None else None,
+        voice_duration_seconds=voice_duration,
+        audio_format=audio_format_from_mime(media.mime_type) if media and message_type == "voice" else None,
     )
 
 
@@ -305,7 +362,12 @@ class WhatsAppCloudTransport(WhatsAppHandler):
             return None
         if media.content:
             mime = _safe_mime(media.mime_type)
-            if mime and mime not in ALLOWED_IMAGE_TYPES and not mime.startswith("image/"):
+            if (
+                mime
+                and mime not in ALLOWED_IMAGE_TYPES
+                and mime not in ALLOWED_AUDIO_TYPES
+                and not mime.startswith("image/")
+            ):
                 return ResolvedMedia(media_id=media_id, mime_type=mime, error="unsupported_media_type")
             if len(media.content) > self._max_media_bytes:
                 return ResolvedMedia(media_id=media_id, mime_type=mime, error="media_too_large")
@@ -345,7 +407,12 @@ class WhatsAppCloudTransport(WhatsAppHandler):
                     response = await client.get(str(media_url), headers=headers)
                     response.raise_for_status()
                     content = response.content
-            if mime and mime not in ALLOWED_IMAGE_TYPES and not mime.startswith("image/"):
+            if (
+                mime
+                and mime not in ALLOWED_IMAGE_TYPES
+                and mime not in ALLOWED_AUDIO_TYPES
+                and not mime.startswith("image/")
+            ):
                 return ResolvedMedia(media_id=media_id, mime_type=mime, error="unsupported_media_type")
             if len(content) > self._max_media_bytes:
                 return ResolvedMedia(media_id=media_id, mime_type=mime, error="media_too_large")
@@ -375,6 +442,7 @@ class SentinelLoopWhatsAppHandler(_KernelWhatsAppHandler):  # type: ignore[misc]
         transport: WhatsAppCloudTransport | None = None,
         skip_kernel_init: bool = False,
         emergency_fn: Any | None = None,
+        transcribe_fn: Any | None = None,
     ) -> None:
         if not skip_kernel_init and _KernelWhatsAppHandler is not object:
             super().__init__()
@@ -382,6 +450,7 @@ class SentinelLoopWhatsAppHandler(_KernelWhatsAppHandler):  # type: ignore[misc]
             self._log = log
         self._transport = transport or WhatsAppCloudTransport()
         self._orchestrator = orchestrator
+        self._transcribe_fn = transcribe_fn
         from guardrails.emergency_bypass import is_emergency_trigger
 
         self._emergency_fn = emergency_fn or is_emergency_trigger
@@ -399,8 +468,9 @@ class SentinelLoopWhatsAppHandler(_KernelWhatsAppHandler):  # type: ignore[misc]
         if normalized is None:
             return None
         log.info("whatsapp_inbound_received type=%s", normalized.message_type)
+        is_voice = normalized.message_type == "voice"
         raw = normalized.text or normalized.caption or ""
-        if self._emergency_fn(raw):
+        if raw and self._emergency_fn(raw):
             normalized.emergency_bypass = True
             log.info("whatsapp_emergency_bypass")
         if not normalized.supported:
@@ -418,33 +488,34 @@ class SentinelLoopWhatsAppHandler(_KernelWhatsAppHandler):  # type: ignore[misc]
             {"event_id": normalized.provider_message_id, "source": "whatsapp"},
             source="whatsapp",
         )
-        inbound = validate_worker_input(normalized.text)
-        if inbound.rejected:
-            try:
-                await self._transport.send_text_message(
-                    normalized.sender_id,
-                    "Your message is too large to process safely. Please send a shorter description.",
-                )
-            except WhatsAppSendError:
-                log.warning("whatsapp_input_guardrail_ack_failed")
-            return None
-        if normalized.media:
-            media_check = validate_media_input(
-                mime_type=normalized.media.mime_type,
-                filename=normalized.media.filename if hasattr(normalized.media, "filename") else None,
-                size_bytes=normalized.media.size_bytes if hasattr(normalized.media, "size_bytes") else None,
-                provider_id=normalized.media.media_id,
-                source="whatsapp",
-            )
-            if media_check.rejected:
+        if not is_voice:
+            inbound = validate_worker_input(normalized.text)
+            if inbound.rejected:
                 try:
                     await self._transport.send_text_message(
                         normalized.sender_id,
-                        "That attachment is not an allowed workplace photo. Please send a JPEG or PNG image.",
+                        "Your message is too large to process safely. Please send a shorter description.",
                     )
                 except WhatsAppSendError:
-                    log.warning("whatsapp_media_guardrail_ack_failed")
+                    log.warning("whatsapp_input_guardrail_ack_failed")
                 return None
+            if normalized.media:
+                media_check = validate_media_input(
+                    mime_type=normalized.media.mime_type,
+                    filename=normalized.media.filename if hasattr(normalized.media, "filename") else None,
+                    size_bytes=normalized.media.size_bytes if hasattr(normalized.media, "size_bytes") else None,
+                    provider_id=normalized.media.media_id,
+                    source="whatsapp",
+                )
+                if media_check.rejected:
+                    try:
+                        await self._transport.send_text_message(
+                            normalized.sender_id,
+                            "That attachment is not an allowed workplace photo. Please send a JPEG or PNG image.",
+                        )
+                    except WhatsAppSendError:
+                        log.warning("whatsapp_media_guardrail_ack_failed")
+                    return None
         if normalized.media and normalized.media.media_id:
             resolved = await self._transport.resolve_inbound_media(normalized.media)
             if resolved is not None and resolved.content:
@@ -453,9 +524,80 @@ class SentinelLoopWhatsAppHandler(_KernelWhatsAppHandler):  # type: ignore[misc]
                 normalized.media.size_bytes = resolved.size_bytes
             elif resolved is not None and resolved.error:
                 log.warning("whatsapp_media_skipped reason=%s", resolved.error)
+                if is_voice:
+                    try:
+                        await self._transport.send_text_message(
+                            normalized.sender_id, worker_voice_fallback_message()
+                        )
+                    except WhatsAppSendError:
+                        log.warning("whatsapp_voice_fallback_failed")
+                    return None
+
+        if is_voice:
+            transcribed = await self._transcribe_voice(normalized)
+            if transcribed is None:
+                if normalized.emergency_bypass and (normalized.caption or raw):
+                    normalized.text = normalized.caption or raw
+                    normalized.voice_used = True
+                    normalized.audio_used = True
+                    normalized.input_method = "voice"
+                else:
+                    return None
+            inbound = validate_worker_input(normalized.text)
+            if inbound.rejected:
+                try:
+                    await self._transport.send_text_message(
+                        normalized.sender_id,
+                        "Your message is too large to process safely. Please send a shorter description.",
+                    )
+                except WhatsAppSendError:
+                    log.warning("whatsapp_input_guardrail_ack_failed")
+                return None
+            if not normalized.emergency_bypass and self._emergency_fn(normalized.text or ""):
+                normalized.emergency_bypass = True
+                log.info("whatsapp_emergency_bypass")
+
         orchestrator = self._orchestrator
         if orchestrator is None:
             from integrations.incident_orchestrator import get_incident_orchestrator
 
             orchestrator = get_incident_orchestrator()
         return await orchestrator.process_incoming_whatsapp_message(normalized)
+
+    async def _transcribe_voice(self, message: NormalizedWhatsAppMessage) -> bool | None:
+        content = message.media.content if message.media else None
+        if not content:
+            try:
+                await self._transport.send_text_message(message.sender_id, VOICE_UNAVAILABLE_MESSAGE)
+            except WhatsAppSendError:
+                log.warning("whatsapp_voice_fallback_failed")
+            return None
+        encoded = base64.b64encode(content).decode("ascii")
+        fmt = audio_format_from_mime(message.media.mime_type if message.media else None)
+        result = await transcribe_voice_note(
+            encoded,
+            fmt,
+            message.language_code,
+            duration_seconds=message.voice_duration_seconds,
+            call_model_fn=self._transcribe_fn,
+        )
+        if result.blocked or not result.available or is_low_confidence(result):
+            try:
+                await self._transport.send_text_message(
+                    message.sender_id, worker_voice_fallback_message(result)
+                )
+            except WhatsAppSendError:
+                log.warning("whatsapp_voice_fallback_failed")
+            return None
+        message.text = result.text
+        message.voice_used = True
+        message.audio_used = True
+        message.input_method = "voice"
+        message.audio_format = result.audio_format or fmt
+        message.transcription_available = True
+        message.detected_language = result.detected_language or result.language
+        message.transcription_cost = result.cost_usd
+        message.transcription_confidence = result.transcription_confidence
+        message.transcription_latency_s = result.latency_s
+        message.message_type = "text"
+        return True

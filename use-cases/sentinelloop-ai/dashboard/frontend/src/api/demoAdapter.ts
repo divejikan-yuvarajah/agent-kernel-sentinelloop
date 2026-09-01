@@ -165,6 +165,25 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
     (item) => item.incident_id !== row.incident_id && item.category === row.category && item.location === row.location,
   );
   const ev = evidenceRecords.filter((item) => item.incident_id === row.incident_id);
+  const voiceEvents =
+    row.message_type === "voice"
+      ? [
+          { timestamp: clockFrom(row.created_at, 0), title: "Voice message received", detail: row.input_channel || "voice", actor: "worker" },
+          {
+            timestamp: clockFrom(row.created_at, 1),
+            title: "Audio transcribed",
+            detail: row.translated_text,
+            actor: "voice_tools",
+          },
+          {
+            timestamp: clockFrom(row.created_at, 1),
+            title: "Language detected",
+            detail: row.language,
+            actor: "voice_tools",
+          },
+          { timestamp: clockFrom(row.created_at, 2), title: "Incident created", detail: row.incident_id, actor: "incident_agent" },
+        ]
+      : [];
   const timeline = row.emergency
     ? [
         { timestamp: "10:32:01", title: "Emergency keyword detected", detail: row.emergency_trigger || "🔥", actor: "emergency_bypass" },
@@ -205,6 +224,9 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
       actor: "coordination_agent",
     },
   ];
+  if (voiceEvents.length) {
+    timeline.unshift(...voiceEvents);
+  }
   const detail: IncidentDetail = {
     incident_id: row.incident_id,
     title: row.title,
@@ -263,11 +285,22 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
       row.message_type === "voice" || row.incident_id === "INC-2026-00422"
         ? {
             duration_seconds: row.voice_duration_seconds ?? 18,
-            language: row.language,
+            language: row.language === "Sinhala" ? "si" : row.language === "Tamil" ? "ta" : "en",
+            language_name: row.language,
             transcript: row.translated_text,
             audio_format: "ogg",
+            input_method: "voice",
+            audio_used: true,
+            transcription_cost: 0.001,
+            transcription_confidence: 0.92,
+            confidence_label: "High confidence 92%",
+            processing_status: "Completed",
+            playback_url: null,
+            uploaded_by: "Worker",
+            source: row.input_channel === "telegram" ? "Telegram" : "WhatsApp",
           }
         : null,
+    input_method: row.message_type === "voice" ? "voice" : "text",
     safety_status:
       row.guidance_status === "blocked"
         ? "Guardrail Blocked"
@@ -411,6 +444,23 @@ export function fetchAnalyticsSummary(): Promise<AnalyticsSummary> {
     emergency_alerts_today: 12,
     emergency_avg_response_time: "1.8 seconds",
     active_critical_emergencies: 4,
+    voice_analytics: {
+      reports_today: 42,
+      average_transcription_seconds: 2.1,
+      most_used_language: "Sinhala",
+      languages: { Sinhala: 60, Tamil: 25, English: 15 },
+      incident_sources: { Text: 55, Voice: 30, Image: 15 },
+      completion_rate_voice: 92,
+      completion_rate_text: 81,
+    },
+    ai_usage: {
+      text_cost_usd: 2.4,
+      vision_cost_usd: 0.8,
+      voice_cost_usd: 0.35,
+      total_cost_usd: 3.55,
+      remaining_budget_usd: 6.45,
+      budget_ceiling_usd: 10,
+    },
     vision_analytics: {
       images_analyzed: 142,
       high_confidence_detections: 87,
@@ -600,6 +650,17 @@ export function fetchRouterStatus(): Promise<RouterStatus> {
   });
 }
 
+export function fetchAiUsage() {
+  return wait({
+    text_cost_usd: 2.4,
+    vision_cost_usd: 0.8,
+    voice_cost_usd: 0.35,
+    total_cost_usd: 3.55,
+    remaining_budget_usd: 6.45,
+    budget_ceiling_usd: 10,
+  });
+}
+
 export function fetchAuditExport(id: string): Promise<AuditExport> {
   const row = findIncident(id);
   if (!row) return Promise.reject(new Error("incident not found"));
@@ -616,11 +677,12 @@ export function fetchAuditExport(id: string): Promise<AuditExport> {
       duplicate_count: row.duplicate_count,
     },
     original_report: {
-      source: row.qr ? "QR_TAGGED" : "whatsapp",
+      source: row.qr ? "QR_TAGGED" : row.input_channel || "whatsapp",
       message: row.original_text,
       received_at: row.created_at,
       worker_identifier: row.reporter_name === "anonymous" ? "anonymous" : "worker",
-      communication_channel: "whatsapp",
+      communication_channel: row.input_channel === "telegram" ? "Telegram" : "WhatsApp",
+      input_method: row.message_type === "voice" ? "Voice" : "Text",
     },
     language_processing: {
       detected_language: row.language,
@@ -704,6 +766,19 @@ export function fetchAuditExport(id: string): Promise<AuditExport> {
           normal_ai_delayed: true,
         }
       : null,
+    voice_report:
+      row.message_type === "voice" || row.incident_id === "INC-2026-00422"
+        ? {
+            input_method: "Voice",
+            audio_language: row.language,
+            transcription: row.translated_text,
+            ai_cost: "$0.001",
+            human_override: "No",
+            duration_seconds: row.voice_duration_seconds ?? 18,
+            confidence_label: "High confidence 92%",
+            audio_format: "ogg",
+          }
+        : null,
     resolution: {
       status: row.status,
       resolution_message: row.status === "CLOSED" ? "Worker confirmed the area is safe." : null,

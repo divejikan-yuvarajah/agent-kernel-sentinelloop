@@ -87,7 +87,7 @@ def test_extract_reply_context():
 
 
 def test_unsupported_types_do_not_raise():
-    for kind in ("audio", "video", "sticker", "document", "location", "reaction"):
+    for kind in ("video", "sticker", "document", "location", "reaction"):
         normalized = normalize_incoming_message({"id": f"wamid.{kind}", "from": "9477", "type": kind})
         assert normalized is not None
         assert normalized.supported is False

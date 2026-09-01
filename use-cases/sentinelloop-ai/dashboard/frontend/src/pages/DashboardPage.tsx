@@ -202,6 +202,28 @@ export function DashboardPage() {
         ))}
       </div>
       <HandoverPanel latest={handover} generating={generatingHandover} note={handoverNote} onGenerate={onGenerateHandover} />
+      <Panel title="Voice Safety Reports">
+        <div className="ds-grid ds-grid--metrics">
+          <Card variant="analytics-card">
+            <p className="ds-metric__label">Voice Reports Today</p>
+            <p className="ds-metric__value">{summary?.voice_analytics?.reports_today ?? (demo ? 42 : 0)}</p>
+          </Card>
+          <Card variant="analytics-card">
+            <p className="ds-metric__label">Average Transcription Time</p>
+            <p className="ds-metric__value">
+              {summary?.voice_analytics?.average_transcription_seconds != null
+                ? `${summary.voice_analytics.average_transcription_seconds} sec`
+                : demo
+                  ? "2.1 sec"
+                  : "—"}
+            </p>
+          </Card>
+          <Card variant="analytics-card">
+            <p className="ds-metric__label">Most Used Language</p>
+            <p className="ds-metric__value">{summary?.voice_analytics?.most_used_language ?? (demo ? "Sinhala" : "—")}</p>
+          </Card>
+        </div>
+      </Panel>
       <Panel title="AI Vision Insights" titleTooltip="Suggestion only. Humans remain in control.">
         <div className="ds-grid ds-grid--metrics">
           <Card variant="analytics-card">

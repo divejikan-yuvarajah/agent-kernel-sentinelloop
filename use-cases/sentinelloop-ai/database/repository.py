@@ -59,6 +59,9 @@ _ALLOWED_CONTENT_TYPES = frozenset(
         "audio/ogg",
         "audio/wav",
         "audio/webm",
+        "audio/mp4",
+        "audio/m4a",
+        "audio/x-m4a",
         "application/pdf",
         "text/plain",
     }

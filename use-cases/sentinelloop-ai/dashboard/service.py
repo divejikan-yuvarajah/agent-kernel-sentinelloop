@@ -16,6 +16,7 @@ from uuid import UUID
 
 from dashboard.schemas import (
     ActivityEvent,
+    AiUsageBreakdown,
     AnalyticsSummary,
     ChannelShare,
     DuplicateIntelligence,
@@ -46,6 +47,7 @@ from dashboard.schemas import (
     VisionCategoryShare,
     VisionInsight,
     VisionLocationHeatmap,
+    VoiceAnalytics,
     VoiceReport,
 )
 from database.models import Assignment, Incident, IncidentEvidence, IncidentUpdate, RiskAssessment
@@ -112,6 +114,10 @@ _TIMELINE_TITLES = {
     "whatsapp_inbound": "Worker message received",
     "vision_suggestion": "Vision AI analyzed image",
     "vision_override": "Human overrode vision suggestion",
+    "voice_report": "Voice message received",
+    "voice_message_received": "Voice message received",
+    "audio_transcribed": "Audio transcribed",
+    "language_detected": "Language detected",
     "emergency_bypass": "Emergency keyword detected",
     "emergency_repeat": "Repeated emergency message attached",
     "emergency_slack_alert": "Slack alert sent",
@@ -623,6 +629,7 @@ class DashboardReadService:
             if isinstance(score, (int, float)):
                 similarity = float(score)
         origin = extract_qr_origin(incident.original_message_text)
+        voice_report = _voice_report_from_updates(updates, incident, evidence)
         from dashboard.safety import build_safety_panel, guidance_from_updates, safety_status_for_incident
         from guardrails.events import list_guardrail_events
 
@@ -669,7 +676,8 @@ class DashboardReadService:
             is_anonymous=bool(getattr(incident, "is_anonymous", False)),
             safety_status=status_label,
             input_channel=incident.source_channel,
-            voice_report=_voice_report_from_updates(updates, incident),
+            input_method="voice" if voice_report else "text",
+            voice_report=voice_report,
             vision=_vision_from_updates(updates, incident),
             safety=build_safety_panel(
                 incident_id=incident.incident_ref,
@@ -798,6 +806,8 @@ class DashboardReadService:
             emergency_alerts_today=int(emergency_snapshot["emergency_alerts_today"]),
             emergency_avg_response_time=emergency_snapshot["average_response_time"],
             active_critical_emergencies=int(emergency_snapshot["active_critical_incidents"]),
+            voice_analytics=_voice_analytics(incidents, vision_updates),
+            ai_usage=self.ai_usage(),
         )
 
     def telegram_status(self) -> TelegramBotStatus:
@@ -1034,6 +1044,43 @@ class DashboardReadService:
             ledger_available=True,
         )
 
+    def ai_usage(self) -> AiUsageBreakdown:
+        spent, limit = self._spend_snapshot()
+        text_cost = 0.0
+        vision_cost = 0.0
+        voice_cost = 0.0
+        if self._ledger_path.exists():
+            try:
+                payload = _read_json(self._ledger_path)
+            except Exception:
+                payload = {}
+            types = payload.get("per_type_spend_usd") if isinstance(payload.get("per_type_spend_usd"), dict) else {}
+            text_cost = float(_as_decimal(types.get("text")))
+            vision_cost = float(_as_decimal(types.get("vision")))
+            voice_cost = float(_as_decimal(types.get("audio") or types.get("audio_transcription")))
+            if text_cost == 0 and vision_cost == 0 and voice_cost == 0:
+                raw_calls = payload.get("recent_calls") if isinstance(payload.get("recent_calls"), list) else []
+                for row in raw_calls:
+                    if not isinstance(row, dict):
+                        continue
+                    cost = float(_as_decimal(row.get("cost_usd")))
+                    kind = str(row.get("type") or row.get("model_role") or "")
+                    if kind in {"audio", "audio_transcription"}:
+                        voice_cost += cost
+                    elif kind in {"vision", "role_vision"}:
+                        vision_cost += cost
+                    else:
+                        text_cost += cost
+        remaining = None if limit is None else max(0.0, float(limit) - float(spent))
+        return AiUsageBreakdown(
+            text_cost_usd=round(text_cost, 4),
+            vision_cost_usd=round(vision_cost, 4),
+            voice_cost_usd=round(voice_cost, 4),
+            total_cost_usd=round(float(spent), 4),
+            remaining_budget_usd=None if remaining is None else round(remaining, 4),
+            budget_ceiling_usd=limit,
+        )
+
     def _spend_snapshot(self) -> tuple[float, float | None]:
         status = self.router_status()
         spent = float(status.budget.spent or 0)
@@ -1209,6 +1256,41 @@ class DashboardReadService:
             title = _timeline_title_for(str(fields["update_type"]), fields.get("new_status"))
             detail = redact_text(fields["message"] if isinstance(fields["message"], str) else None)
             meta = fields.get("metadata") if isinstance(fields.get("metadata"), dict) else {}
+            if str(fields["update_type"]) == "voice_report":
+                lang = meta.get("detected_language") or incident.detected_language
+                events.append(
+                    TimelineEvent(
+                        timestamp=update.created_at,
+                        title="Voice message received",
+                        detail=str(meta.get("source") or incident.source_channel or ""),
+                        actor="worker",
+                    )
+                )
+                events.append(
+                    TimelineEvent(
+                        timestamp=update.created_at,
+                        title="Audio transcribed",
+                        detail=redact_text(incident.hazard_description or incident.original_message_text),
+                        actor="voice_tools",
+                    )
+                )
+                events.append(
+                    TimelineEvent(
+                        timestamp=update.created_at,
+                        title="Language detected",
+                        detail=str(lang or ""),
+                        actor="voice_tools",
+                    )
+                )
+                events.append(
+                    TimelineEvent(
+                        timestamp=update.created_at,
+                        title="Incident created",
+                        detail=incident.incident_ref,
+                        actor="incident_agent",
+                    )
+                )
+                continue
             if str(fields["update_type"]) == "vision_suggestion":
                 cat = meta.get("vision_hazard_category") or meta.get("category")
                 conf = meta.get("vision_confidence") or meta.get("confidence")
@@ -1473,6 +1555,69 @@ def _vision_from_updates(updates: list[IncidentUpdate], incident: Incident) -> V
     )
 
 
+def _voice_analytics(incidents: list[Incident], updates: list[IncidentUpdate]) -> VoiceAnalytics:
+    from tools.voice_tools import language_display_name
+
+    voice_ids: set[str] = set()
+    image_ids: set[str] = set()
+    latencies: list[float] = []
+    languages: dict[str, int] = {}
+    today = _utcnow().date()
+    reports_today = 0
+    for update in updates:
+        meta = update.metadata or {}
+        iid = str(update.incident_id)
+        kind = (update.update_type or "").lower()
+        if meta.get("voice_used") or meta.get("audio_used") or kind == "voice_report":
+            voice_ids.add(iid)
+            created = _aware(update.created_at)
+            if created is not None and created.date() == today:
+                reports_today += 1
+            lang = str(meta.get("detected_language") or "").strip().lower()
+            if lang:
+                languages[lang] = languages.get(lang, 0) + 1
+            latency = _as_float(meta.get("transcription_latency_s") or meta.get("latency_s"))
+            if latency is not None:
+                latencies.append(latency)
+        if kind in {"evidence_added", "evidence_uploaded"} or meta.get("has_image"):
+            image_ids.add(iid)
+    by_id = {str(item.id): item for item in incidents}
+    voice_incidents = [by_id[iid] for iid in voice_ids if iid in by_id]
+    text_incidents = [item for item in incidents if str(item.id) not in voice_ids]
+    def _rate(rows: list[Incident]) -> float | None:
+        if not rows:
+            return None
+        closed = sum(1 for item in rows if not _is_open(item))
+        return round(100 * closed / len(rows), 1)
+
+    total = len(incidents) or 1
+    voice_n = len(voice_ids)
+    image_n = len(image_ids - voice_ids)
+    text_n = max(0, total - voice_n - image_n)
+    most = None
+    if languages:
+        top = max(languages, key=languages.get)
+        most = language_display_name(top) or top
+    lang_total = sum(languages.values()) or 1
+    lang_share = {
+        language_display_name(code) or code: round(100 * count / lang_total, 1)
+        for code, count in languages.items()
+    }
+    return VoiceAnalytics(
+        reports_today=reports_today,
+        average_transcription_seconds=round(sum(latencies) / len(latencies), 1) if latencies else None,
+        most_used_language=most,
+        languages=lang_share,
+        incident_sources={
+            "Text": round(100 * text_n / total, 1),
+            "Voice": round(100 * voice_n / total, 1),
+            "Image": round(100 * image_n / total, 1),
+        },
+        completion_rate_voice=_rate(voice_incidents),
+        completion_rate_text=_rate(text_incidents),
+    )
+
+
 def _vision_analytics(incidents: list[Incident], updates: list[IncidentUpdate]) -> VisionAnalytics:
     from tools.vision_tools import vision_stats
 
@@ -1560,18 +1705,53 @@ def _vision_analytics(incidents: list[Incident], updates: list[IncidentUpdate]) 
     )
 
 
-def _voice_report_from_updates(updates: list[IncidentUpdate], incident: Incident) -> VoiceReport | None:
+def _voice_report_from_updates(
+    updates: list[IncidentUpdate],
+    incident: Incident,
+    evidence: list[IncidentEvidence] | None = None,
+) -> VoiceReport | None:
+    from tools.voice_tools import confidence_band, language_display_name
+
+    meta: dict[str, Any] = {}
+    found = False
     for update in updates:
-        meta = update.metadata or {}
-        if not meta.get("voice_used") and (update.update_type or "") != "voice_report":
-            continue
-        return VoiceReport(
-            duration_seconds=_as_float(meta.get("duration_seconds")),
-            language=incident.detected_language,
-            transcript=redact_text(incident.hazard_description or incident.original_message_text),
-            audio_format=str(meta.get("audio_format") or "ogg"),
-        )
-    return None
+        row = update.metadata or {}
+        if row.get("voice_used") or row.get("audio_used") or (update.update_type or "") == "voice_report":
+            meta = row
+            found = True
+            break
+    if not found:
+        return None
+    playback = None
+    source = str(meta.get("source") or incident.source_channel or "")
+    for row in evidence or []:
+        kind = (row.evidence_type or "").lower()
+        if "audio" in kind or "voice" in kind:
+            playback = row.storage_reference
+            source = row.source or source
+            break
+    language = str(meta.get("detected_language") or incident.detected_language or "") or None
+    confidence = _as_float(meta.get("transcription_confidence"))
+    band = confidence_band(confidence)
+    label = None
+    if confidence is not None and band:
+        label = f"{band.capitalize()} confidence {round(confidence * 100)}%"
+    return VoiceReport(
+        duration_seconds=_as_float(meta.get("duration_seconds")),
+        language=language,
+        language_name=language_display_name(language),
+        transcript=redact_text(incident.hazard_description or incident.original_message_text),
+        audio_format=str(meta.get("audio_format") or "ogg"),
+        input_method="voice",
+        audio_used=True,
+        transcription_cost=_as_float(meta.get("transcription_cost")),
+        transcription_confidence=confidence,
+        confidence_label=label,
+        processing_status="Completed",
+        playback_url=playback if _safe_storage_available(playback) else None,
+        uploaded_by="Worker",
+        source=source,
+    )
 
 
 def _budget(ceiling: Decimal | None, spent: Decimal) -> RouterBudget:

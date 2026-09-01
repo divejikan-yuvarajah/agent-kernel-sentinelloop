@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict
 
 from integrations.whatsapp_handler import NormalizedWhatsAppMessage, WhatsAppMedia
 from tools.emergency_bypass import is_emergency_trigger
-from tools.voice_tools import transcribe_voice_note
+from tools.voice_tools import audio_format_from_mime, is_low_confidence, transcribe_voice_note
 
 log = logging.getLogger("sentinelloop.telegram")
 
@@ -573,7 +573,9 @@ class SentinelLoopTelegramHandler(_KernelTelegramHandler):  # type: ignore[misc]
                 return None
             normalized.text = transcript
             normalized.voice_used = True
-            normalized.audio_format = "ogg"
+            normalized.audio_used = True
+            normalized.input_method = "voice"
+            normalized.audio_format = normalized.audio_format or "ogg"
             normalized.transcription_available = True
             normalized.message_type = "text"
 
@@ -627,7 +629,21 @@ class SentinelLoopTelegramHandler(_KernelTelegramHandler):  # type: ignore[misc]
         if not content:
             return None
         encoded = base64.b64encode(content).decode("ascii")
-        result = await transcribe_voice_note(encoded, audio_format="ogg", call_model_fn=self._transcribe_fn)
+        fmt = audio_format_from_mime(message.media.mime_type if message.media else None)
+        result = await transcribe_voice_note(
+            encoded,
+            fmt,
+            message.language_code,
+            duration_seconds=message.voice_duration_seconds,
+            call_model_fn=self._transcribe_fn,
+        )
+        if result.blocked or not result.available or is_low_confidence(result):
+            return None
+        message.audio_format = result.audio_format or fmt
+        message.detected_language = result.detected_language or result.language
+        message.transcription_cost = result.cost_usd
+        message.transcription_confidence = result.transcription_confidence
+        message.transcription_latency_s = result.latency_s
         return result.text or None
 
 

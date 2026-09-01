@@ -211,6 +211,23 @@ export type AnalyticsSummary = {
   emergency_alerts_today?: number;
   emergency_avg_response_time?: string | null;
   active_critical_emergencies?: number;
+  voice_analytics?: {
+    reports_today: number;
+    average_transcription_seconds: number | null;
+    most_used_language: string | null;
+    languages: Record<string, number>;
+    incident_sources: Record<string, number>;
+    completion_rate_voice: number | null;
+    completion_rate_text: number | null;
+  };
+  ai_usage?: {
+    text_cost_usd: number;
+    vision_cost_usd: number;
+    voice_cost_usd: number;
+    total_cost_usd: number;
+    remaining_budget_usd: number | null;
+    budget_ceiling_usd: number | null;
+  };
 };
 
 export type TimelineEvent = {

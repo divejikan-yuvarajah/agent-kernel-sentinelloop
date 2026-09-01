@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from dashboard.schemas import (
+    AiUsageBreakdown,
     AnalyticsSummary,
     AuditExport,
     EmergencyCommandCenter,
@@ -38,6 +39,7 @@ from dashboard.schemas import (
     ReviewQueueResponse,
     RouterStatus,
     TelegramBotStatus,
+    VoiceAnalytics,
 )
 from dashboard.service import DashboardReadService
 
@@ -543,6 +545,43 @@ class DashboardHandler(RESTRequestHandler):
                 raise HTTPException(status_code=500, detail="internal dashboard failure") from None
 
         @router.get(
+            "/ai-usage",
+            response_model=AiUsageBreakdown,
+            summary="AI Usage Dashboard",
+            description="Text, vision, and voice spend against OPENROUTER_BUDGET_CEILING_USD. Never returns API keys.",
+        )
+        async def ai_usage() -> AiUsageBreakdown:
+            try:
+                return await asyncio.to_thread(
+                    self._cached,
+                    "ai.usage",
+                    _ROUTER_TTL_S,
+                    lambda: self._reader().ai_usage(),
+                )
+            except Exception:
+                log.exception("dashboard ai_usage failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
+        @router.get(
+            "/analytics/voice",
+            response_model=VoiceAnalytics,
+            summary="Voice safety report analytics",
+            description="Voice volume, languages, incident sources, and completion rates. Read-only.",
+        )
+        async def voice_analytics() -> VoiceAnalytics:
+            try:
+                summary = await asyncio.to_thread(
+                    self._cached,
+                    "analytics.summary",
+                    _ANALYTICS_TTL_S,
+                    self._reader().analytics_summary,
+                )
+                return summary.voice_analytics
+            except Exception:
+                log.exception("dashboard voice_analytics failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
+        @router.get(
             "/guardrails/status",
             response_model=GuardrailStatus,
             summary="AI Safety Center",
@@ -626,6 +665,8 @@ class DashboardHandler(RESTRequestHandler):
             "/handover/compare",
             "/telegram/health",
             "/router/status",
+            "/ai-usage",
+            "/analytics/voice",
             "/guardrails/status",
             "/guardrails/review-queue",
             "/guardrails/debug",

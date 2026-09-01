@@ -98,8 +98,18 @@ class DuplicateIntelligence(_Out):
 class VoiceReport(_Out):
     duration_seconds: float | None = None
     language: str | None = None
+    language_name: str | None = None
     transcript: str | None = None
     audio_format: str | None = "ogg"
+    input_method: str = "voice"
+    audio_used: bool = True
+    transcription_cost: float | None = None
+    transcription_confidence: float | None = None
+    confidence_label: str | None = None
+    processing_status: str = "Completed"
+    playback_url: str | None = None
+    uploaded_by: str = "Worker"
+    source: str | None = None
 
 
 class VisionInsight(_Out):
@@ -142,6 +152,7 @@ class IncidentDetail(_Out):
     safety_status: str | None = None
     safety: IncidentSafetyPanel | None = None
     input_channel: str | None = None
+    input_method: str | None = None
     voice_report: VoiceReport | None = None
     vision: VisionInsight | None = None
     included_in_handovers: list["HandoverMention"] = Field(default_factory=list)
@@ -225,6 +236,25 @@ class VisionAnalytics(_Out):
     location_heatmap: list[VisionLocationHeatmap] = Field(default_factory=list)
 
 
+class VoiceAnalytics(_Out):
+    reports_today: int = 0
+    average_transcription_seconds: float | None = None
+    most_used_language: str | None = None
+    languages: dict[str, float] = Field(default_factory=dict)
+    incident_sources: dict[str, float] = Field(default_factory=dict)
+    completion_rate_voice: float | None = None
+    completion_rate_text: float | None = None
+
+
+class AiUsageBreakdown(_Out):
+    text_cost_usd: float = 0.0
+    vision_cost_usd: float = 0.0
+    voice_cost_usd: float = 0.0
+    total_cost_usd: float = 0.0
+    remaining_budget_usd: float | None = None
+    budget_ceiling_usd: float | None = None
+
+
 class AnalyticsSummary(_Out):
     total_incidents: int
     open_incidents: int
@@ -252,6 +282,8 @@ class AnalyticsSummary(_Out):
     emergency_alerts_today: int = 0
     emergency_avg_response_time: str | None = None
     active_critical_emergencies: int = 0
+    voice_analytics: VoiceAnalytics = Field(default_factory=VoiceAnalytics)
+    ai_usage: AiUsageBreakdown = Field(default_factory=AiUsageBreakdown)
 
 
 class RecurringHazard(_Out):
@@ -384,6 +416,7 @@ class AuditOriginalReport(_Out):
     received_at: datetime | None = None
     worker_identifier: str | None = None
     communication_channel: str | None = None
+    input_method: str | None = None
 
 
 class AuditLanguageProcessing(_Out):
@@ -493,6 +526,17 @@ class AuditVisionSuggestion(_Out):
     suggestion_only: bool = True
 
 
+class AuditVoiceReport(_Out):
+    input_method: str = "Voice"
+    audio_language: str | None = None
+    transcription: str | None = None
+    ai_cost: str | None = None
+    human_override: str = "No"
+    duration_seconds: float | None = None
+    confidence_label: str | None = None
+    audio_format: str | None = None
+
+
 class AuditEmergencyBypass(_Out):
     detected: bool = False
     reason: str | None = None
@@ -558,6 +602,7 @@ class AuditExport(_Out):
     resolution: AuditResolution
     vision_suggestion: AuditVisionSuggestion | None = None
     emergency_bypass: AuditEmergencyBypass | None = None
+    voice_report: AuditVoiceReport | None = None
     audit_metadata: AuditMetadata
 
 
