@@ -4,10 +4,19 @@ Authoritative behavior lives in [`SPEC.md`](SPEC.md). This file is a compact map
 
 Framework (verified): OpenAI Agents SDK `Agent` objects registered together through one Agent Kernel `OpenAIModule`. Handoffs use SDK `handoffs=[...]`. Telegram `config.yaml` `telegram.agent` is `intake_agent`.
 
+```text
+Telegram  ─┐
+QR open   ─┼─▶ intake_agent → incident_agent → risk_agent → guidance_agent
+Manual    ─┘                              ↓
+                               coordination_agent → followup_agent
+```
+
+`incident_agent`, `risk_agent`, and `guidance_agent` are invoked identically regardless of whether the source was Telegram or dashboard manual entry (`input_channel: "manual"`). Manual entry is a fourth front door into the same pipeline — not a shortcut path.
+
 ## Pipeline
 
 ```text
-Telegram
+Telegram / QR / Manual dashboard
    ↓
 intake_agent
    ↓

@@ -777,11 +777,15 @@ class DashboardHandler(RESTRequestHandler):
             people_exposed=data.people_exposed,
             photo_filename=data.photo_filename,
             photo_content_type=data.photo_content_type,
+            is_active=data.is_active,
+            injury_reported=data.injury_reported,
         )
         if error:
             raise HTTPException(status_code=400, detail=error)
 
         people = int(data.people_exposed or 0)
+        reporter = (data.reporter_name or data.created_by or "").strip() or None
+        equipment = (data.equipment_involved or "").strip() or None
         raw_text = compose_manual_report_text(
             data.description,
             category=data.category,
@@ -789,6 +793,7 @@ class DashboardHandler(RESTRequestHandler):
             people_exposed=people,
             is_active=bool(data.is_active),
             injury_reported=bool(data.injury_reported),
+            equipment_involved=equipment,
         )
         photo = decode_photo(
             data.photo_base64,
@@ -811,12 +816,14 @@ class DashboardHandler(RESTRequestHandler):
                 source="manual",
                 raw_text=raw_text,
                 metadata={
-                    "created_by": data.created_by or "dashboard_officer",
+                    "created_by": reporter,
+                    "reporter_name": reporter,
                     "category": data.category,
                     "location": data.location,
                     "people_exposed": people,
                     "is_active": data.is_active,
                     "injury_reported": data.injury_reported,
+                    "equipment_involved": equipment,
                     "photo": photo,
                 },
                 orchestrator=orch,
@@ -832,6 +839,8 @@ class DashboardHandler(RESTRequestHandler):
             status=result.status,
             risk_level=result.risk_level,
             risk_score=result.risk_score,
+            risk_explanation=result.risk_explanation,
+            guidance_text=result.guidance_text,
             pipeline=list(result.pipeline_trace or []),
             slack_alert_sent=bool(result.slack_alert_sent or result.coordination_completed),
             input_channel="manual",

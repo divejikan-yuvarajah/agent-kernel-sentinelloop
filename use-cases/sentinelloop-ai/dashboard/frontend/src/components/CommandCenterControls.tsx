@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { Button, SystemHealthStrip } from "@ds/index";
 
 import { fetchSystemHealth, simulateEmergencyReport, type SystemHealth } from "../api/client";
 import { useDemoMode } from "../demo/useDemoMode";
 import { useOperatorRole } from "../demo/useOperatorRole";
-import { LogHazardModal } from "./LogHazardModal";
 
 export function CommandCenterControls() {
   const [demo] = useDemoMode();
@@ -14,7 +13,6 @@ export function CommandCenterControls() {
   const navigate = useNavigate();
   const location = useLocation();
   const [health, setHealth] = useState<SystemHealth | null>(null);
-  const [open, setOpen] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [simulating, setSimulating] = useState(false);
 
@@ -54,7 +52,9 @@ export function CommandCenterControls() {
       <SystemHealthStrip health={health} />
       <div className="ds-command-bar">
         {canCreate ? (
-          <Button onClick={() => setOpen(true)}>Log a Hazard</Button>
+          <Link className="ds-btn" to="/report">
+            + Log hazard
+          </Link>
         ) : (
           <p className="ds-mono">Supervisor role is review-only.</p>
         )}
@@ -65,15 +65,6 @@ export function CommandCenterControls() {
         ) : null}
         {note ? <p className="ds-mono">{note}</p> : null}
       </div>
-      <LogHazardModal
-        open={open}
-        onClose={() => setOpen(false)}
-        onCreated={(result) => {
-          setNote(result.incident_id ? `Hazard logged as ${result.incident_id}` : "Hazard submitted.");
-          refreshHealth();
-          if (result.incident_id) navigate(`/incidents/${result.incident_id}`);
-        }}
-      />
     </>
   );
 }

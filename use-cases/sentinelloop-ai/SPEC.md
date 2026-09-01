@@ -2,7 +2,7 @@
 
 ## Agent Description
 
-SentinelLoop AI is a multilingual workplace hazard-reporting and closed-loop safety follow-up system powered by coordinated AI agents. Workers report through Telegram; safety teams operate through Slack; durable incident history lives in Supabase / PostgreSQL; conversation cursor state lives in Agent Kernel sessions.
+SentinelLoop AI is a multilingual workplace hazard-reporting and closed-loop safety follow-up system powered by coordinated AI agents. Workers report through Telegram; officers may also log phoned-in or in-person hazards via **dashboard manual entry**; safety teams operate through Slack; durable incident history lives in Supabase / PostgreSQL; conversation cursor state lives in Agent Kernel sessions.
 
 Workplace hazards are often reported informally, missing important details, inconsistently triaged, and disconnected from the safety teams who must act. Incidents are frequently marked resolved without confirming that the worker-facing problem is actually gone. SentinelLoop AI creates a closed loop — Report → Understand → Assess → Guide → Assign → Track → Verify → Close or Reopen — so a hazard is not treated as finished until verification rules are satisfied or the incident is reopened with history preserved.
 
@@ -11,7 +11,7 @@ SentinelLoop is not only a hazard classifier. It is a closed-loop incident-resol
 ## Functional Requirements
 
 - Preserve project identity: name **SentinelLoop AI**; primary worker channel Telegram; primary safety-team channel Slack; primary durable persistence Supabase / PostgreSQL; agent framework OpenAI Agents SDK registered through Agent Kernel `OpenAIModule`.
-- Implement the product objective: a worker may report a workplace hazard through Telegram using text and image/photo (voice is application-level STT, not a native Agent Kernel Telegram capability — see Voice). Support Sinhala, Tamil, English, and reasonable mixed-language input without a language picker. The system must (1) maintain conversation/session continuity, (2) extract structured incident details, (3) ask only necessary clarification questions, (4) calculate explainable risk, (5) retrieve approved safety guidance, (6) notify the correct team via Slack, (7) persist the durable incident, (8) track assignment/remediation, (9) request resolution evidence, (10) contact the original reporter, (11) close only when verification rules are satisfied, (12) reopen if the worker says the hazard remains.
+- Implement the product objective: a worker may report a workplace hazard through Telegram using text and image/photo (voice is application-level STT, not a native Agent Kernel Telegram capability — see Voice). Officers may also submit the same structured hazard through **dashboard manual entry** (`input_channel: "manual"`), which must invoke the identical intake → incident → risk (`calculate_risk`) → guidance → coordination pipeline — never a shortcut risk path. Support Sinhala, Tamil, English, and reasonable mixed-language input without a language picker. The system must (1) maintain conversation/session continuity, (2) extract structured incident details, (3) ask only necessary clarification questions, (4) calculate explainable risk, (5) retrieve approved safety guidance, (6) notify the correct team via Slack, (7) persist the durable incident, (8) track assignment/remediation, (9) request resolution evidence, (10) contact the original reporter, (11) close only when verification rules are satisfied, (12) reopen if the worker says the hazard remains.
 - Register **six** native OpenAI Agents SDK agents in **one** `OpenAIModule([...])` list. Agent names are snake_case, matching this repository’s use-case convention (`waste_sorting_advisor`). Telegram `config.yaml` `telegram.agent` must be `intake_agent` so worker traffic always re-enters at intake.
 - Use SDK `handoffs=[...]` for agent-to-agent routing inside a run. Agent Kernel does not provide a separate handoff graph. Logical pipeline: Telegram → `intake_agent` → `incident_agent` → `risk_agent` → `guidance_agent` → `coordination_agent` → `followup_agent`. This is **not** a strictly synchronous linear chain. Lifecycle-based re-entry is required (clarification, new evidence, risk-changing updates, worker rejection).
 - Bind tools with `OpenAIToolBuilder.bind([...])`. Inside tools, read session via `ToolContext.get().session` (do not pass context as a function parameter). Prefer JSON-returning tools plus Python validation; this repository has no Agent Kernel structured-output API.
@@ -174,6 +174,13 @@ SentinelLoop is not only a hazard classifier. It is a closed-loop incident-resol
 - Closed-loop verification: `IN_PROGRESS` → remediation declared complete → evidence requested/recorded where required → `AWAITING_VERIFICATION` → original reporter contacted. Silence is not confirmation in MVP.
 - Concurrency: durable transitions must validate the latest current status. Example: a safety officer marks remediation complete while the worker sends “The cable is still exposed.” The system must not close. Worker “still dangerous” wins over a concurrent close attempt: resulting state is `REOPENED` (or remains open, never `CLOSED`).
 - Duplicate incident **semantic** detection (same location, similar description, same category, close time, similar evidence) is **stretch**. The system may suggest a possible existing incident; it must not silently merge uncertain cases. Webhook duplicate detection (same external message id) is **MVP**.
+
+### Input channels
+
+- **Telegram** — primary worker channel (text / photo / voice transcript).
+- **QR-tagged Telegram open** — same Telegram channel with location/equipment prefilled.
+- **Dashboard manual entry** — officers log phoned-in or in-person reports via `POST /api/incidents/manual` (`input_channel: "manual"`). Manual entry must run the identical intake → incident → risk (`calculate_risk`) → guidance → coordination path; officers never pick a risk level from a dropdown.
+- **Slack** — primary safety-team operational channel (alerts and lifecycle actions).
 
 ### Telegram integration touch points
 

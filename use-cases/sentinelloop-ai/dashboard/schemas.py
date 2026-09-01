@@ -185,12 +185,14 @@ class ManualIncidentRequest(_Out):
     description: str = ""
     category: str = ""
     location: str = ""
+    equipment_involved: str | None = None
     people_exposed: int | None = None
     is_active: bool = True
     injury_reported: bool = False
     photo_base64: str | None = None
     photo_filename: str | None = None
     photo_content_type: str | None = None
+    reporter_name: str | None = None
     created_by: str | None = None
     simulate: bool = False
     scenario: str | None = None
@@ -201,6 +203,8 @@ class ManualIncidentResponse(_Out):
     status: str | None = None
     risk_level: str | None = None
     risk_score: int | None = None
+    risk_explanation: str | None = None
+    guidance_text: str | None = None
     pipeline: list[str] = Field(default_factory=list)
     slack_alert_sent: bool = False
     input_channel: str = "manual"

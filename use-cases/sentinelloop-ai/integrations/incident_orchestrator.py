@@ -170,6 +170,8 @@ class OrchestrationResult(BaseModel):
     slack_alert_sent: bool = False
     risk_level: str | None = None
     risk_score: int | None = None
+    risk_explanation: str | None = None
+    guidance_text: str | None = None
 
 
 class _SilentOutbound:
@@ -1727,7 +1729,25 @@ class IncidentOrchestrator:
             slack_alert_sent=coordination_completed,
             risk_level=merged.get("current_risk_level") or risk.get("level"),
             risk_score=risk.get("score"),
+            risk_explanation=risk.get("explanation"),
+            guidance_text=_guidance_text(merged.get("guidance")),
         )
+
+
+def _guidance_text(value: Any) -> str | None:
+    data = _as_dict(value)
+    for key in ("text", "worker_text", "guidance", "summary"):
+        text = data.get(key)
+        if isinstance(text, str) and text.strip():
+            return text.strip()
+    if hasattr(value, "worker_text"):
+        try:
+            text = value.worker_text()
+            if isinstance(text, str) and text.strip():
+                return text.strip()
+        except Exception:
+            return None
+    return None
 
 
 def _jsonable(value: Any) -> bool:

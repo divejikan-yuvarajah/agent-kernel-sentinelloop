@@ -9,8 +9,8 @@ export function FeatureGrid() {
         <p className="sl-kicker">Distinguishing features</p>
         <h2 id="features-title">Built for the floor, not the demo reel</h2>
         <p className="sl-section__lede">
-          QR context, duplicate merge, audit export, emergency bypass, prediction, vision, voice, and shift handover —
-          each one removes a reporting or accountability failure.
+          QR context, duplicate merge, audit export, emergency bypass, prediction, vision, voice, shift handover,
+          and manual dashboard entry — each one removes a reporting or accountability failure.
         </p>
         <ul className="sl-features">
           {FEATURES.map((feature) => (

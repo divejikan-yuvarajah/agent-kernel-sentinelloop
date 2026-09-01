@@ -97,7 +97,7 @@ def test_manual_missing_location_is_400():
     response = client.post(
         "/api/incidents/manual",
         json={
-            "description": "Smoke",
+            "description": "Smoke detected near the welding bay",
             "category": "Fire/Smoke",
             "location": "",
             "people_exposed": 1,

@@ -48,10 +48,11 @@ SentinelLoop AI is built directly against these six failure points.
 ## 3. Solution Overview
 
 ```text
-Worker
-  │ (Text / Photo / Voice note, Sinhala · Tamil · English)
-  ▼
-Telegram Bot API
+Worker / Officer
+  │
+  ├── Telegram (Text / Photo / Voice note, Sinhala · Tamil · English)
+  ├── QR-tagged Telegram open (location/equipment prefilled)
+  └── Dashboard (Manual Entry) — for phoned-in or in-person reports, feeds the same pipeline.
   ▼
 Deterministic Emergency Bypass  ──── SOS/🆘 detected? ──▶ Instant Critical alert
   │ (no match, continue)             (zero LLM calls, <100ms)
@@ -210,6 +211,7 @@ Typography: `Space Grotesk` (headers/KPIs), `IBM Plex Sans` (UI text), `IBM Plex
 * 🖼️ **Vision-based triage** — a hazard photo with little/no caption still gets a category suggestion via a vision-capable model.
 * 🎙️ **Voice message reporting** — Telegram and Telegram voice notes transcribed via OpenRouter's unified audio endpoint, in the worker's own language, with spend tracked against the same OpenRouter budget ceiling as text and vision.
 * 🗒️ **Automated shift handover briefings** — `handover_agent` collects open/critical/review/overdue incidents, calls `role_fast` **once** to phrase a bullet briefing, stores it in `handover_summaries`, and posts it to the Slack Safety Channel. Judges can trigger **Generate Shift Handover** from the dashboard. Agent Kernel has no in-process cron/scheduler, so automatic shift-end jobs are not wired here.
+* 🖥️ **Manual dashboard entry** — officers can log a phoned-in or in-person report directly, running through the identical risk pipeline as any Telegram report — no shortcut, no separate rules.
 
 ```
 Phase 2:
@@ -374,6 +376,10 @@ use-cases/sentinelloop_ai/
 ├── dashboard/
 │   ├── api.py
 │   └── frontend/
+│       ├── landing/
+│       ├── report/          # Manual "Log a hazard" page (same pipeline as Telegram)
+│       ├── design-system/
+│       └── src/
 ├── scripts/
 │   ├── seed_demo_data.py
 │   └── generate_location_qr.py

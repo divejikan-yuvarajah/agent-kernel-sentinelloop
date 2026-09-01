@@ -985,9 +985,14 @@ export type ManualIncidentPayload = {
   description: string;
   category: string;
   location: string;
+  equipment_involved?: string;
   people_exposed: number;
   is_active: boolean;
   injury_reported: boolean;
+  photo_base64?: string;
+  photo_filename?: string;
+  photo_content_type?: string;
+  reporter_name?: string;
   created_by?: string;
   simulate?: boolean;
   scenario?: string;
@@ -1016,11 +1021,15 @@ function pushDemoIncident(row: DemoIncident) {
 
 export function createManualIncident(payload: ManualIncidentPayload) {
   if (!payload.description.trim()) return Promise.reject(new Error("Description is required before creating incident"));
+  if (payload.description.trim().length < 10) {
+    return Promise.reject(new Error("Description must be at least 10 characters"));
+  }
   if (!payload.location.trim()) return Promise.reject(new Error("Location is required before creating incident"));
   if (!payload.category.trim()) return Promise.reject(new Error("Category is required before creating incident"));
   if (!Number.isFinite(payload.people_exposed)) return Promise.reject(new Error("People exposed must be a number"));
   const id = nextDemoId();
   const now = new Date().toISOString();
+  const reporter = (payload.reporter_name || payload.created_by || "").trim();
   pushDemoIncident({
     incident_id: id,
     title: payload.description.slice(0, 72),
@@ -1032,12 +1041,12 @@ export function createManualIncident(payload: ManualIncidentPayload) {
     created_at: now,
     assigned_officer: "A. Perera",
     assigned_team: "Electrical Maintenance",
-    reporter_id: `dashboard:${payload.created_by || "officer"}`,
-    reporter_name: payload.created_by || "Duty officer",
+    reporter_id: reporter ? `dashboard:${reporter}` : "dashboard:anonymous",
+    reporter_name: reporter || "Anonymous",
     language: "English",
     original_text: payload.description,
     translated_text: payload.description,
-    equipment: null,
+    equipment: payload.equipment_involved || null,
     people_exposed: payload.people_exposed,
     active: payload.is_active,
     injury: payload.injury_reported,
@@ -1058,6 +1067,8 @@ export function createManualIncident(payload: ManualIncidentPayload) {
     status: "Assigned",
     risk_level: payload.is_active ? "CRITICAL" : "HIGH",
     risk_score: payload.is_active ? 20 : 12,
+    risk_explanation: "Deterministic risk matrix (severity × likelihood, with active-hazard policy).",
+    guidance_text: "Move away from the hazard and notify a supervisor.",
     pipeline: ["intake_agent", "incident_agent", "risk_agent", "guidance_agent", "coordination_agent", "repository"],
     slack_alert_sent: true,
     input_channel: "manual",

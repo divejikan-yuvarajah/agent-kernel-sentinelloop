@@ -39,6 +39,7 @@ def compose_manual_report_text(
     people_exposed: int,
     is_active: bool,
     injury_reported: bool,
+    equipment_involved: str | None = None,
 ) -> str:
     body = (description or "").strip()
     lines = [
@@ -50,6 +51,9 @@ def compose_manual_report_text(
         f"Currently active: {'yes' if is_active else 'no'}",
         f"Injury reported: {'yes' if injury_reported else 'no'}",
     ]
+    equipment = (equipment_involved or "").strip()
+    if equipment:
+        lines.insert(4, f"Equipment involved: {equipment}")
     return "\n".join(lines).strip()
 
 
@@ -61,9 +65,14 @@ def validate_manual_incident(
     people_exposed: object,
     photo_filename: str | None = None,
     photo_content_type: str | None = None,
+    is_active: object = True,
+    injury_reported: object = False,
 ) -> str | None:
-    if not (description or "").strip():
+    text = (description or "").strip()
+    if not text:
         return "Description is required before creating incident"
+    if len(text) < 10:
+        return "Description must be at least 10 characters"
     if not (location or "").strip():
         return "Location is required before creating incident"
     if not (category or "").strip():
@@ -78,6 +87,10 @@ def validate_manual_incident(
         return "People exposed must be a number"
     if people < 0:
         return "People exposed must be a number"
+    if is_active is None:
+        return "Active-hazard status is required"
+    if injury_reported is None:
+        return "Injury status is required"
     if photo_content_type:
         mime = photo_content_type.strip().lower()
         if mime not in ALLOWED_PHOTO_TYPES:
@@ -100,10 +113,14 @@ def build_manual_message(
     people_exposed: int | None = None,
     is_active: bool | None = None,
     injury_reported: bool | None = None,
+    equipment_involved: str | None = None,
     photo: InboundMedia | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> NormalizedInboundMessage:
-    officer = (created_by or "dashboard_officer").strip() or "dashboard_officer"
+    reporter = (created_by or "").strip()
+    is_anonymous = not reporter
+    officer = reporter or None
+    sender_id = f"dashboard:{reporter}" if reporter else "dashboard:anonymous"
     media = photo
     message_type = "image" if media is not None else "text"
     extra = dict(metadata or {})
@@ -114,11 +131,13 @@ def build_manual_message(
             "people_exposed": people_exposed,
             "is_active": is_active,
             "injury_reported": injury_reported,
+            "equipment_involved": (equipment_involved or "").strip() or None,
+            "is_anonymous": is_anonymous,
         }
     )
     return NormalizedInboundMessage(
         provider_message_id=f"manual:{uuid4()}",
-        sender_id=f"dashboard:{officer}",
+        sender_id=sender_id,
         message_type=message_type,
         text=raw_text,
         media=media,
@@ -180,12 +199,13 @@ async def process_incident_input(
             meta = dict(metadata or {})
             inbound = build_manual_message(
                 raw_text=(raw_text or "").strip(),
-                created_by=str(meta.get("created_by") or "") or None,
+                created_by=str(meta.get("created_by") or meta.get("reporter_name") or "") or None,
                 category=str(meta.get("category") or "") or None,
                 location=str(meta.get("location") or "") or None,
                 people_exposed=meta.get("people_exposed"),
                 is_active=meta.get("is_active"),
                 injury_reported=meta.get("injury_reported"),
+                equipment_involved=str(meta.get("equipment_involved") or "") or None,
                 photo=meta.get("photo"),
                 metadata=meta,
             )

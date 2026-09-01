@@ -156,6 +156,12 @@ export const FEATURES: {
     description:
       "Open, critical, review, and overdue incidents are phrased into a briefing the next shift can use, then posted to the Slack Safety Channel.",
   },
+  {
+    icon: "incidents",
+    title: "Manual dashboard entry",
+    description:
+      "Officers can log a phoned-in or in-person report directly — the same intake → risk → guidance → Slack pipeline as Telegram, with no shortcut rules.",
+  },
 ];
 
 export const TRUST_PILLARS = [

@@ -495,12 +495,14 @@ export type ManualIncidentPayload = {
   description: string;
   category: string;
   location: string;
+  equipment_involved?: string;
   people_exposed: number;
   is_active: boolean;
   injury_reported: boolean;
   photo_base64?: string;
   photo_filename?: string;
   photo_content_type?: string;
+  reporter_name?: string;
   created_by?: string;
 };
 
@@ -509,6 +511,8 @@ export type ManualIncidentResponse = {
   status: string | null;
   risk_level: string | null;
   risk_score: number | null;
+  risk_explanation?: string | null;
+  guidance_text?: string | null;
   pipeline: string[];
   slack_alert_sent: boolean;
   input_channel: string;

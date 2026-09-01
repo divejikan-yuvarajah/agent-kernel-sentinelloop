@@ -219,6 +219,33 @@
   letter-spacing: -0.01em;
 }
 
+.sl-topnav__log {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--maroon);
+  border-radius: var(--radius-sm);
+  background: var(--maroon);
+  color: var(--on-brand);
+  font-family: var(--font-body);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background-color var(--transition-duration) var(--transition-timing),
+    border-color var(--transition-duration) var(--transition-timing);
+}
+
+.sl-topnav__log:hover,
+.sl-topnav__log:focus-visible {
+  background: var(--maroon-deep);
+  border-color: var(--maroon-deep);
+  color: var(--on-brand);
+}
+
 .sl-topnav__sys {
   display: none;
 }
@@ -642,6 +669,15 @@
   .sl-topnav__page {
     max-width: min(36vw, 10rem);
     font-size: var(--font-size-sm);
+  }
+
+  .sl-topnav__log {
+    min-height: var(--tap-min);
+    padding-inline: var(--space-2);
+  }
+
+  .sl-topnav__log-label-full {
+    display: none;
   }
 
   .sl-topnav__trail {
