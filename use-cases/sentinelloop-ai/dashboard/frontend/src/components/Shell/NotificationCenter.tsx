@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { normalizeRisk } from "@ds/colors";
 
 import { notifications } from "../../data/demoData";
+import { notificationAllowed, useOperatorPrefs } from "../../demo/operatorPrefs";
 import { useDemoMode } from "../../demo/useDemoMode";
 
 type Props = {
@@ -12,10 +13,11 @@ type Props = {
 
 export function NotificationCenter({ count }: Props) {
   const [demo] = useDemoMode();
+  const [prefs] = useOperatorPrefs();
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
-  const items = demo ? notifications.slice(0, 6) : [];
+  const items = demo ? notifications.filter((item) => notificationAllowed(item, prefs)).slice(0, 6) : [];
   const unread = count ?? items.length;
 
   useEffect(() => {

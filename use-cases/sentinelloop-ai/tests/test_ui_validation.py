@@ -165,6 +165,8 @@ def test_horizon_demo_dataset_covers_command_center():
     assert "Test User" not in demo
     settings = (FRONTEND / "src" / "pages" / "SettingsPage.tsx").read_text(encoding="utf-8")
     assert "Demo Mode" in settings
+    assert "Spoken worker replies" in settings
+    assert "Alert routing" in settings
     client = (FRONTEND / "src" / "api" / "client.ts").read_text(encoding="utf-8")
     assert "isDemoMode" in client
     assert "demoAdapter" in client

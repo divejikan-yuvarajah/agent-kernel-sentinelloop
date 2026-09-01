@@ -6,6 +6,8 @@ import { Sidebar } from "@ds/components/Sidebar";
 import { CommandCenterControls } from "../CommandCenterControls";
 import { useDemoMode } from "../../demo/useDemoMode";
 import { notifications, organization } from "../../data/demoData";
+import { notificationAllowed, useOperatorPrefs } from "../../demo/operatorPrefs";
+import { OPERATOR_ROLE_LABEL, readOperatorRole, subscribeOperatorRole } from "../../demo/operatorRole";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { MobileNav } from "./MobileNav";
 import { PageContainer } from "./PageContainer";
@@ -48,12 +50,19 @@ export function Shell({
   showCommandControls = true,
 }: Props) {
   const [demo] = useDemoMode();
+  const [prefs] = useOperatorPrefs();
+  const [role, setRole] = useState(readOperatorRole);
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [navOpen, setNavOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const alerts = notificationCount ?? (demo ? notifications.length : 0);
+  const alerts =
+    notificationCount ?? (demo ? notifications.filter((item) => notificationAllowed(item, prefs)).length : 0);
   const crumbs = buildBreadcrumbs(location.pathname, brand || title);
+  const operatorName = prefs.displayName || (demo ? organization.operator.name : "A. Perera");
+  const operatorRole = OPERATOR_ROLE_LABEL[role] || (demo ? organization.operator.role : "Safety Officer");
+
+  useEffect(() => subscribeOperatorRole(() => setRole(readOperatorRole())), []);
 
   useEffect(() => {
     document.title = "SentinelLoop AI Dashboard";
@@ -110,8 +119,8 @@ export function Shell({
       <Sidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} onNavigate={() => setNavOpen(false)} />
       <TopNav
         title={title}
-        operatorName={demo ? organization.operator.name : "A. Perera"}
-        operatorRole={demo ? organization.operator.role : "Safety Officer"}
+        operatorName={operatorName}
+        operatorRole={operatorRole}
         notificationCount={alerts}
         demo={demo}
         navOpen={navOpen || mobileOpen}

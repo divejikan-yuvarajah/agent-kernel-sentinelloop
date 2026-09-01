@@ -3,6 +3,12 @@ const EVENT = "sentinelloop-operator-role";
 
 export type OperatorRole = "officer" | "supervisor" | "admin";
 
+export const OPERATOR_ROLE_LABEL: Record<OperatorRole, string> = {
+  officer: "Safety Officer",
+  supervisor: "Supervisor",
+  admin: "Admin",
+};
+
 export function readOperatorRole(): OperatorRole {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);

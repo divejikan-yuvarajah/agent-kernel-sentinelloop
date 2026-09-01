@@ -11,6 +11,9 @@ import "./styles/command-center.css";
 import "./styles/incident-intel.css";
 import "./styles/shell.css";
 import { App } from "./App";
+import { applyOperatorPrefs } from "./demo/operatorPrefs";
+
+applyOperatorPrefs();
 
 const root = document.getElementById("root");
 if (!root) {
