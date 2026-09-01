@@ -49,6 +49,9 @@ export function TopNav({
         </p>
       </div>
       <div className="sl-topnav__trail">
+        <Link to="/sandbox" className="sl-topnav__live" aria-label="Try It Live sandbox">
+          Try It Live
+        </Link>
         <Link to="/report" className="sl-topnav__log" aria-label="Log a hazard">
           <span aria-hidden="true">+</span>
           <span className="sl-topnav__log-label-full">Log hazard</span>

@@ -12,6 +12,7 @@ from typing import Any
 
 from dashboard.schemas import HeatmapCell, PredictionItem, PredictionsResponse, PreventionAnalytics
 from tools.forecast_tools import detect_location_hotspots, detect_risk_patterns
+from services.sandbox_isolation import filter_production_incidents
 
 log = logging.getLogger("sentinelloop.dashboard.predictions")
 
@@ -130,7 +131,7 @@ async def build_predictions(
     from agents.prevention_agent import generate_prevention_recommendations
 
     generated_at = now or _utcnow()
-    incidents = repository.list_all_incidents()
+    incidents = filter_production_incidents(repository.list_all_incidents())
     patterns = detect_risk_patterns(incidents, now=generated_at)
     flagged = [row for row in patterns if row.get("predicted_risk_zone")]
     recs = await generate_prevention_recommendations(flagged, call_model_fn=call_model_fn)

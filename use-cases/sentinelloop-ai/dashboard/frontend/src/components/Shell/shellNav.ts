@@ -3,6 +3,7 @@ export const SHELL_PRIMARY_NAV = [] as const;
 
 export const SHELL_MOBILE_EXTRA = [
   { to: "/dashboard", label: "Dashboard", end: true },
+  { to: "/sandbox", label: "Try It Live", end: false },
   { to: "/report", label: "Log a hazard", end: false },
   { to: "/incidents", label: "Incidents", end: false },
   { to: "/analytics", label: "Analytics", end: false },
@@ -37,6 +38,11 @@ export function buildBreadcrumbs(pathname: string, pageTitle?: string): Crumb[] 
 
   if (pathname.startsWith("/report")) {
     crumbs.push({ label: "Log a hazard" });
+    return crumbs;
+  }
+
+  if (pathname.startsWith("/sandbox") || pathname.startsWith("/try")) {
+    crumbs.push({ label: "Try It Live" });
     return crumbs;
   }
 

@@ -11,6 +11,7 @@
 
 > **Worker-facing bot**: `@SentinelLoopReportBot` on Telegram *(update once deployed)*
 > **Dashboard**: `http://localhost:8000/dashboard` locally, or your deployed URL *(update once deployed)*
+> **Try It Live**: `/sandbox` — experience the full AI safety pipeline without Telegram setup
 > **API Docs**: `/docs` on your running instance
 > **Slack safety channel**: configured per-organization at setup
 
@@ -52,7 +53,8 @@ Worker / Officer
   │
   ├── Telegram (Text / Photo / Voice note, Sinhala · Tamil · English)
   ├── QR-tagged Telegram open (location/equipment prefilled)
-  └── Dashboard (Manual Entry) — for phoned-in or in-person reports, feeds the same pipeline.
+  ├── Dashboard (Manual Entry) — for phoned-in or in-person reports, feeds the same pipeline.
+  └── Try It Live Sandbox — identical agents; incidents marked is_sandbox=true (isolated).
   ▼
 Deterministic Emergency Bypass  ──── SOS/🆘 detected? ──▶ Instant Critical alert
   │ (no match, continue)             (zero LLM calls, <100ms)
@@ -75,6 +77,18 @@ Prevention Agent  (recurring-pattern detection → preventive-inspection recomme
   ▼
 Dashboard: Loop status ring · risk-tagged incident cards · predictions · audit export
 ```
+
+## Try it yourself
+
+Experience SentinelLoop AI without Telegram setup:
+
+**`/sandbox`**
+
+* Example scenarios: Electrical Emergency, Chemical Spill, Slip Hazard, PPE Violation
+* Supported inputs: text (English / Sinhala / Tamil), optional jpg/png/webp image
+* Expected outputs: language detection, hazard category, deterministic risk score/level, safety guidance, simulated Slack alert, pipeline trace, audit-ready incident preview
+* Isolation: sandbox incidents never affect production analytics, predictions, or the real Slack safety channel
+* Rate limit: 20 messages per session per hour
 
 Every LLM call in this pipeline is routed through a single **cost-governed OpenRouter model router** rather than agents calling providers directly — see [§8](#8-model-router--cost-governance).
 
@@ -212,6 +226,7 @@ Typography: `Space Grotesk` (headers/KPIs), `IBM Plex Sans` (UI text), `IBM Plex
 * 🎙️ **Voice message reporting** — Telegram and Telegram voice notes transcribed via OpenRouter's unified audio endpoint, in the worker's own language, with spend tracked against the same OpenRouter budget ceiling as text and vision.
 * 🗒️ **Automated shift handover briefings** — `handover_agent` collects open/critical/review/overdue incidents, calls `role_fast` **once** to phrase a bullet briefing, stores it in `handover_summaries`, and posts it to the Slack Safety Channel. Judges can trigger **Generate Shift Handover** from the dashboard. Agent Kernel has no in-process cron/scheduler, so automatic shift-end jobs are not wired here.
 * 🖥️ **Manual dashboard entry** — officers can log a phoned-in or in-person report directly, running through the identical risk pipeline as any Telegram report — no shortcut, no separate rules.
+* 🎯 **Live Safety Simulator** — `/sandbox` runs the complete production agent pipeline for judges and reviewers without Telegram, bots, or credentials; Slack is simulated and incidents are isolated with `is_sandbox=true`.
 
 ```
 Phase 2:
@@ -378,6 +393,7 @@ use-cases/sentinelloop_ai/
 │   └── frontend/
 │       ├── landing/
 │       ├── report/          # Manual "Log a hazard" page (same pipeline as Telegram)
+│       ├── sandbox/         # Try It Live Safety Operations Simulator
 │       ├── design-system/
 │       └── src/
 ├── scripts/

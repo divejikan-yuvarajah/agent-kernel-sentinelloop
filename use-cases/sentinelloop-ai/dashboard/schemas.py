@@ -212,6 +212,44 @@ class ManualIncidentResponse(_Out):
     error: str | None = None
 
 
+class SandboxMessageRequest(_Out):
+    session_id: str = ""
+    text: str = ""
+    image_base64: str | None = None
+    image_filename: str | None = None
+    image_content_type: str | None = None
+    judge_mode: bool = False
+    scenario: str | None = None
+    simulate: bool = True
+
+
+class SandboxMessageResponse(_Out):
+    incident_id: str | None = None
+    session_id: str | None = None
+    language: str | None = None
+    translation: str | None = None
+    category: str | None = None
+    location: str | None = None
+    risk_score: int | None = None
+    risk_level: str | None = None
+    guidance: list[str] = Field(default_factory=list)
+    guidance_text: str | None = None
+    slack_alert_preview: str | None = None
+    slack_preview: str | None = None
+    input_channel: str = "sandbox"
+    is_sandbox: bool = True
+    pipeline: list[str] = Field(default_factory=list)
+    pipeline_stages: list[dict[str, Any]] = Field(default_factory=list)
+    clarification_required: bool = False
+    worker_reply: str | None = None
+    vision_suggestion: dict[str, Any] | None = None
+    explainability: dict[str, Any] | None = None
+    processing_ms: int | None = None
+    judge: dict[str, Any] | None = None
+    usage: dict[str, Any] | None = None
+    error: str | None = None
+
+
 class SystemHealth(_Out):
     telegram: str = "disconnected"
     slack: str = "disconnected"

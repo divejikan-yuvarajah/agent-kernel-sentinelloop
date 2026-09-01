@@ -301,8 +301,10 @@ class IncidentOrchestrator:
             return coord
         return _load_agent_fn("coordination_agent.py", "coordinate_incident")
 
-    def _next_ref(self) -> str:
+    def _next_ref(self, *, sandbox: bool = False) -> str:
         self._ref_seq += 1
+        if sandbox:
+            return f"SANDBOX-{self._ref_seq:03d}"
         return f"INC-{self._ref_seq:04d}"
 
     def _load_session(self, sender_id: str, session: Any | None = None) -> tuple[Any, Any]:
@@ -566,6 +568,7 @@ class IncidentOrchestrator:
             message_text=raw,
             incident_ref=str(merged.get("incident_id") or ""),
             location=location,
+            sandbox=channel == "sandbox",
         )
         self._trace("emergency_slack_alert")
         if slack_ok:
@@ -648,7 +651,8 @@ class IncidentOrchestrator:
         message: NormalizedInboundMessage,
         session: Any,
     ) -> dict[str, Any]:
-        ref = merged.get("incident_id") or self._next_ref()
+        sandbox = self._channel(message) == "sandbox"
+        ref = merged.get("incident_id") or self._next_ref(sandbox=sandbox)
         payload = IncidentCreate(
             incident_ref=ref,
             reporter_id=message.sender_id,
@@ -663,9 +667,13 @@ class IncidentOrchestrator:
             current_risk_level=EMERGENCY_RISK_LEVEL,
             original_message_id=message.provider_message_id,
             original_message_text=merged.get("raw_text"),
-            telegram_chat_id=message.chat_id or message.sender_id,
-            telegram_user_id=message.telegram_user_id,
-            telegram_message_id=message.provider_message_id,
+            telegram_chat_id=message.chat_id or message.sender_id if not sandbox else None,
+            telegram_user_id=message.telegram_user_id if not sandbox else None,
+            telegram_message_id=message.provider_message_id if not sandbox else None,
+            input_method=getattr(message, "input_method", None),
+            source_metadata=_source_metadata(message, merged),
+            pipeline_version=getattr(message, "pipeline_version", None),
+            is_sandbox=sandbox,
         )
         if self.repository is None:
             merged["incident_id"] = ref
@@ -694,7 +702,11 @@ class IncidentOrchestrator:
         message_text: str,
         incident_ref: str,
         location: str | None,
+        sandbox: bool = False,
     ) -> bool:
+        if sandbox or (source or "").strip().lower() == "sandbox":
+            log.info("emergency_slack_simulated channel=sentinelloop-sandbox")
+            return True
         text = format_emergency_slack_alert(
             source=source,
             message=message_text,
@@ -1169,6 +1181,9 @@ class IncidentOrchestrator:
             "reporter_id": message.sender_id,
             "timestamp": message.received_at,
             "has_image": bool(message.media),
+            "source_channel": self._channel(message),
+            "input_channel": self._channel(message),
+            "is_sandbox": self._channel(message) == "sandbox",
         }
         if self.repository is None:
             return DuplicateResult(status="none", action="create_new", reason="no_repository")
@@ -1399,16 +1414,17 @@ class IncidentOrchestrator:
         if merged.get("incident_id") and self.repository is None:
             return merged, None
         if self.repository is None:
-            ref = merged.get("incident_id") or self._next_ref()
+            ref = merged.get("incident_id") or self._next_ref(sandbox=self._channel(message) == "sandbox")
             merged["incident_id"] = ref
             merged["incident_ref"] = ref
             merged["status"] = STATUS_VALIDATING
             _cache_set(session, NV_CANONICAL, ref)
             return merged, None
         try:
+            sandbox = self._channel(message) == "sandbox"
             created = self.repository.create_incident(
                 IncidentCreate(
-                    incident_ref=merged.get("incident_id") or self._next_ref(),
+                    incident_ref=merged.get("incident_id") or self._next_ref(sandbox=sandbox),
                     reporter_id=message.sender_id,
                     source_channel=self._channel(message),
                     session_id=str(getattr(session, "id", None) or message.sender_id),
@@ -1439,6 +1455,7 @@ class IncidentOrchestrator:
                     created_by=getattr(message, "created_by", None),
                     source_metadata=_source_metadata(message, merged),
                     pipeline_version=getattr(message, "pipeline_version", None),
+                    is_sandbox=sandbox,
                 )
             )
             mapping = _as_dict(created)
@@ -1837,6 +1854,8 @@ def _source_metadata(message: NormalizedInboundMessage, merged: dict[str, Any]) 
         payload.update(extra)
     channel = (getattr(message, "input_channel", None) or "telegram").strip().lower()
     payload.setdefault("input_channel", channel)
+    if channel == "sandbox":
+        payload["is_sandbox"] = True
     if getattr(message, "input_method", None):
         payload.setdefault("input_method", message.input_method)
     if getattr(message, "created_by", None):

@@ -24,6 +24,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { TelegramBotPage } from "./pages/TelegramBotPage";
 import { LandingPage } from "../landing";
 import { ReportPage } from "../report";
+import { SandboxPage } from "../sandbox";
 
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage").then((module) => ({ default: module.AnalyticsPage })));
 const DesignSystemPage = lazy(() =>
@@ -46,6 +47,8 @@ export function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/report" element={<ReportPage />} />
+        <Route path="/sandbox" element={<SandboxPage />} />
+        <Route path="/try" element={<Navigate to="/sandbox" replace />} />
         <Route path="/emergency" element={<EmergencyPage />} />
         <Route path="/emergency/history" element={<EmergencyHistoryPage />} />
         <Route path="/handover/history" element={<HandoverHistoryPage />} />

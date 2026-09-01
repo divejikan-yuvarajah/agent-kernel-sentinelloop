@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import { DASHBOARD_PATH, TELEGRAM_BOT_HANDLE, TELEGRAM_BOT_URL } from "../constants";
+import { DASHBOARD_PATH, SANDBOX_PATH, TELEGRAM_BOT_HANDLE, TELEGRAM_BOT_URL } from "../constants";
 import { LoopHero } from "./LoopHero";
 
 export function Hero() {
@@ -24,7 +24,10 @@ export function Hero() {
             Sinhala, Tamil, or English.
           </p>
           <div className="sl-hero__actions">
-            <a className="ds-btn" href={TELEGRAM_BOT_URL} target="_blank" rel="noopener noreferrer">
+            <Link className="ds-btn" to={SANDBOX_PATH}>
+              Try SentinelLoop Live
+            </Link>
+            <a className="ds-btn ds-btn--ghost" href={TELEGRAM_BOT_URL} target="_blank" rel="noopener noreferrer">
               Message the bot on Telegram
             </a>
             <Link className="ds-btn ds-btn--ghost" to={DASHBOARD_PATH}>

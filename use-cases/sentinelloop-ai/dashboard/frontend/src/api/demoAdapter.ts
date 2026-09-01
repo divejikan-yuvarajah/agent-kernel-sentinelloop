@@ -1077,6 +1077,145 @@ export function createManualIncident(payload: ManualIncidentPayload) {
   });
 }
 
+const sandboxHistory: Array<{
+  session_id: string;
+  created_at: string;
+  scenario?: string;
+  incident_id: string;
+  risk_level: string;
+  risk_score: number;
+  text: string;
+  result: string;
+}> = [];
+const sandboxRate: Record<string, number> = {};
+let sandboxCost = 0.04;
+
+export function sendSandboxMessage(payload: {
+  session_id: string;
+  text: string;
+  image_base64?: string;
+  image_filename?: string;
+  image_content_type?: string;
+  judge_mode?: boolean;
+  scenario?: string;
+}) {
+  const session = payload.session_id || "demo-user";
+  sandboxRate[session] = (sandboxRate[session] || 0) + 1;
+  if (sandboxRate[session] > 20) {
+    return Promise.reject(new Error("Sandbox rate limit reached (20 messages/session/hour)"));
+  }
+  const text = (payload.text || "").trim();
+  if (!text) return Promise.reject(new Error("text is required"));
+  const lower = text.toLowerCase();
+  let category = "Fire/Smoke";
+  let location = "Machine 4";
+  if (lower.includes("wire") || lower.includes("electric")) {
+    category = "Electrical";
+  } else if (lower.includes("chemical") || lower.includes("spill")) {
+    category = "Chemical";
+    location = "Storage area";
+  } else if (lower.includes("water") || lower.includes("slip")) {
+    category = "Slip/Trip";
+    location = "Factory floor";
+  } else if (lower.includes("helmet") || lower.includes("ppe")) {
+    category = "Missing PPE";
+    location = "Workshop floor";
+  }
+  const id = `SANDBOX-${String(sandboxHistory.length + 1).padStart(3, "0")}`;
+  sandboxCost += 0.001;
+  const language = /[\u0d80-\u0dff]/.test(text) ? "Sinhala" : /[\u0b80-\u0bff]/.test(text) ? "Tamil" : "English";
+  const translation =
+    language === "Sinhala" || language === "Tamil"
+      ? "Smoke coming from machine 4. Three workers are nearby."
+      : null;
+  const response = {
+    incident_id: id,
+    session_id: session,
+    language,
+    translation,
+    category,
+    location,
+    risk_score: 20,
+    risk_level: "Critical",
+    guidance: ["Move away from the hazard and notify a supervisor."],
+    guidance_text: "Move away from the hazard and notify a supervisor.",
+    slack_alert_preview: `🚨 Critical alert would be sent to #sentinelloop-sandbox — Safety Response Team (${category})`,
+    slack_preview: `🚨 Critical alert would be sent to #sentinelloop-sandbox — Safety Response Team (${category})`,
+    input_channel: "sandbox",
+    is_sandbox: true,
+    pipeline: ["intake_agent", "incident_agent", "risk_agent", "guidance_agent", "coordination_agent", "repository"],
+    pipeline_stages: [
+      { id: "language", label: "Language Detection", ok: true, detail: language },
+      { id: "understanding", label: "Incident Understanding", ok: true, detail: category },
+      { id: "risk", label: "Risk Assessment", ok: true, detail: "Critical" },
+      { id: "guidance", label: "Guidance Generated", ok: true, detail: "Completed" },
+      { id: "slack", label: "Slack Coordination", ok: true, detail: "Sandbox alert generated" },
+    ],
+    clarification_required: false,
+    worker_reply: null,
+    vision_suggestion: payload.image_base64
+      ? {
+          status: "Image received",
+          analysis: "AI Vision Analysis",
+          possible_hazard: category,
+          confidence: 82,
+          observations: ["liquid spill", "container nearby"],
+          note: "Vision suggestion only — final risk uses the deterministic matrix.",
+        }
+      : null,
+    explainability: {
+      ai_estimates: { severity: 5, likelihood: 4 },
+      deterministic: { risk_score: 20, final: "Critical" },
+      note: "AI estimates severity and likelihood. Rules decide the final risk.",
+    },
+    processing_ms: 180,
+    judge: payload.judge_mode
+      ? {
+          processing_ms: 180,
+          model_used: "demo-scripted",
+          cost_estimate_usd: 0.001,
+          final_decision: { risk_level: "Critical", risk_score: 20, incident_id: id },
+        }
+      : null,
+    usage: {
+      messages: Object.values(sandboxRate).reduce((a, b) => a + b, 0),
+      session_messages: sandboxRate[session],
+      session_limit: 20,
+      ai_cost_usd: sandboxCost,
+      budget_usd: 10,
+      remaining_usd: Math.max(0, 10 - sandboxCost),
+    },
+    error: null,
+  };
+  sandboxHistory.unshift({
+    session_id: session,
+    created_at: new Date().toISOString(),
+    scenario: payload.scenario || category,
+    incident_id: id,
+    risk_level: "Critical",
+    risk_score: 20,
+    text: text.slice(0, 160),
+    result: "Critical",
+  });
+  return wait(response);
+}
+
+export function fetchSandboxUsage(session_id?: string) {
+  const session_messages = session_id ? sandboxRate[session_id] || 0 : 0;
+  return wait({
+    messages: Object.values(sandboxRate).reduce((a, b) => a + b, 0),
+    session_messages,
+    session_limit: 20,
+    ai_cost_usd: sandboxCost,
+    budget_usd: 10,
+    remaining_usd: Math.max(0, 10 - sandboxCost),
+  });
+}
+
+export function fetchSandboxHistory(limit = 20) {
+  return wait(sandboxHistory.slice(0, limit));
+}
+
 export function simulateEmergencyReport(scenario = "smoke") {
   const samples: Record<string, ManualIncidentPayload> = {
     electrical: {

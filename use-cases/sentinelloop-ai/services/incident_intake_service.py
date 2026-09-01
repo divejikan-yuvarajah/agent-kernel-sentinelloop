@@ -28,7 +28,8 @@ log = logging.getLogger("sentinelloop.intake_service")
 SOURCE_TELEGRAM = "telegram"
 SOURCE_MANUAL = "manual"
 SOURCE_QR = "qr"
-VALID_SOURCES = frozenset({SOURCE_TELEGRAM, SOURCE_MANUAL, SOURCE_QR})
+SOURCE_SANDBOX = "sandbox"
+VALID_SOURCES = frozenset({SOURCE_TELEGRAM, SOURCE_MANUAL, SOURCE_QR, SOURCE_SANDBOX})
 
 
 def compose_manual_report_text(
@@ -228,6 +229,14 @@ async def process_incident_input(
         inbound.input_channel = SOURCE_MANUAL
         inbound.input_method = inbound.input_method or "dashboard"
         inbound.pipeline_version = inbound.pipeline_version or PIPELINE_VERSION
+    if channel == SOURCE_SANDBOX:
+        inbound.input_channel = SOURCE_SANDBOX
+        inbound.input_method = inbound.input_method or "sandbox"
+        inbound.pipeline_version = inbound.pipeline_version or PIPELINE_VERSION
+        meta = dict(inbound.source_metadata or {})
+        meta["input_channel"] = SOURCE_SANDBOX
+        meta["is_sandbox"] = True
+        inbound.source_metadata = meta
     log.info("incident_intake source=%s channel=%s", source, inbound.input_channel)
     dispatch = getattr(orch, "process_inbound_message", None) or orch.process_incoming_telegram_message
     return await dispatch(inbound)

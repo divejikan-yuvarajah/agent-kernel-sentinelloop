@@ -6,6 +6,7 @@ export const TELEGRAM_BOT_URL = "https://t.me/SentinelLoopReportBot";
 export const GITHUB_REPO_URL = "https://github.com/divejikan-yuvarajah/agent-kernel-sentinelloop";
 export const AGENT_KERNEL_URL = "https://kernel.yaala.ai";
 export const DASHBOARD_PATH = "/dashboard";
+export const SANDBOX_PATH = "/sandbox";
 
 export const LANDING_TITLE = "SentinelLoop AI — Report danger in seconds";
 export const LANDING_DESCRIPTION =
@@ -161,6 +162,11 @@ export const FEATURES: {
     title: "Manual dashboard entry",
     description:
       "Officers can log a phoned-in or in-person report directly — the same intake → risk → guidance → Slack pipeline as Telegram, with no shortcut rules.",
+  },
+  {
+    icon: "alerts",
+    title: "Live Safety Simulator",
+    description: "Experience the complete AI safety pipeline instantly without setup.",
   },
 ];
 

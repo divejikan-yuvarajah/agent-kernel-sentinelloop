@@ -40,6 +40,8 @@ from dashboard.schemas import (
     RecurringResponse,
     ReviewQueueResponse,
     RouterStatus,
+    SandboxMessageRequest,
+    SandboxMessageResponse,
     SystemHealth,
     TelegramBotStatus,
     VoiceAnalytics,
@@ -718,6 +720,69 @@ class DashboardHandler(RESTRequestHandler):
                 methods=["POST", "PUT", "PATCH", "DELETE"],
                 include_in_schema=False,
             )
+
+        @router.post(
+            "/sandbox/message",
+            response_model=SandboxMessageResponse,
+            summary="Try It Live sandbox message",
+            description="Run the production safety pipeline in an isolated sandbox session.",
+        )
+        async def sandbox_message(body: SandboxMessageRequest) -> SandboxMessageResponse:
+            from services.demo_mode import demo_mode_enabled
+            from services.sandbox_service import (
+                SandboxRateLimitError,
+                SandboxValidationError,
+                build_sandbox_orchestrator,
+                infer_demo_category,
+                process_sandbox_message,
+            )
+
+            try:
+                category, location = infer_demo_category(body.text or "")
+                orch = self._orchestrator
+                if orch is None and (demo_mode_enabled() or body.simulate):
+                    orch = build_sandbox_orchestrator(
+                        repository=self._repository or self._reader()._repo,
+                        raw_text=body.text or "",
+                        category=category,
+                        location=location,
+                    )
+                payload = await process_sandbox_message(
+                    session_id=body.session_id,
+                    text=body.text,
+                    image_base64=body.image_base64,
+                    image_filename=body.image_filename,
+                    image_content_type=body.image_content_type,
+                    orchestrator=orch,
+                    repository=self._repository or self._reader()._repo,
+                    judge_mode=bool(body.judge_mode),
+                    scenario=body.scenario,
+                )
+            except SandboxValidationError as exc:
+                raise HTTPException(status_code=400, detail=exc.message) from None
+            except SandboxRateLimitError as exc:
+                raise HTTPException(status_code=429, detail=exc.message) from None
+            except Exception:
+                log.exception("sandbox message failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+            self._cache.clear()
+            return SandboxMessageResponse.model_validate(payload)
+
+        @router.get("/sandbox/usage", summary="Sandbox demo usage")
+        async def sandbox_usage(session_id: str | None = Query(default=None)) -> dict[str, Any]:
+            from services.sandbox_service import sandbox_usage as usage_fn
+
+            return usage_fn(session_id=session_id)
+
+        @router.get("/sandbox/history", summary="Previous sandbox demo sessions")
+        async def sandbox_history(limit: int = Query(default=20, ge=1, le=100)) -> dict[str, Any]:
+            from services.sandbox_service import list_sandbox_history
+
+            return {"items": list_sandbox_history(limit=limit)}
+
+        @router.post("/sandbox/replay", response_model=SandboxMessageResponse, summary="Replay a sandbox incident")
+        async def sandbox_replay(body: SandboxMessageRequest) -> SandboxMessageResponse:
+            return await sandbox_message(body)
 
         return router
 

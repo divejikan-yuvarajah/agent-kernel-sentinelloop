@@ -122,6 +122,9 @@ class DuplicateQuery(BaseModel):
     timestamp: datetime | None = None
     has_image: bool = False
     is_active: bool | None = None
+    source_channel: str | None = None
+    is_sandbox: bool = False
+    input_channel: str | None = None
 
 
 class DuplicateCandidate(BaseModel):
@@ -363,9 +366,25 @@ def find_candidate_incidents(
         return []
     cutoff = now - timedelta(hours=window_hours)
     rows = _load_incidents(repository, cutoff=cutoff)
+    query_sandbox = False
+    try:
+        from services.sandbox_isolation import incident_is_sandbox
+
+        query_sandbox = incident_is_sandbox(payload)
+    except Exception:
+        query_sandbox = False
     candidates: list[DuplicateCandidate] = []
     for row in rows:
         mapping = _incident_mapping(row)
+        try:
+            from services.sandbox_isolation import incident_is_sandbox
+
+            row_sandbox = incident_is_sandbox(mapping) or incident_is_sandbox(row)
+        except Exception:
+            row_sandbox = (mapping.get("source_channel") or "").strip().lower() == "sandbox"
+        # Sandbox incidents only match other sandbox incidents (and never production).
+        if query_sandbox != row_sandbox:
+            continue
         if not _within_window(mapping, now, window_hours):
             continue
         closed = _is_closed(mapping)

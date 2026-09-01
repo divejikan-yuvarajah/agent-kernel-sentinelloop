@@ -109,6 +109,7 @@ class MemoryRepo:
             "created_by": data.created_by,
             "source_metadata": data.source_metadata,
             "pipeline_version": data.pipeline_version,
+            "is_sandbox": bool(getattr(data, "is_sandbox", False) or (data.source_channel or "").lower() == "sandbox"),
             "created_at": datetime.now(timezone.utc),
         }
         self.incidents[uid] = row
@@ -129,6 +130,9 @@ class MemoryRepo:
 
     def list_all_incidents(self, filters=None):
         return self.list_incidents(filters)
+
+    def row_key(self, incident: Incident) -> str:
+        return str(incident.id)
 
     def add_update(self, data) -> None:
         self.updates.append(data)
@@ -159,6 +163,34 @@ class MemoryRepo:
 
     def get_assignment_for_incident(self, incident_id: UUID):
         return self.assignments.get(incident_id)
+
+    def list_assignments_for_incidents(self, keys):
+        del keys
+        return list(self.assignments.values())
+
+    def list_risk_assessments_for_incidents(self, keys):
+        del keys
+        return []
+
+    def list_risk_assessments_for_incident(self, incident_id):
+        del incident_id
+        return []
+
+    def list_evidence_for_incident(self, incident_id):
+        del incident_id
+        return []
+
+    def list_updates_for_incident(self, incident_id):
+        del incident_id
+        return []
+
+    def list_recent_updates(self, limit: int = 12):
+        del limit
+        return []
+
+    def list_duplicates_of(self, incident_id):
+        del incident_id
+        return []
 
     def update_incident_status(self, incident_id: UUID, status: str) -> Incident:
         self.incidents[incident_id]["status"] = status

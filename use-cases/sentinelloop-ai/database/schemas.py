@@ -63,6 +63,7 @@ class IncidentCreate(_InputModel):
     created_by: str | None = None
     source_metadata: dict[str, Any] | None = None
     pipeline_version: str | None = None
+    is_sandbox: bool = False
 
     @field_validator("injury_occurred", "hazard_currently_active", mode="before")
     @classmethod

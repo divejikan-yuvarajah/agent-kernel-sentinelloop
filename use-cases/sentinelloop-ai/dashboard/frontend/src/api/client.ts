@@ -525,6 +525,99 @@ export function createManualIncident(payload: ManualIncidentPayload) {
   return postJson<ManualIncidentResponse>("/incidents/manual", payload);
 }
 
+export type SandboxMessagePayload = {
+  session_id: string;
+  text: string;
+  image_base64?: string;
+  image_filename?: string;
+  image_content_type?: string;
+  judge_mode?: boolean;
+  scenario?: string;
+  simulate?: boolean;
+};
+
+export type SandboxMessageResponse = {
+  incident_id: string | null;
+  session_id?: string | null;
+  language?: string | null;
+  translation?: string | null;
+  category?: string | null;
+  location?: string | null;
+  risk_score: number | null;
+  risk_level: string | null;
+  guidance: string[];
+  guidance_text?: string | null;
+  slack_alert_preview?: string | null;
+  slack_preview?: string | null;
+  input_channel?: string;
+  is_sandbox?: boolean;
+  pipeline: string[];
+  pipeline_stages?: { id?: string; label: string; ok: boolean; detail?: string }[];
+  clarification_required?: boolean;
+  worker_reply?: string | null;
+  vision_suggestion?: {
+    status?: string;
+    analysis?: string;
+    possible_hazard?: string;
+    confidence?: number;
+    observations?: string[];
+    note?: string;
+  } | null;
+  explainability?: {
+    ai_estimates?: { severity?: number; likelihood?: number };
+    deterministic?: { risk_score?: number | null; final?: string | null };
+    note?: string;
+    risk_explanation?: string | null;
+  } | null;
+  processing_ms?: number | null;
+  judge?: {
+    processing_ms?: number;
+    model_used?: string;
+    cost_estimate_usd?: number;
+    final_decision?: Record<string, unknown>;
+    pipeline_stages?: unknown;
+  } | null;
+  usage?: SandboxUsage | null;
+  error?: string | null;
+};
+
+export type SandboxUsage = {
+  messages: number;
+  session_messages?: number;
+  session_limit?: number;
+  ai_cost_usd: number;
+  budget_usd: number;
+  remaining_usd: number;
+};
+
+export type SandboxHistoryItem = {
+  session_id: string;
+  created_at?: string;
+  scenario?: string;
+  incident_id?: string | null;
+  risk_level?: string | null;
+  risk_score?: number | null;
+  text?: string;
+  result?: string;
+};
+
+export function sendSandboxMessage(payload: SandboxMessagePayload) {
+  if (isDemoMode()) return demo.sendSandboxMessage(payload);
+  return postJson<SandboxMessageResponse>("/sandbox/message", payload);
+}
+
+export function fetchSandboxUsage(session_id?: string) {
+  if (isDemoMode()) return demo.fetchSandboxUsage(session_id);
+  const query = session_id ? `?session_id=${encodeURIComponent(session_id)}` : "";
+  return getJson<SandboxUsage>(`/sandbox/usage${query}`);
+}
+
+export async function fetchSandboxHistory(limit = 20) {
+  if (isDemoMode()) return demo.fetchSandboxHistory(limit);
+  const body = await getJson<{ items: SandboxHistoryItem[] }>(`/sandbox/history?limit=${limit}`);
+  return body.items || [];
+}
+
 export function simulateEmergencyReport(scenario = "smoke") {
   if (isDemoMode()) return demo.simulateEmergencyReport(scenario);
   return postJson<ManualIncidentResponse>("/incidents/simulate", { simulate: true, scenario });

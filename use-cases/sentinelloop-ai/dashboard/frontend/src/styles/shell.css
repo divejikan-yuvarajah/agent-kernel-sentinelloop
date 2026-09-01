@@ -239,6 +239,28 @@
     border-color var(--transition-duration) var(--transition-timing);
 }
 
+.sl-topnav__live {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--verified-teal);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--verified-teal) 12%, var(--panel));
+  color: var(--verified-teal);
+  font-family: var(--font-body);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sl-topnav__live:hover,
+.sl-topnav__live:focus-visible {
+  background: color-mix(in srgb, var(--verified-teal) 22%, var(--panel));
+  color: var(--verified-teal);
+}
+
 .sl-topnav__log:hover,
 .sl-topnav__log:focus-visible {
   background: var(--maroon-deep);

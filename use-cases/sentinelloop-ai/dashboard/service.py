@@ -56,6 +56,7 @@ from database.models import Assignment, Incident, IncidentEvidence, IncidentUpda
 from database.repository import IncidentRepository
 from database.schema_map import parse_update_envelope
 from database.schemas import IncidentFilters
+from services.sandbox_isolation import filter_production_incidents
 from tools.duplicate_tools import duplicate_detection_stats
 from tools.lifecycle import to_display_status
 from tools.qr_tags import SOURCE_QR_TAGGED, extract_qr_origin
@@ -582,6 +583,10 @@ class DashboardReadService:
             current_risk_level=normalize_risk_filter(risk_level),
         )
         incidents = self._repo.list_all_incidents(filters)
+        if source_channel and source_channel.strip().lower() == "sandbox":
+            incidents = [item for item in incidents if (item.source_channel or "").strip().lower() == "sandbox"]
+        else:
+            incidents = filter_production_incidents(incidents)
         stage_statuses = statuses_for_stage(stage)
         if stage_statuses is not None:
             incidents = [item for item in incidents if (item.status or "").upper() in stage_statuses]
@@ -738,7 +743,7 @@ class DashboardReadService:
         )
 
     def analytics_summary(self) -> AnalyticsSummary:
-        incidents = self._repo.list_all_incidents()
+        incidents = filter_production_incidents(self._repo.list_all_incidents())
         assignments = _latest_by_incident(
             self._repo.list_assignments_for_incidents([self._repo.row_key(item) for item in incidents])
         )
@@ -922,7 +927,7 @@ class DashboardReadService:
         )
 
     def emergency_command_center(self) -> EmergencyCommandCenter:
-        incidents = self._repo.list_all_incidents()
+        incidents = filter_production_incidents(self._repo.list_all_incidents())
         updates = self._repo.list_recent_updates(limit=400)
         from guardrails.emergency_bypass import emergency_stats
 
@@ -1031,7 +1036,7 @@ class DashboardReadService:
         }
 
     def recurring_hazards(self, *, window_days: int = 30, threshold: int = 3) -> RecurringResponse:
-        incidents = self._repo.list_all_incidents()
+        incidents = filter_production_incidents(self._repo.list_all_incidents())
         now = _utcnow()
         start = now - timedelta(days=window_days)
         in_window = [item for item in incidents if (_aware(item.created_at) or now) >= start]
@@ -1172,7 +1177,7 @@ class DashboardReadService:
     def guardrail_status(self):
         from dashboard.safety import build_guardrail_status
 
-        incidents = self._repo.list_all_incidents(IncidentFilters())
+        incidents = filter_production_incidents(self._repo.list_all_incidents(IncidentFilters()))
         spent, limit = self._spend_snapshot()
         anonymous = sum(1 for item in incidents if getattr(item, "is_anonymous", False))
         return build_guardrail_status(incidents=incidents, budget_limit=limit, spent=spent, anonymous_count=anonymous)
@@ -1180,7 +1185,7 @@ class DashboardReadService:
     def review_queue(self):
         from dashboard.safety import build_review_queue
 
-        incidents = self._repo.list_all_incidents(IncidentFilters())
+        incidents = filter_production_incidents(self._repo.list_all_incidents(IncidentFilters()))
         keys = [self._repo.row_key(item) for item in incidents]
         assignments = _latest_by_incident(self._repo.list_assignments_for_incidents(keys))
         return build_review_queue(incidents, assignments)
@@ -1198,7 +1203,7 @@ class DashboardReadService:
     def guardrail_compliance_export(self):
         from dashboard.safety import build_compliance_export
 
-        incidents = self._repo.list_all_incidents(IncidentFilters())
+        incidents = filter_production_incidents(self._repo.list_all_incidents(IncidentFilters()))
         spent, limit = self._spend_snapshot()
         return build_compliance_export(incidents=incidents, spent=spent, budget_limit=limit)
 
