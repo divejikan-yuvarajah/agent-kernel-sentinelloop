@@ -44,13 +44,14 @@ def test_primary_navigation_routes():
     nav = (SHELL / "shellNav.ts").read_text(encoding="utf-8")
     top = (SHELL / "TopNav.tsx").read_text(encoding="utf-8")
     mobile = (SHELL / "MobileNav.tsx").read_text(encoding="utf-8")
-    for route in ("/dashboard", "/incidents", "/analytics", "/ai-usage"):
-        assert route in nav
-    assert "Dashboard" in nav and "Incidents" in nav
-    assert "Predictions" in nav and "Router Status" in nav
-    assert "SHELL_PRIMARY_NAV" in top
-    assert "Settings" in mobile or "SHELL_MOBILE_EXTRA" in mobile
+    assert "SHELL_MOBILE_EXTRA" in nav
     assert "SENTINELLOOP" in top
+    assert "sl-topnav__links" not in top
+    assert "Dashboard" in mobile or "SHELL_MOBILE_EXTRA" in mobile
+    assert "Settings" in mobile or "SHELL_MOBILE_EXTRA" in mobile
+    assert "/ai-usage" not in nav
+    assert "Router Status" not in nav
+    assert "Predictions" not in nav
 
 
 def test_router_status_pill_uses_endpoint_and_semantic_tones():

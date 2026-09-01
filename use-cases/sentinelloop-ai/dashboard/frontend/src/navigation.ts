@@ -14,7 +14,6 @@ export const NAV_GROUPS = [
     label: "Intelligence",
     links: [
       { to: "/analytics", label: "Analytics", icon: "analytics" as const },
-      { to: "/ai-usage", label: "AI Usage", icon: "analytics" as const },
       { to: "/forecast/cnc-area__electrical", label: "Risk Forecast", icon: "forecast" as const },
       { to: "/reports", label: "Reports", icon: "reports" as const },
       { to: "/knowledge", label: "Knowledge Base", icon: "knowledge" as const },
@@ -56,7 +55,6 @@ export const ROUTE_CRUMBS: { prefix: string; label: string; to?: string }[] = [
   { prefix: "/follow-up", label: "Follow-up", to: "/follow-up" },
   { prefix: "/evidence", label: "Evidence", to: "/evidence" },
   { prefix: "/analytics", label: "Analytics", to: "/analytics" },
-  { prefix: "/ai-usage", label: "AI Usage", to: "/ai-usage" },
   { prefix: "/forecast", label: "Predictions", to: "/analytics" },
   { prefix: "/reports", label: "Reports", to: "/reports" },
   { prefix: "/knowledge", label: "Knowledge", to: "/knowledge" },

@@ -1,5 +1,4 @@
 import { useEffect, useId, useState } from "react";
-import { Link } from "react-router-dom";
 
 import { Modal } from "@ds/components/Modal";
 import { Button } from "@ds/components/Button";
@@ -90,17 +89,12 @@ export function RouterStatusPill({ className = "" }: Props) {
         aria-controls={titleId}
         onClick={() => setOpen(true)}
         title="AI Usage Details"
+        aria-label={`Router Status: ${statusLabel(key, loading, failed)}`}
       >
         <span className="sl-router-pill__dot" aria-hidden="true" />
         <span className="sl-router-pill__copy">
-          <strong>Router Status</strong>
-          <span className="ds-mono">
-            {statusLabel(key, loading, failed)} · {model}
-          </span>
-          <span className="ds-mono">
-            Spend: {loading ? "…" : money(spent)}
-            {!loading && limit != null ? ` / ${money(limit)}` : ""}
-          </span>
+          <strong className="sr-only">Router Status</strong>
+          <span>{statusLabel(key, loading, failed)}</span>
         </span>
       </button>
 
@@ -109,7 +103,7 @@ export function RouterStatusPill({ className = "" }: Props) {
           {loading ? (
             <p role="status">Loading router status…</p>
           ) : failed ? (
-            <p role="alert">Router status could not be loaded. Open Router Status for details.</p>
+            <p role="alert">Router status could not be loaded. Try again shortly.</p>
           ) : (
             <dl>
               <div>
@@ -135,9 +129,6 @@ export function RouterStatusPill({ className = "" }: Props) {
             </dl>
           )}
           <div className="ds-toolbar">
-            <Link className="ds-btn ds-btn--ghost" to="/ai-usage" onClick={() => setOpen(false)}>
-              Open Router Status
-            </Link>
             <Button variant="quiet" onClick={() => setOpen(false)}>
               Close
             </Button>

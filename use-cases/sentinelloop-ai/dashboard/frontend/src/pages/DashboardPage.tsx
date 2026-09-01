@@ -12,11 +12,10 @@ import {
   PredictedRiskZones,
   ResponsePerformanceWidget,
   RiskDistributionWidget,
-  RouterStatusStrip,
 } from "@ds/index";
-import type { AnalyticsSummary, IncidentSummary, LoopStage, RecurringHazard, RouterStatus, PredictionItem, PredictionsResponse } from "@ds/types";
+import type { AnalyticsSummary, IncidentSummary, LoopStage, RecurringHazard, PredictionItem, PredictionsResponse } from "@ds/types";
 
-import { fetchAnalyticsSummary, fetchIncidents, fetchLatestHandover, fetchPredictions, fetchRecurring, fetchRouterStatus, fetchTelegramHealth, generateHandover, requestInspection, type HandoverRecord, type TelegramBotStatus } from "../api/client";
+import { fetchAnalyticsSummary, fetchIncidents, fetchLatestHandover, fetchPredictions, fetchRecurring, fetchTelegramHealth, generateHandover, requestInspection, type HandoverRecord, type TelegramBotStatus } from "../api/client";
 import { organization } from "../data/demoData";
 import { incidentThumbnail, recentEvidenceFeed, locationRiskDemo } from "../data/demoImages";
 import { EvidenceImage } from "../components/EvidenceImage";
@@ -48,7 +47,6 @@ export function DashboardPage() {
   const [incidents, setIncidents] = useState<IncidentSummary[]>([]);
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [recurring, setRecurring] = useState<RecurringHazard[]>([]);
-  const [router, setRouter] = useState<RouterStatus | null>(null);
   const [predictions, setPredictions] = useState<PredictionsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,17 +64,15 @@ export function DashboardPage() {
       fetchIncidents({ limit: 8, sort_by: "newest", stage: stage ?? undefined }),
       fetchAnalyticsSummary(),
       fetchRecurring(),
-      fetchRouterStatus(),
       fetchPredictions(),
       fetchLatestHandover(),
       fetchTelegramHealth(),
     ])
-      .then(([list, analytics, repeats, routerStatus, forecast, latestHandover, botHealth]) => {
+      .then(([list, analytics, repeats, forecast, latestHandover, botHealth]) => {
         if (cancelled) return;
         setIncidents(list.items);
         setSummary(analytics);
         setRecurring(repeats.items);
-        setRouter(routerStatus);
         setPredictions(forecast);
         setHandover(latestHandover);
         setTelegramHealth(botHealth);
@@ -171,7 +167,7 @@ export function DashboardPage() {
 
   return (
     <AppShell
-      title="Operations overview"
+      title="Dashboard"
       brand="SentinelLoop AI"
       subtitle="Safety Intelligence Center"
       operationalStatus={operationalStatus}
@@ -418,7 +414,6 @@ export function DashboardPage() {
           </Panel>
         </div>
       ) : null}
-      <RouterStatusStrip status={router} loading={loading} />
       <div className="ds-dash-learn">
         <Panel title={stage ? `Incidents · ${stage}` : "Active incidents"} titleTooltip="We detect hazards.">
           {loading ? (

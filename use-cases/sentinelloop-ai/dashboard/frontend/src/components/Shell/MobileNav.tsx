@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 
-import { SHELL_MOBILE_EXTRA, SHELL_PRIMARY_NAV } from "./shellNav";
+import { SHELL_MOBILE_EXTRA } from "./shellNav";
 
 type Props = {
   open: boolean;
@@ -14,11 +14,11 @@ export function MobileNav({ open, onClose }: Props) {
       <button type="button" className="sl-mobile-nav__backdrop" aria-label="Close menu" onClick={onClose} />
       <nav className="sl-mobile-nav__panel">
         <p className="sl-mobile-nav__title">Menu</p>
-        {[...SHELL_PRIMARY_NAV, ...SHELL_MOBILE_EXTRA].map((link) => (
+        {SHELL_MOBILE_EXTRA.map((link) => (
           <NavLink
             key={link.to}
             to={link.to}
-            end={"end" in link ? link.end : false}
+            end={link.end}
             className={({ isActive }) => `sl-mobile-nav__link${isActive ? " is-active" : ""}`}
             onClick={onClose}
           >

@@ -1,11 +1,12 @@
-export const SHELL_PRIMARY_NAV = [
+/** Mobile drawer links — sidebar remains the full ops nav. */
+export const SHELL_PRIMARY_NAV = [] as const;
+
+export const SHELL_MOBILE_EXTRA = [
   { to: "/dashboard", label: "Dashboard", end: true },
   { to: "/incidents", label: "Incidents", end: false },
-  { to: "/analytics", label: "Predictions", end: false },
-  { to: "/ai-usage", label: "Router Status", end: false },
+  { to: "/analytics", label: "Analytics", end: false },
+  { to: "/settings", label: "Settings", end: false },
 ] as const;
-
-export const SHELL_MOBILE_EXTRA = [{ to: "/settings", label: "Settings" }] as const;
 
 export type Crumb = { label: string; to?: string };
 
@@ -29,12 +30,7 @@ export function buildBreadcrumbs(pathname: string, pageTitle?: string): Crumb[] 
   }
 
   if (pathname.startsWith("/analytics") || pathname.startsWith("/forecast")) {
-    crumbs.push({ label: "Predictions" });
-    return crumbs;
-  }
-
-  if (pathname.startsWith("/ai-usage")) {
-    crumbs.push({ label: "Router Status" });
+    crumbs.push({ label: "Analytics" });
     return crumbs;
   }
 

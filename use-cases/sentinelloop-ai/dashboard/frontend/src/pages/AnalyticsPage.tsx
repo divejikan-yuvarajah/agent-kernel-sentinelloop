@@ -141,17 +141,6 @@ export function AnalyticsPage() {
           ))}
         </div>
       </Panel>
-      <Panel title="AI Usage Dashboard" style={{ marginTop: 24 }}>
-        <p>Text Cost: ${Number(summary?.ai_usage?.text_cost_usd ?? 0).toFixed(2)}</p>
-        <p>Vision Cost: ${Number(summary?.ai_usage?.vision_cost_usd ?? 0).toFixed(2)}</p>
-        <p>Voice Cost: ${Number(summary?.ai_usage?.voice_cost_usd ?? 0).toFixed(2)}</p>
-        <p>
-          Remaining Budget:{" "}
-          {summary?.ai_usage?.remaining_budget_usd != null
-            ? `$${summary.ai_usage.remaining_budget_usd.toFixed(2)}`
-            : "—"}
-        </p>
-      </Panel>
       <Panel title="Most reported hazard" style={{ marginTop: 24 }}>
         <div className="ds-share">
           {(summary?.category_share ?? [

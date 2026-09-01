@@ -109,7 +109,7 @@ export function Shell({
       ) : null}
       <Sidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} onNavigate={() => setNavOpen(false)} />
       <TopNav
-        title={brand || title}
+        title={title}
         operatorName={demo ? organization.operator.name : "A. Perera"}
         operatorRole={demo ? organization.operator.role : "Safety Officer"}
         notificationCount={alerts}
@@ -132,6 +132,9 @@ export function Shell({
             <Breadcrumbs items={crumbs} />
             {showCommandControls ? <CommandCenterControls /> : null}
           </div>
+          <header className="sl-page-header">
+            <h1 className="sl-page-header__title">{title}</h1>
+          </header>
           <div className="sl-shell__content">{children}</div>
         </PageContainer>
       </main>
