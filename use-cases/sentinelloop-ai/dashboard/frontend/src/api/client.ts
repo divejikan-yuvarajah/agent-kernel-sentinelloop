@@ -119,6 +119,25 @@ export type IncidentDetail = {
     playback_url?: string | null;
     uploaded_by?: string;
     source?: string | null;
+    voice_reply_sent?: boolean | null;
+    voice_language?: string | null;
+    voice_model?: string | null;
+    voice_cost_usd?: number | null;
+    voice_loop_status?: string | null;
+    guidance_playback_url?: string | null;
+  } | null;
+  accessibility?: {
+    voice_received?: boolean;
+    guidance_generated?: boolean;
+    voice_reply_delivered?: boolean;
+    text_only?: boolean;
+    language?: string | null;
+    language_name?: string | null;
+    status?: string;
+    voice_model?: string | null;
+    voice_cost_usd?: number | null;
+    guidance_playback_url?: string | null;
+    loop_steps?: string[];
   } | null;
   vision?: {
     hazard_category: string | null;
@@ -371,6 +390,11 @@ export type AuditExport = {
     duration_seconds: number | null;
     confidence_label: string | null;
     audio_format: string | null;
+    voice_reply_sent?: boolean | null;
+    voice_language?: string | null;
+    voice_model?: string | null;
+    voice_cost_usd?: number | null;
+    full_accessibility_loop?: boolean | null;
   } | null;
   resolution: {
     status: string | null;
@@ -531,6 +555,10 @@ export type SandboxMessagePayload = {
   image_base64?: string;
   image_filename?: string;
   image_content_type?: string;
+  voice_sample?: boolean;
+  voice_base64?: string;
+  voice_filename?: string;
+  voice_content_type?: string;
   judge_mode?: boolean;
   scenario?: string;
   simulate?: boolean;
@@ -578,6 +606,15 @@ export type SandboxMessageResponse = {
     pipeline_stages?: unknown;
   } | null;
   usage?: SandboxUsage | null;
+  voice_loop?: {
+    voice_received?: boolean;
+    transcript?: string;
+    risk_level?: string | null;
+    guidance?: string[];
+    voice_reply_sent?: boolean;
+    pipeline?: string[];
+    note?: string;
+  } | null;
   error?: string | null;
 };
 

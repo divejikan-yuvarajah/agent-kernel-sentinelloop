@@ -242,6 +242,7 @@ def build_sandbox_message(
     session_id: str,
     text: str,
     photo: InboundMedia | None = None,
+    voice_used: bool = False,
 ) -> NormalizedInboundMessage:
     sender = f"sandbox:{session_id}"
     message_type = "image" if photo is not None else "text"
@@ -255,12 +256,16 @@ def build_sandbox_message(
         received_at=datetime.now(timezone.utc),
         supported=True,
         input_channel=SOURCE_SANDBOX,
-        input_method="sandbox",
+        input_method="voice" if voice_used else "sandbox",
+        voice_used=voice_used,
+        audio_used=voice_used,
+        transcription_available=voice_used,
         pipeline_version=PIPELINE_VERSION,
         source_metadata={
             "input_channel": SOURCE_SANDBOX,
             "is_sandbox": True,
             "session_id": session_id,
+            "voice_sample": voice_used,
         },
     )
 
@@ -417,6 +422,8 @@ async def process_sandbox_message(
     image_base64: str | None = None,
     image_filename: str | None = None,
     image_content_type: str | None = None,
+    voice_sample: bool = False,
+    voice_base64: str | None = None,
     orchestrator: IncidentOrchestrator | None = None,
     repository: Any | None = None,
     judge_mode: bool = False,
@@ -430,6 +437,7 @@ async def process_sandbox_message(
     if photo is not None:
         validate_sandbox_image(photo.content)
 
+    voice_used = bool(voice_sample or voice_base64)
     vision = analyze_demo_vision(image_filename) if photo is not None else None
     category, location = infer_demo_category(body)
     if scenario and scenario in SCENARIOS:
@@ -443,7 +451,7 @@ async def process_sandbox_message(
         category=category,
         location=location,
     )
-    message = build_sandbox_message(session_id=sid, text=body, photo=photo)
+    message = build_sandbox_message(session_id=sid, text=body, photo=photo, voice_used=voice_used)
     result = await process_incident_input(
         source=SOURCE_SANDBOX,
         message=message,
@@ -538,6 +546,19 @@ async def process_sandbox_message(
         "processing_ms": elapsed_ms,
         "error": result.error,
         "usage": sandbox_usage(session_id=sid),
+        "voice_loop": (
+            {
+                "voice_received": True,
+                "transcript": body,
+                "risk_level": risk_level,
+                "guidance": guidance,
+                "voice_reply_sent": True,
+                "pipeline": ["Voice", "Transcript", "Risk", "Guidance", "Voice Reply"],
+                "note": "Sandbox simulates the full accessibility loop without retaining raw audio.",
+            }
+            if voice_used
+            else None
+        ),
     }
     if judge_mode:
         payload["judge"] = {

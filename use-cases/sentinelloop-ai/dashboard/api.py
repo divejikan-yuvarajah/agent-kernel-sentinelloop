@@ -753,6 +753,8 @@ class DashboardHandler(RESTRequestHandler):
                     image_base64=body.image_base64,
                     image_filename=body.image_filename,
                     image_content_type=body.image_content_type,
+                    voice_sample=bool(getattr(body, "voice_sample", False) or getattr(body, "voice_base64", None)),
+                    voice_base64=getattr(body, "voice_base64", None),
                     orchestrator=orch,
                     repository=self._repository or self._reader()._repo,
                     judge_mode=bool(body.judge_mode),

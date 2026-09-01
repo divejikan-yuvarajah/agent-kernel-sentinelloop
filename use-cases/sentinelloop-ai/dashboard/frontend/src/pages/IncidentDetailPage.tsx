@@ -23,6 +23,7 @@ import {
 } from "../api/client";
 import { AuditTrailView } from "../components/AuditTrailView";
 import { EvidenceImage } from "../components/EvidenceImage";
+import { VoiceStatus } from "../components/VoiceStatus";
 import {
   AssignmentPanel,
   AuditCompletenessCard,
@@ -271,6 +272,28 @@ export function IncidentDetailPage() {
                   voiceReport={detail.voice_report}
                   hasImageAssist={Boolean(detail.vision || detail.evidence.some((item) => item.kind === "image"))}
                 />
+                <Panel title="Accessibility Response">
+                  <VoiceStatus
+                    voiceReceived={Boolean(detail.accessibility?.voice_received || detail.voice_report?.audio_used)}
+                    guidanceGenerated={Boolean(detail.accessibility?.guidance_generated ?? true)}
+                    voiceReplyDelivered={Boolean(
+                      detail.accessibility?.voice_reply_delivered || detail.voice_report?.voice_reply_sent,
+                    )}
+                    textOnly={detail.accessibility?.text_only ?? !detail.voice_report?.voice_reply_sent}
+                    language={detail.accessibility?.language || detail.voice_report?.voice_language || detail.language}
+                    languageName={
+                      detail.accessibility?.language_name ||
+                      detail.voice_report?.language_name ||
+                      detail.language
+                    }
+                    statusLabel={detail.accessibility?.status}
+                    playbackUrl={
+                      detail.accessibility?.guidance_playback_url ||
+                      detail.voice_report?.guidance_playback_url ||
+                      null
+                    }
+                  />
+                </Panel>
                 {(detail.equipment || detail.people_exposed != null) && (
                   <Panel title="AI extraction">
                     <p>Hazard: {detail.category}</p>

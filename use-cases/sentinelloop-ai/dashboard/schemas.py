@@ -110,6 +110,28 @@ class VoiceReport(_Out):
     playback_url: str | None = None
     uploaded_by: str = "Worker"
     source: str | None = None
+    voice_reply_sent: bool | None = None
+    voice_language: str | None = None
+    voice_model: str | None = None
+    voice_cost_usd: float | None = None
+    voice_loop_status: str | None = None
+    guidance_playback_url: str | None = None
+
+
+class AccessibilityResponse(_Out):
+    """Full voice safety loop status for incident detail."""
+
+    voice_received: bool = False
+    guidance_generated: bool = False
+    voice_reply_delivered: bool = False
+    text_only: bool = True
+    language: str | None = None
+    language_name: str | None = None
+    status: str = "Text-only response"
+    voice_model: str | None = None
+    voice_cost_usd: float | None = None
+    guidance_playback_url: str | None = None
+    loop_steps: list[str] = Field(default_factory=list)
 
 
 class VisionInsight(_Out):
@@ -154,6 +176,7 @@ class IncidentDetail(_Out):
     input_channel: str | None = None
     input_method: str | None = None
     voice_report: VoiceReport | None = None
+    accessibility: AccessibilityResponse | None = None
     vision: VisionInsight | None = None
     included_in_handovers: list["HandoverMention"] = Field(default_factory=list)
     created_by: str | None = None
@@ -218,6 +241,10 @@ class SandboxMessageRequest(_Out):
     image_base64: str | None = None
     image_filename: str | None = None
     image_content_type: str | None = None
+    voice_base64: str | None = None
+    voice_filename: str | None = None
+    voice_content_type: str | None = None
+    voice_sample: bool = False
     judge_mode: bool = False
     scenario: str | None = None
     simulate: bool = True
@@ -247,6 +274,7 @@ class SandboxMessageResponse(_Out):
     processing_ms: int | None = None
     judge: dict[str, Any] | None = None
     usage: dict[str, Any] | None = None
+    voice_loop: dict[str, Any] | None = None
     error: str | None = None
 
 
@@ -340,6 +368,10 @@ class VoiceAnalytics(_Out):
     incident_sources: dict[str, float] = Field(default_factory=dict)
     completion_rate_voice: float | None = None
     completion_rate_text: float | None = None
+    voice_reports_received: int = 0
+    voice_replies_sent: int = 0
+    preferred_languages: dict[str, float] = Field(default_factory=dict)
+    text_vs_voice_completion: dict[str, float] = Field(default_factory=dict)
 
 
 class AiUsageBreakdown(_Out):
@@ -631,6 +663,11 @@ class AuditVoiceReport(_Out):
     duration_seconds: float | None = None
     confidence_label: str | None = None
     audio_format: str | None = None
+    voice_reply_sent: bool | None = None
+    voice_language: str | None = None
+    voice_model: str | None = None
+    voice_cost_usd: float | None = None
+    full_accessibility_loop: bool | None = None
 
 
 class AuditEmergencyBypass(_Out):

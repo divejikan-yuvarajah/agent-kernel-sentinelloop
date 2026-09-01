@@ -128,6 +128,34 @@ export function AuditTrailView({ audit, onDownload }: Props) {
             <Pair label="AI Cost" value={audit.voice_report.ai_cost} />
             <Pair label="Human Override" value={audit.voice_report.human_override} />
             <Pair label="Voice Understanding" value={audit.voice_report.confidence_label} />
+            <Pair
+              label="Voice Reply Sent"
+              value={
+                audit.voice_report.voice_reply_sent == null
+                  ? null
+                  : audit.voice_report.voice_reply_sent
+                    ? "Yes"
+                    : "No"
+              }
+            />
+            <Pair label="Voice Language" value={audit.voice_report.voice_language} />
+            <Pair label="Voice Model" value={audit.voice_report.voice_model} />
+            <Pair
+              label="Voice Cost"
+              value={
+                audit.voice_report.voice_cost_usd != null ? `$${audit.voice_report.voice_cost_usd}` : null
+              }
+            />
+            <Pair
+              label="Full Accessibility Loop"
+              value={
+                audit.voice_report.full_accessibility_loop == null
+                  ? null
+                  : audit.voice_report.full_accessibility_loop
+                    ? "Completed"
+                    : "Incomplete"
+              }
+            />
           </dl>
         </section>
       ) : null}

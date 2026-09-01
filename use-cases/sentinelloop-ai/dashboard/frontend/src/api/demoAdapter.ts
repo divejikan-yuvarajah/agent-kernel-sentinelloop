@@ -188,6 +188,8 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
             actor: "voice_tools",
           },
           { timestamp: clockFrom(row.created_at, 2), title: "Incident created", detail: row.incident_id, actor: "incident_agent" },
+          { timestamp: clockFrom(row.created_at, 3), title: "Risk assessed", detail: row.risk_level, actor: "risk_agent" },
+          { timestamp: clockFrom(row.created_at, 4), title: "Voice guidance delivered", detail: row.language, actor: "voice_out" },
         ]
       : [];
   const timeline = row.emergency
@@ -304,8 +306,39 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
             playback_url: null,
             uploaded_by: "Worker",
             source: row.input_channel === "telegram" ? "Telegram" : "Telegram",
+            voice_reply_sent: true,
+            voice_language: row.language === "Sinhala" ? "si" : row.language === "Tamil" ? "ta" : "en",
+            voice_model: "demo-tts",
+            voice_cost_usd: 0.001,
+            voice_loop_status: "Delivered",
+            guidance_playback_url: null,
           }
         : null,
+    accessibility:
+      row.message_type === "voice" || row.incident_id === "INC-2026-00422"
+        ? {
+            voice_received: true,
+            guidance_generated: true,
+            voice_reply_delivered: true,
+            text_only: false,
+            language: row.language === "Sinhala" ? "si" : row.language === "Tamil" ? "ta" : "en",
+            language_name: row.language,
+            status: "Full voice loop completed",
+            voice_model: "demo-tts",
+            voice_cost_usd: 0.001,
+            guidance_playback_url: null,
+            loop_steps: ["Voice received", "Guidance generated", "Voice reply delivered"],
+          }
+        : {
+            voice_received: false,
+            guidance_generated: true,
+            voice_reply_delivered: false,
+            text_only: true,
+            language: row.language === "Sinhala" ? "si" : row.language === "Tamil" ? "ta" : "en",
+            language_name: row.language,
+            status: "Text-only response",
+            loop_steps: ["Guidance generated"],
+          },
     input_method: row.message_type === "voice" ? "voice" : row.input_channel === "manual" ? "dashboard" : "text",
     created_by: row.input_channel === "manual" ? row.reporter_name : null,
     pipeline_stages: [
@@ -466,6 +499,10 @@ export function fetchAnalyticsSummary(): Promise<AnalyticsSummary> {
       incident_sources: { Text: 55, Voice: 30, Image: 15 },
       completion_rate_voice: 92,
       completion_rate_text: 81,
+      voice_reports_received: 42,
+      voice_replies_sent: 31,
+      preferred_languages: { Sinhala: 55, English: 30, Tamil: 15 },
+      text_vs_voice_completion: { voice: 92, text: 81 },
     },
     ai_usage: {
       text_cost_usd: 2.4,
@@ -1096,6 +1133,7 @@ export function sendSandboxMessage(payload: {
   image_base64?: string;
   image_filename?: string;
   image_content_type?: string;
+  voice_sample?: boolean;
   judge_mode?: boolean;
   scenario?: string;
 }) {
@@ -1161,6 +1199,17 @@ export function sendSandboxMessage(payload: {
           confidence: 82,
           observations: ["liquid spill", "container nearby"],
           note: "Vision suggestion only — final risk uses the deterministic matrix.",
+        }
+      : null,
+    voice_loop: payload.voice_sample
+      ? {
+          voice_received: true,
+          transcript: text,
+          risk_level: "Critical",
+          guidance: ["Move away from the hazard and notify a supervisor."],
+          voice_reply_sent: true,
+          pipeline: ["Voice", "Transcript", "Risk", "Guidance", "Voice Reply"],
+          note: "Demo voice loop (no raw audio retained).",
         }
       : null,
     explainability: {

@@ -7,7 +7,8 @@ from the approved knowledge-base file. Any output that cannot be linked
 to a supplied source_id must be rejected.
 
 This agent does not send Telegram, notify Slack, change risk scores, or
-reclassify hazards.
+reclassify hazards. Spoken delivery (TTS) is handled by the orchestrator after
+``worker_text()`` is produced — text guidance is always sent first.
 """
 
 from __future__ import annotations

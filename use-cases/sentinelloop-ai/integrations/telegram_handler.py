@@ -445,6 +445,40 @@ class TelegramTransport:
     async def send_guidance(self, to: str, text: str, *, reply_to_message_id: str | None = None) -> dict[str, Any]:
         return await self.send_text_message(to, text, reply_to_message_id=reply_to_message_id)
 
+    async def send_voice_message(
+        self,
+        to: str,
+        audio: bytes,
+        *,
+        filename: str = "guidance.ogg",
+        mime_type: str = "audio/ogg",
+        reply_to_message_id: str | None = None,
+        caption: str | None = None,
+        duration: int | None = None,
+    ) -> dict[str, Any]:
+        """Deliver spoken guidance. Prefer sendVoice (OGG/OPUS); use sendAudio for MP3."""
+        if not audio:
+            raise TelegramSendError("telegram_empty_audio")
+        chat_id = chat_id_from_session(to) or to
+        fmt = (filename.rsplit(".", 1)[-1] if "." in filename else "").lower()
+        mime = (mime_type or "").lower()
+        use_voice = fmt in {"ogg", "opus"} or "ogg" in mime or "opus" in mime
+        method = "sendVoice" if use_voice else "sendAudio"
+        field = "voice" if use_voice else "audio"
+        payload: dict[str, Any] = {
+            "chat_id": chat_id,
+            field: audio,
+            "filename": filename,
+            "mime_type": mime_type or ("audio/ogg" if use_voice else "audio/mpeg"),
+        }
+        if reply_to_message_id:
+            payload["reply_to_message_id"] = reply_to_message_id
+        if caption:
+            payload["caption"] = caption[:1024]
+        if duration is not None:
+            payload["duration"] = int(duration)
+        return await self._post_multipart(method, payload)
+
     async def send_verification_prompt(self, to: str, body: str, buttons: list[dict[str, str]]) -> dict[str, Any]:
         keyboard = {
             "inline_keyboard": [
@@ -500,6 +534,68 @@ class TelegramTransport:
             media.mime_type = mime
         log.info("telegram_photo_downloaded bytes=%s", len(content))
         return media
+
+    async def _post_multipart(self, method: str, payload: dict[str, Any]) -> dict[str, Any]:
+        if self._client is not None:
+            try:
+                result = self._client(method, payload)
+                if hasattr(result, "__await__"):
+                    result = await result
+            except TelegramSendError:
+                raise
+            except Exception as exc:
+                log.warning("telegram_delivery_failed method=%s", method)
+                _health.errors += 1
+                raise TelegramSendError("telegram_send_failed") from exc
+            if not isinstance(result, dict):
+                raise TelegramSendError("telegram_send_failed")
+            return _normalize_telegram_send(result)
+
+        token = self._require_token()
+        import httpx
+
+        chat_id = payload.get("chat_id")
+        data: dict[str, Any] = {"chat_id": str(chat_id)}
+        for key in ("reply_to_message_id", "caption", "duration", "title", "performer"):
+            if payload.get(key) is not None:
+                data[key] = payload[key]
+
+        field_name = "voice" if "voice" in payload else "audio"
+        audio = payload.get(field_name)
+        filename = str(payload.get("filename") or ("voice.ogg" if field_name == "voice" else "guidance.mp3"))
+        mime = str(payload.get("mime_type") or "application/octet-stream")
+        if not isinstance(audio, (bytes, bytearray)):
+            raise TelegramSendError("telegram_empty_audio")
+
+        tmp_path: str | None = None
+        try:
+            import tempfile
+
+            suffix = Path(filename).suffix or ".bin"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as handle:
+                handle.write(bytes(audio))
+                tmp_path = handle.name
+            async with httpx.AsyncClient(timeout=45.0) as client:
+                with open(tmp_path, "rb") as stream:
+                    response = await client.post(
+                        f"https://api.telegram.org/bot{token}/{method}",
+                        data=data,
+                        files={field_name: (filename, stream, mime)},
+                    )
+                response.raise_for_status()
+                body = response.json()
+        except Exception as exc:
+            log.warning("telegram_delivery_failed method=%s", method)
+            _health.errors += 1
+            raise TelegramSendError("telegram_send_failed") from exc
+        finally:
+            if tmp_path:
+                try:
+                    Path(tmp_path).unlink(missing_ok=True)
+                except OSError:
+                    pass
+        log.info("telegram_voice_sent method=%s", method)
+        return _normalize_telegram_send(body if isinstance(body, dict) else {"ok": True})
 
     async def _post(self, method: str, payload: dict[str, Any]) -> dict[str, Any]:
         if self._client is not None:
@@ -622,6 +718,16 @@ class SentinelLoopTelegramHandler(_KernelTelegramHandler):  # type: ignore[misc]
             normalized.audio_format = normalized.audio_format or "ogg"
             normalized.transcription_available = True
             normalized.message_type = "text"
+            try:
+                from tools.voice_out_tools import set_voice_preference
+
+                set_voice_preference(
+                    normalized.sender_id,
+                    voice_preference=True,
+                    preferred_language=normalized.detected_language or normalized.language_code,
+                )
+            except Exception:
+                log.debug("voice_preference_store_skipped")
 
         raw = normalized.text or normalized.caption or ""
         if is_start_command(raw):

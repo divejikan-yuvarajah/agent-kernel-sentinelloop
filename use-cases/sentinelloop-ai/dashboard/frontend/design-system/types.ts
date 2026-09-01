@@ -219,6 +219,10 @@ export type AnalyticsSummary = {
     incident_sources: Record<string, number>;
     completion_rate_voice: number | null;
     completion_rate_text: number | null;
+    voice_reports_received?: number;
+    voice_replies_sent?: number;
+    preferred_languages?: Record<string, number>;
+    text_vs_voice_completion?: Record<string, number>;
   };
   ai_usage?: {
     text_cost_usd: number;

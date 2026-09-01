@@ -197,6 +197,10 @@ class _SilentOutbound:
         del args, kwargs
         return None
 
+    async def send_voice_message(self, *args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        return None
+
 
 class IncidentOrchestrator:
     def __init__(
@@ -582,6 +586,8 @@ class IncidentOrchestrator:
         reply = worker_emergency_reply(language)
         worker_ok = await self._send_emergency_worker_reply(message, reply)
         self._trace("emergency_worker_reply")
+        if worker_ok:
+            await self._maybe_send_emergency_voice(message, session, merged, reply, language)
         response_ms = (time.perf_counter() - started) * 1000
         if worker_ok:
             await self._audit(
@@ -743,6 +749,184 @@ class IncidentOrchestrator:
         except TelegramSendError:
             log.warning("emergency_worker_reply_failed")
             return False
+
+    async def _maybe_send_emergency_voice(
+        self,
+        message: NormalizedInboundMessage,
+        session: Any,
+        merged: dict[str, Any],
+        text: str,
+        language: str | None,
+    ) -> None:
+        """Optional emergency voice after fixed text — never blocks the bypass path."""
+        try:
+            from tools.voice_out_tools import should_send_voice_reply
+
+            if not should_send_voice_reply(
+                worker_id=message.sender_id,
+                voice_used=bool(getattr(message, "voice_used", False)),
+                text=message.text or message.caption,
+            ):
+                return
+            await self._deliver_voice_reply(
+                message,
+                session,
+                merged,
+                worker_text=text,
+                language=language,
+                reply_to_message_id=message.provider_message_id,
+                update_type="emergency_voice_reply",
+            )
+        except Exception:
+            log.info("Voice reply skipped: emergency voice failed")
+
+    async def _maybe_send_voice_guidance(
+        self,
+        message: NormalizedInboundMessage,
+        session: Any,
+        merged: dict[str, Any],
+        *,
+        worker_text: str,
+        reply_to_message_id: str | None,
+    ) -> None:
+        """After text guidance: optional TTS. Failures never block the safety reply."""
+        try:
+            from tools.voice_out_tools import (
+                detect_voice_preference_request,
+                should_send_voice_reply,
+            )
+
+            raw_text = message.text or message.caption or ""
+            if detect_voice_preference_request(raw_text):
+                # Preference already stored by should_send_voice_reply / detect path.
+                pass
+            if not should_send_voice_reply(
+                worker_id=message.sender_id,
+                voice_used=bool(getattr(message, "voice_used", False)),
+                text=raw_text,
+            ):
+                return
+            language = (
+                merged.get("language")
+                or getattr(message, "detected_language", None)
+                or _cache_get(session, NV_LANGUAGE)
+                or "en"
+            )
+            await self._deliver_voice_reply(
+                message,
+                session,
+                merged,
+                worker_text=worker_text,
+                language=str(language),
+                reply_to_message_id=reply_to_message_id,
+                update_type="voice_guidance_delivered",
+            )
+        except Exception:
+            log.info("Voice reply skipped: unexpected error")
+
+    async def _deliver_voice_reply(
+        self,
+        message: NormalizedInboundMessage,
+        session: Any,
+        merged: dict[str, Any],
+        *,
+        worker_text: str,
+        language: str | None,
+        reply_to_message_id: str | None,
+        update_type: str,
+    ) -> None:
+        from tools.voice_out_tools import (
+            get_voice_preference,
+            language_display_name,
+            resolve_voice_language,
+            synthesize_speech,
+        )
+
+        pref = get_voice_preference(message.sender_id)
+        lang = resolve_voice_language(
+            preferred_language=pref.preferred_language,
+            detected_language=language or getattr(message, "detected_language", None),
+            session_language=_cache_get(session, NV_LANGUAGE),
+        )
+        speech = await synthesize_speech(worker_text, lang)
+        if speech.blocked:
+            log.info("Voice reply skipped: Budget ceiling reached")
+            await self._audit(
+                merged,
+                "voice_reply_skipped",
+                message="Voice reply skipped: Budget ceiling reached",
+                metadata={
+                    "voice_reply_sent": False,
+                    "voice_language": lang,
+                    "skip_reason": "budget_ceiling",
+                },
+            )
+            return
+        if not speech.available or not speech.audio:
+            reason = speech.reason or speech.error or "tts_unavailable"
+            log.info("Voice reply skipped: %s", reason)
+            await self._audit(
+                merged,
+                "voice_reply_skipped",
+                message=f"Voice reply skipped: {reason}",
+                metadata={
+                    "voice_reply_sent": False,
+                    "voice_language": lang,
+                    "skip_reason": reason,
+                    "voice_model": speech.model,
+                },
+            )
+            return
+
+        fmt = (speech.format or "mp3").lower()
+        filename = "guidance.ogg" if fmt in {"ogg", "opus"} else "guidance.mp3"
+        mime = speech.mime_type or ("audio/ogg" if "ogg" in filename else "audio/mpeg")
+        outbound = self._outbound(message)
+        send_voice = getattr(outbound, "send_voice_message", None)
+        if send_voice is None:
+            log.info("Voice reply skipped: transport_unsupported")
+            return
+        try:
+            await send_voice(
+                message.sender_id,
+                speech.audio,
+                filename=filename,
+                mime_type=mime,
+                reply_to_message_id=reply_to_message_id,
+            )
+        except TelegramSendError:
+            log.info("Voice reply skipped: telegram_send_failed")
+            await self._audit(
+                merged,
+                "voice_reply_skipped",
+                message="Voice reply skipped: delivery failed",
+                metadata={"voice_reply_sent": False, "voice_language": lang, "skip_reason": "delivery_failed"},
+            )
+            return
+        except Exception:
+            log.info("Voice reply skipped: delivery error")
+            return
+
+        self._trace("telegram_voice_guidance")
+        log.info("voice_guidance_delivered language=%s model=%s", lang, speech.model)
+        merged["voice_reply_sent"] = True
+        merged["voice_language"] = lang
+        merged["voice_model"] = speech.model
+        merged["voice_cost_usd"] = speech.cost_usd
+        await self._audit(
+            merged,
+            update_type,
+            message="Voice guidance delivered",
+            metadata={
+                "voice_reply_sent": True,
+                "voice_language": lang,
+                "voice_language_name": language_display_name(lang),
+                "voice_model": speech.model,
+                "voice_cost_usd": speech.cost_usd,
+                "voice_format": fmt,
+                "full_accessibility_loop": True,
+            },
+        )
 
     async def _retry_emergency_worker_reply(self, message: NormalizedInboundMessage, text: str) -> bool:
         try:
@@ -1106,6 +1290,13 @@ class IncidentOrchestrator:
                     log.info("telegram_guidance_sent")
                     guidance_sent = True
                     self._note("guidance_delivery_success")
+                    await self._maybe_send_voice_guidance(
+                        message,
+                        session,
+                        merged,
+                        worker_text=worker_text,
+                        reply_to_message_id=message.provider_message_id,
+                    )
                 except TelegramSendError:
                     log.warning("guidance_send_failed")
                     log.warning("telegram_delivery_failed")
@@ -1113,6 +1304,13 @@ class IncidentOrchestrator:
                     await self._audit(merged, "guidance_send_failed", message="worker channel delivery failed")
             elif worker_text:
                 guidance_sent = True
+                await self._maybe_send_voice_guidance(
+                    message,
+                    session,
+                    merged,
+                    worker_text=worker_text,
+                    reply_to_message_id=message.provider_message_id,
+                )
 
         coordination_completed = False
         if merged.get("incident_id") or merged.get("id"):

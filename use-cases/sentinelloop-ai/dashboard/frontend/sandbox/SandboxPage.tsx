@@ -67,6 +67,17 @@ function formatAiReply(result: SandboxMessageResponse): string {
   } else if (result.guidance_text) {
     lines.push("", result.guidance_text);
   }
+  if (result.voice_loop?.voice_received) {
+    lines.push("", "Voice Loop:");
+    lines.push("✓ Voice received");
+    lines.push(`Language: ${result.language || "Detected"}`);
+    lines.push(`Category: ${result.category || "Hazard"}`);
+    lines.push(`Risk: ${result.risk_level || "—"}`);
+    if (result.guidance?.length) {
+      lines.push(`Guidance: ${result.guidance[0]}`);
+    }
+    lines.push(result.voice_loop.voice_reply_sent ? "Voice Reply Sent ✓" : "Text-only response");
+  }
   if (result.slack_alert_preview) {
     lines.push("", result.slack_alert_preview);
   }
@@ -92,6 +103,7 @@ export function SandboxPage() {
   const [usage, setUsage] = useState<SandboxUsage | null>(null);
   const [history, setHistory] = useState<SandboxHistoryItem[]>([]);
   const [photo, setPhoto] = useState<{ base64: string; filename: string; type: string } | null>(null);
+  const [voiceSample, setVoiceSample] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -117,7 +129,7 @@ export function SandboxPage() {
     return () => window.clearInterval(timer);
   }, [busy]);
 
-  async function runMessage(nextText: string, scenario?: string, replay = false) {
+  async function runMessage(nextText: string, scenario?: string, replay = false, asVoice = false) {
     const body = nextText.trim();
     if (!body || busy) return;
     setError(null);
@@ -125,7 +137,7 @@ export function SandboxPage() {
     setText("");
     setMessages((current) => [
       ...current,
-      { id: `w-${Date.now()}`, role: "worker", text: body },
+      { id: `w-${Date.now()}`, role: "worker", text: asVoice || voiceSample ? `🎙 ${body}` : body },
     ]);
     try {
       const result = await sendSandboxMessage({
@@ -134,6 +146,7 @@ export function SandboxPage() {
         image_base64: photo?.base64,
         image_filename: photo?.filename,
         image_content_type: photo?.type,
+        voice_sample: asVoice || voiceSample,
         judge_mode: judgeMode,
         scenario,
         simulate: true,
@@ -146,6 +159,7 @@ export function SandboxPage() {
         { id: `a-${Date.now()}`, role: "ai", text: formatAiReply(result) },
       ]);
       if (photo) setPhoto(null);
+      if (voiceSample) setVoiceSample(false);
       if (replay) {
         setMessages((current) => [
           ...current,
@@ -267,6 +281,30 @@ export function SandboxPage() {
                     hidden
                     onChange={(event) => onFile(event.target.files?.[0] || null)}
                   />
+                  <button
+                    type="button"
+                    className="sl-sandbox__chip"
+                    disabled={busy}
+                    aria-pressed={voiceSample}
+                    onClick={() => setVoiceSample((value) => !value)}
+                  >
+                    {voiceSample ? "Voice sample on" : "Simulate voice report"}
+                  </button>
+                  <button
+                    type="button"
+                    className="sl-sandbox__chip"
+                    disabled={busy}
+                    onClick={() =>
+                      void runMessage(
+                        "Machine making strange sound near production area",
+                        "machine_voice",
+                        false,
+                        true,
+                      )
+                    }
+                  >
+                    Voice loop demo
+                  </button>
                   {photo ? (
                     <span className="ds-mono" style={{ fontSize: "var(--font-size-xs)" }}>
                       {photo.filename}

@@ -223,7 +223,8 @@ Typography: `Space Grotesk` (headers/KPIs), `IBM Plex Sans` (UI text), `IBM Plex
 * 🆘 **Deterministic emergency bypass** — "SOS"/🆘 in any supported language triggers an instant, hardcoded Critical alert with **zero LLM calls** in the critical path.
 * 📈 **Predictive hazard forecasting** — recurring category+location patterns surface as "recommend inspection before next shift," turning the system reactive → preventive.
 * 🖼️ **Vision-based triage** — a hazard photo with little/no caption still gets a category suggestion via a vision-capable model.
-* 🎙️ **Voice message reporting** — Telegram and Telegram voice notes transcribed via OpenRouter's unified audio endpoint, in the worker's own language, with spend tracked against the same OpenRouter budget ceiling as text and vision.
+* 🎙️ **Voice message reporting** — Telegram voice notes transcribed via OpenRouter's unified audio endpoint, in the worker's own language, with spend tracked against the same OpenRouter budget ceiling as text and vision.
+* 🔊 **Full Voice Loop** — Workers can report hazards by voice and receive safety instructions back as voice messages in their preferred language (Sinhala, Tamil, or English). Text replies always remain; TTS is additive and never blocks the safety response.
 * 🗒️ **Automated shift handover briefings** — `handover_agent` collects open/critical/review/overdue incidents, calls `role_fast` **once** to phrase a bullet briefing, stores it in `handover_summaries`, and posts it to the Slack Safety Channel. Judges can trigger **Generate Shift Handover** from the dashboard. Agent Kernel has no in-process cron/scheduler, so automatic shift-end jobs are not wired here.
 * 🖥️ **Manual dashboard entry** — officers can log a phoned-in or in-person report directly, running through the identical risk pipeline as any Telegram report — no shortcut, no separate rules.
 * 🎯 **Live Safety Simulator** — `/sandbox` runs the complete production agent pipeline for judges and reviewers without Telegram, bots, or credentials; Slack is simulated and incidents are isolated with `is_sandbox=true`.
@@ -343,7 +344,7 @@ All external calls (Telegram, Slack, OpenRouter, Supabase) are mocked, so the su
 | 🏥 **SDG 3** — Good Health & Well-Being | Prevents workplace injuries by surfacing hazards before they cause harm |
 | 💼 **SDG 8** — Decent Work & Economic Growth | Builds safer, more accountable workplace conditions |
 | 🏗️ **SDG 9** — Industry, Innovation & Infrastructure | Applies agentic AI to real industrial safety operations |
-| ⚖️ **SDG 10** — Reduced Inequalities | Multilingual, voice-capable reporting removes literacy/language barriers to safety access |
+| ⚖️ **SDG 10** — Reduced Inequalities | Multilingual, voice-capable reporting removes literacy/language barriers to safety access. Voice *output* improves accessibility for low-literacy workers, multilingual teams, and high-pressure environments where reading a phone screen is impractical. |
 | 🏛️ **SDG 16** — Peace, Justice & Strong Institutions | Anonymous reporting, audit trails, and accountable case ownership |
 
 ---
@@ -367,7 +368,8 @@ use-cases/sentinelloop_ai/
 │   ├── duplicate_tools.py
 │   ├── forecast_tools.py
 │   ├── vision_tools.py
-│   └── voice_tools.py
+│   ├── voice_tools.py
+│   └── voice_out_tools.py
 ├── integrations/
 │   ├── telegram_handler.py
 │   └── slack_handler.py

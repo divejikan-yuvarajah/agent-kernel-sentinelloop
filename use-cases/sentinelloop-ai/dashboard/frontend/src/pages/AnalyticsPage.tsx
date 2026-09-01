@@ -109,6 +109,41 @@ export function AnalyticsPage() {
           </Card>
         </div>
       </Panel>
+      <Panel title="Voice Accessibility Insights" style={{ marginTop: 24 }}>
+        <div className="ds-grid ds-grid--metrics">
+          <Card variant="analytics-card">
+            <p className="ds-metric__label">Voice Reports Received</p>
+            <p className="ds-metric__value">{summary?.voice_analytics?.voice_reports_received ?? 0}</p>
+          </Card>
+          <Card variant="analytics-card">
+            <p className="ds-metric__label">Voice Replies Sent</p>
+            <p className="ds-metric__value">{summary?.voice_analytics?.voice_replies_sent ?? 0}</p>
+          </Card>
+          <Card variant="analytics-card">
+            <p className="ds-metric__label">Text vs Voice Completion</p>
+            <p className="ds-metric__value" style={{ fontSize: "1rem" }}>
+              V {summary?.voice_analytics?.text_vs_voice_completion?.voice ?? summary?.voice_analytics?.completion_rate_voice ?? "—"}%
+              {" · "}
+              T {summary?.voice_analytics?.text_vs_voice_completion?.text ?? summary?.voice_analytics?.completion_rate_text ?? "—"}%
+            </p>
+          </Card>
+        </div>
+        <div className="ds-share" style={{ marginTop: 16 }}>
+          {Object.entries(summary?.voice_analytics?.preferred_languages ?? {}).length === 0 ? (
+            <p className="ds-metric__label">Preferred reply languages appear when voice replies are sent.</p>
+          ) : (
+            Object.entries(summary?.voice_analytics?.preferred_languages ?? {}).map(([label, value]) => (
+              <div key={label} className="ds-share__row">
+                <span>{label}</span>
+                <span className="ds-share__track">
+                  <span className="ds-share__fill" style={{ width: `${Math.round(Number(value))}%` }} />
+                </span>
+                <span className="ds-mono">{value}%</span>
+              </div>
+            ))
+          )}
+        </div>
+      </Panel>
       <Panel title="Incident Sources" style={{ marginTop: 24 }}>
         <div className="ds-share">
           {Object.entries(summary?.voice_analytics?.incident_sources ?? { Text: 55, Voice: 30, Image: 15 }).map(

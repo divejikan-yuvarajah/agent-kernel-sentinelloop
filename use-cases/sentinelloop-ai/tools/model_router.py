@@ -31,15 +31,21 @@ log = logging.getLogger("sentinelloop.model_router")
 MODELS_URL = "https://openrouter.ai/api/v1/models"
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 TRANSCRIPTIONS_URL = "https://openrouter.ai/api/v1/audio/transcriptions"
+SPEECH_URL = "https://openrouter.ai/api/v1/audio/speech"
 DEFAULT_AUDIO_MODEL = "openai/whisper-large-v3"
 DEFAULT_AUDIO_ESTIMATED_COST_USD = Decimal("0.002")
+DEFAULT_TTS_ESTIMATED_COST_USD = Decimal("0.001")
 BUDGET_BLOCK_REASON = "AI budget ceiling reached"
 
 ROLE_FAST = "role_fast"
 ROLE_REASONING = "role_reasoning"
 ROLE_GUIDANCE = "role_guidance"
 ROLE_VISION = "role_vision"
+ROLE_TRANSCRIPTION = "role_transcription"
+ROLE_TTS = "role_tts"
 REQUIRED_ROLES = (ROLE_FAST, ROLE_REASONING, ROLE_GUIDANCE, ROLE_VISION)
+# Audio roles are discovery/API-driven (not chat role chains):
+# role_transcription = voice input, role_tts = voice output.
 FAMILY_ORDER = ("qwen", "gemini", "deepseek")
 
 _BLOCKED_KWARGS = frozenset(
@@ -144,6 +150,22 @@ class CatalogModel(BaseModel):
     def supports_vision(self) -> bool:
         ins = {m.lower() for m in self.input_modalities}
         return "image" in ins and self.supports_text_chat()
+
+    def supports_tts(self) -> bool:
+        """True when the catalog entry can produce spoken audio from text."""
+        ins = {m.lower() for m in self.input_modalities}
+        outs = {m.lower() for m in self.output_modalities}
+        lowered = f"{self.id} {self.name or ''}".lower()
+        if "tts" in lowered or "text-to-speech" in lowered or "text_to_speech" in lowered:
+            return True
+        if "speech" in lowered and "transcri" not in lowered:
+            return True
+        if "audio" in outs and "text" in ins:
+            # Exclude multimodal chat models that also emit text.
+            if "text" in outs and "tts" not in lowered and "speech" not in lowered:
+                return False
+            return True
+        return False
 
 
 class ModelCallResult(BaseModel):
@@ -787,6 +809,168 @@ class ModelRouter:
             return min(self._timeout, 20.0)
         return value if value > 0 else min(self._timeout, 20.0)
 
+    def estimated_tts_cost(self, text: str | None = None) -> Decimal:
+        configured = _decimal_env("OPENROUTER_TTS_ESTIMATED_COST_USD")
+        if configured is not None:
+            return configured
+        chars = len((text or "").strip())
+        if chars <= 0:
+            return DEFAULT_TTS_ESTIMATED_COST_USD
+        # Rough per-character estimate; ledger records actual usage when provided.
+        return max(DEFAULT_TTS_ESTIMATED_COST_USD, (Decimal(chars) / Decimal("1000")) * Decimal("0.015"))
+
+    def _tts_chain(self) -> list[CatalogModel]:
+        candidates = [m for m in self._catalog.values() if m.supports_tts() and not self._on_circuit(m.id)]
+        preferred = (os.environ.get("OPENROUTER_TTS_MODEL") or "").strip()
+        ordered: list[CatalogModel] = []
+        seen: set[str] = set()
+        if preferred and preferred in self._catalog:
+            model = self._catalog[preferred]
+            if model.supports_tts():
+                ordered.append(model)
+                seen.add(model.id)
+        free = sorted([m for m in candidates if m.is_free and m.id not in seen], key=lambda m: (m.combined_price, m.id))
+        paid = sorted([m for m in candidates if m.is_paid and m.id not in seen], key=lambda m: (m.combined_price, m.id))
+        return ordered + free + paid
+
+    def _tts_timeout(self) -> float:
+        raw = os.environ.get("OPENROUTER_TTS_TIMEOUT")
+        if raw is None or str(raw).strip() == "":
+            return min(self._timeout, 25.0)
+        try:
+            value = float(str(raw).strip())
+        except (TypeError, ValueError):
+            return min(self._timeout, 25.0)
+        return value if value > 0 else min(self._timeout, 25.0)
+
+    def _tts_voice_for_language(self, language: str | None) -> str:
+        env_voice = (os.environ.get("OPENROUTER_TTS_VOICE") or "").strip()
+        if env_voice:
+            return env_voice
+        # OpenAI-compatible default; providers that ignore voice still accept the call.
+        return "alloy"
+
+    async def synthesize_speech(
+        self,
+        *,
+        text: str,
+        language: str | None = None,
+        response_format: str = "mp3",
+    ) -> Any:
+        """POST OpenRouter /audio/speech and record spend. Never invents audio."""
+        from tools.voice_out_tools import SpeechResult
+
+        body = (text or "").strip()
+        if not body:
+            return SpeechResult(error="empty_text", reason="empty_text", language=language)
+
+        await self.ensure_catalog()
+        log.info("tts_request_started language=%s chars=%s", language or "en", len(body))
+        estimated = self.estimated_tts_cost(body)
+        allowed, _ = await self.preflight_audio(estimated)
+        if not allowed:
+            log.info("tts_budget_blocked")
+            return SpeechResult(
+                blocked=True,
+                reason=BUDGET_BLOCK_REASON,
+                error="budget_exceeded",
+                language=language,
+            )
+
+        chain = self._tts_chain()
+        if not chain:
+            log.warning("tts_failed reason=no_tts_models")
+            return SpeechResult(error="tts_unavailable", reason="no_tts_models", language=language)
+
+        fmt = (response_format or "mp3").strip().lower()
+        if fmt not in {"mp3", "pcm"}:
+            fmt = "mp3"
+        mime = "audio/mpeg" if fmt == "mp3" else "audio/pcm"
+        last_error = "tts_failed"
+
+        for model in chain:
+            log.info("tts_model_selected model=%s paid=%s", model.id, model.is_paid)
+            payload: dict[str, Any] = {
+                "model": model.id,
+                "input": body[:4000],
+                "response_format": fmt,
+                "voice": self._tts_voice_for_language(language),
+            }
+            started = time.monotonic()
+            try:
+                response = await self._client.post(
+                    SPEECH_URL,
+                    headers=self._headers(),
+                    json=payload,
+                    timeout=self._tts_timeout(),
+                )
+            except httpx.TimeoutException:
+                last_error = "timeout"
+                self._note_failure(model.id)
+                log.warning("tts_failed model=%s reason=timeout", model.id)
+                continue
+            except httpx.HTTPError:
+                last_error = "transport_failed"
+                self._note_failure(model.id)
+                log.warning("tts_failed model=%s reason=transport", model.id)
+                continue
+
+            latency = time.monotonic() - started
+            if response.status_code in {401, 403}:
+                raise ModelRouterAuthError("OpenRouter rejected OPENROUTER_API_KEY")
+            if response.status_code >= 400:
+                last_error = f"http_{response.status_code}"
+                self._note_failure(model.id)
+                log.info("tts_failed model=%s reason=http_%s", model.id, response.status_code)
+                continue
+
+            audio = response.content or b""
+            if not audio:
+                last_error = "empty_audio"
+                log.info("tts_failed model=%s reason=empty_audio", model.id)
+                continue
+
+            usage_header = response.headers.get("x-openrouter-cost") or response.headers.get("x-cost")
+            cost = estimated
+            parsed_cost = _optional_float(usage_header)
+            if parsed_cost is not None and parsed_cost >= 0:
+                cost = Decimal(str(parsed_cost))
+            # Free TTS models still record a zero-cost ledger entry for observability.
+            paid = model.is_paid or cost > _ZERO
+            if paid:
+                await self._commit_paid(model.id, cost, _ZERO, kind="tts")
+            await self._note_recent_call(
+                role=ROLE_TTS,
+                model=model.id,
+                latency_s=latency,
+                usage={},
+                cost=cost,
+                paid=paid,
+                call_type="tts",
+            )
+            self._note_success(model.id)
+            self._maybe_budget_warning()
+            log.info(
+                "tts_completed model=%s cost=$%s latency=%.2fs language=%s",
+                model.id,
+                cost,
+                latency,
+                language or "en",
+            )
+            return SpeechResult(
+                audio=bytes(audio),
+                mime_type=mime,
+                format=fmt,
+                language=language,
+                model=model.id,
+                cost_usd=float(cost),
+                latency_s=latency,
+                available=True,
+            )
+
+        log.warning("tts_failed reason=%s", last_error)
+        return SpeechResult(error="tts_failed", reason=last_error, language=language)
+
     async def preflight_audio(self, estimated: Decimal) -> tuple[bool, Decimal]:
         """Return (allowed, estimated). Must run before the transcription HTTP call."""
         async with self._ledger_lock:
@@ -875,7 +1059,7 @@ class ModelRouter:
         if text:
             await self._commit_paid(served, cost, _ZERO, kind="audio")
             await self._note_recent_call(
-                role="audio_transcription",
+                role=ROLE_TRANSCRIPTION,
                 model=served,
                 latency_s=latency,
                 usage=usage,
@@ -1232,19 +1416,23 @@ class ModelRouter:
             "total_tokens": (usage or {}).get("total_tokens"),
         }
         kind = call_type or ("vision" if role == ROLE_VISION else "text")
+        entry_type = kind
+        if kind in {"audio", "audio_transcription"}:
+            entry_type = "audio_transcription"
+        elif kind == "tts":
+            entry_type = "tts"
         entry = {
             "timestamp": _now_iso(),
-            "type": "audio_transcription" if kind in {"audio", "audio_transcription"} else kind,
+            "type": entry_type,
             "model": model,
             "model_role": role,
             "latency_s": round(float(latency_s), 3),
             "token_usage": usage_safe,
-            "cost_usd": float(cost) if kind in {"audio", "audio_transcription"} else str(cost),
+            "cost_usd": float(cost) if entry_type in {"audio_transcription", "tts"} else str(cost),
             "paid": paid,
             "tier": "PAID" if paid else "FREE",
         }
-        if kind in {"audio", "audio_transcription"}:
-            entry["type"] = "audio_transcription"
+        if entry_type in {"audio_transcription", "tts"}:
             entry["cost_usd"] = float(cost)
         async with self._ledger_lock:
             calls = list(self._ledger.get("recent_calls") or [])

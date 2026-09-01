@@ -16,6 +16,7 @@ from uuid import UUID
 
 from dashboard.schemas import (
     ActivityEvent,
+    AccessibilityResponse,
     AiUsageBreakdown,
     AnalyticsSummary,
     ChannelShare,
@@ -121,6 +122,9 @@ _TIMELINE_TITLES = {
     "voice_message_received": "Voice message received",
     "audio_transcribed": "Audio transcribed",
     "language_detected": "Language detected",
+    "voice_guidance_delivered": "Voice guidance delivered",
+    "emergency_voice_reply": "Emergency voice reply sent",
+    "voice_reply_skipped": "Voice reply skipped",
     "emergency_bypass": "Emergency keyword detected",
     "emergency_repeat": "Repeated emergency message attached",
     "emergency_slack_alert": "Slack alert sent",
@@ -655,6 +659,7 @@ class DashboardReadService:
                 similarity = float(score)
         origin = extract_qr_origin(incident.original_message_text)
         voice_report = _voice_report_from_updates(updates, incident, evidence)
+        accessibility = _accessibility_from_updates(updates, incident, voice_report)
         from dashboard.safety import build_safety_panel, guidance_from_updates, safety_status_for_incident
         from guardrails.events import list_guardrail_events
 
@@ -703,6 +708,7 @@ class DashboardReadService:
             input_channel=_display_channel(incident, origin),
             input_method=_input_method_for(incident, voice_report),
             voice_report=voice_report,
+            accessibility=accessibility,
             vision=_vision_from_updates(updates, incident),
             safety=build_safety_panel(
                 incident_id=incident.incident_ref,
@@ -1145,6 +1151,8 @@ class DashboardReadService:
             text_cost = float(_as_decimal(types.get("text")))
             vision_cost = float(_as_decimal(types.get("vision")))
             voice_cost = float(_as_decimal(types.get("audio") or types.get("audio_transcription")))
+            tts_cost = float(_as_decimal(types.get("tts")))
+            voice_cost = round(voice_cost + tts_cost, 6)
             if text_cost == 0 and vision_cost == 0 and voice_cost == 0:
                 raw_calls = payload.get("recent_calls") if isinstance(payload.get("recent_calls"), list) else []
                 for row in raw_calls:
@@ -1152,7 +1160,7 @@ class DashboardReadService:
                         continue
                     cost = float(_as_decimal(row.get("cost_usd")))
                     kind = str(row.get("type") or row.get("model_role") or "")
-                    if kind in {"audio", "audio_transcription"}:
+                    if kind in {"audio", "audio_transcription", "tts", "role_tts"}:
                         voice_cost += cost
                     elif kind in {"vision", "role_vision"}:
                         vision_cost += cost
@@ -1376,6 +1384,26 @@ class DashboardReadService:
                         title="Incident created",
                         detail=incident.incident_ref,
                         actor="incident_agent",
+                    )
+                )
+                continue
+            if str(fields["update_type"]) in {"voice_guidance_delivered", "emergency_voice_reply"}:
+                events.append(
+                    TimelineEvent(
+                        timestamp=update.created_at,
+                        title="Voice guidance delivered",
+                        detail=str(meta.get("voice_language_name") or meta.get("voice_language") or ""),
+                        actor="voice_out",
+                    )
+                )
+                continue
+            if str(fields["update_type"]) == "voice_reply_skipped":
+                events.append(
+                    TimelineEvent(
+                        timestamp=update.created_at,
+                        title="Voice reply skipped",
+                        detail=redact_text(fields["message"] if isinstance(fields["message"], str) else None),
+                        actor="voice_out",
                     )
                 )
                 continue
@@ -1696,6 +1724,8 @@ def _voice_analytics(incidents: list[Incident], updates: list[IncidentUpdate]) -
     image_ids: set[str] = set()
     latencies: list[float] = []
     languages: dict[str, int] = {}
+    reply_langs: dict[str, int] = {}
+    replies_sent = 0
     today = _utcnow().date()
     reports_today = 0
     for update in updates:
@@ -1715,6 +1745,11 @@ def _voice_analytics(incidents: list[Incident], updates: list[IncidentUpdate]) -
                 latencies.append(latency)
         if kind in {"evidence_added", "evidence_uploaded"} or meta.get("has_image"):
             image_ids.add(iid)
+        if meta.get("voice_reply_sent") or kind in {"voice_guidance_delivered", "emergency_voice_reply"}:
+            replies_sent += 1
+            rlang = str(meta.get("voice_language") or "").strip().lower()
+            if rlang:
+                reply_langs[rlang] = reply_langs.get(rlang, 0) + 1
     by_id = {str(item.id): item for item in incidents}
     voice_incidents = [by_id[iid] for iid in voice_ids if iid in by_id]
     text_incidents = [item for item in incidents if str(item.id) not in voice_ids]
@@ -1737,6 +1772,10 @@ def _voice_analytics(incidents: list[Incident], updates: list[IncidentUpdate]) -
     lang_share = {
         language_display_name(code) or code: round(100 * count / lang_total, 1) for code, count in languages.items()
     }
+    pref_total = sum(reply_langs.values()) or 1
+    pref_share = {
+        language_display_name(code) or code: round(100 * count / pref_total, 1) for code, count in reply_langs.items()
+    }
     return VoiceAnalytics(
         reports_today=reports_today,
         average_transcription_seconds=round(sum(latencies) / len(latencies), 1) if latencies else None,
@@ -1749,6 +1788,13 @@ def _voice_analytics(incidents: list[Incident], updates: list[IncidentUpdate]) -
         },
         completion_rate_voice=_rate(voice_incidents),
         completion_rate_text=_rate(text_incidents),
+        voice_reports_received=voice_n,
+        voice_replies_sent=replies_sent,
+        preferred_languages=pref_share,
+        text_vs_voice_completion={
+            "voice": _rate(voice_incidents) if _rate(voice_incidents) is not None else 0.0,
+            "text": _rate(text_incidents) if _rate(text_incidents) is not None else 0.0,
+        },
     )
 
 
@@ -1847,14 +1893,17 @@ def _voice_report_from_updates(
     from tools.voice_tools import confidence_band, language_display_name
 
     meta: dict[str, Any] = {}
+    reply_meta: dict[str, Any] = {}
     found = False
     for update in updates:
         row = update.metadata or {}
-        if row.get("voice_used") or row.get("audio_used") or (update.update_type or "") == "voice_report":
+        kind = (update.update_type or "")
+        if row.get("voice_used") or row.get("audio_used") or kind == "voice_report":
             meta = row
             found = True
-            break
-    if not found:
+        if row.get("voice_reply_sent") or kind in {"voice_guidance_delivered", "emergency_voice_reply"}:
+            reply_meta = row
+    if not found and not reply_meta:
         return None
     playback = None
     source = str(meta.get("source") or incident.source_channel or "")
@@ -1870,21 +1919,101 @@ def _voice_report_from_updates(
     label = None
     if confidence is not None and band:
         label = f"{band.capitalize()} confidence {round(confidence * 100)}%"
+    reply_sent = bool(reply_meta.get("voice_reply_sent")) if reply_meta else None
+    voice_lang = str(reply_meta.get("voice_language") or "") or None if reply_meta else None
+    loop_status = None
+    if found and reply_sent:
+        loop_status = "Delivered"
+    elif found:
+        loop_status = "Text-only response"
+    elif reply_sent:
+        loop_status = "Delivered"
     return VoiceReport(
         duration_seconds=_as_float(meta.get("duration_seconds")),
         language=language,
         language_name=language_display_name(language),
-        transcript=redact_text(incident.hazard_description or incident.original_message_text),
-        audio_format=str(meta.get("audio_format") or "ogg"),
-        input_method="voice",
-        audio_used=True,
+        transcript=redact_text(incident.hazard_description or incident.original_message_text) if found else None,
+        audio_format=str(meta.get("audio_format") or "ogg") if found else None,
+        input_method="voice" if found else "text",
+        audio_used=bool(found),
         transcription_cost=_as_float(meta.get("transcription_cost")),
         transcription_confidence=confidence,
         confidence_label=label,
         processing_status="Completed",
         playback_url=playback if _safe_storage_available(playback) else None,
         uploaded_by="Worker",
-        source=source,
+        source=source or None,
+        voice_reply_sent=reply_sent,
+        voice_language=voice_lang,
+        voice_model=str(reply_meta.get("voice_model") or "") or None if reply_meta else None,
+        voice_cost_usd=_as_float(reply_meta.get("voice_cost_usd")) if reply_meta else None,
+        voice_loop_status=loop_status,
+        guidance_playback_url=None,
+    )
+
+
+def _accessibility_from_updates(
+    updates: list[IncidentUpdate],
+    incident: Incident,
+    voice_report: VoiceReport | None,
+) -> AccessibilityResponse:
+    from tools.voice_out_tools import language_display_name
+
+    voice_received = bool(voice_report and voice_report.audio_used)
+    guidance_generated = False
+    voice_delivered = False
+    reply_meta: dict[str, Any] = {}
+    for update in updates:
+        kind = (update.update_type or "").lower()
+        meta = update.metadata or {}
+        if kind in {"guidance_generated", "guidance_sent"} or meta.get("guidance"):
+            guidance_generated = True
+        if kind == "guidance_sent" or "guidance" in kind:
+            guidance_generated = True
+        if meta.get("voice_reply_sent") or kind in {"voice_guidance_delivered", "emergency_voice_reply"}:
+            voice_delivered = True
+            reply_meta = meta
+    # Guidance is assumed generated when risk was assessed / incident progressed past assess.
+    if not guidance_generated:
+        for update in updates:
+            if (update.update_type or "").lower() in {"risk_assessed", "status_transition", "slack_coordination_completed"}:
+                guidance_generated = True
+                break
+    language = (
+        (voice_report.voice_language if voice_report else None)
+        or reply_meta.get("voice_language")
+        or (voice_report.language if voice_report else None)
+        or incident.detected_language
+    )
+    lang_name = language_display_name(str(language)) if language else None
+    steps: list[str] = []
+    if voice_received:
+        steps.append("Voice received")
+    if guidance_generated:
+        steps.append("Guidance generated")
+    if voice_delivered:
+        steps.append("Voice reply delivered")
+    text_only = not voice_delivered
+    if voice_delivered and voice_received:
+        status = "Full voice loop completed"
+    elif voice_delivered:
+        status = "Voice reply delivered"
+    elif voice_received:
+        status = "Text-only response"
+    else:
+        status = "Text-only response"
+    return AccessibilityResponse(
+        voice_received=voice_received,
+        guidance_generated=guidance_generated,
+        voice_reply_delivered=voice_delivered,
+        text_only=text_only,
+        language=str(language) if language else None,
+        language_name=lang_name,
+        status=status,
+        voice_model=str(reply_meta.get("voice_model") or "") or None,
+        voice_cost_usd=_as_float(reply_meta.get("voice_cost_usd")),
+        guidance_playback_url=None,
+        loop_steps=steps,
     )
 
 

@@ -165,6 +165,8 @@ models:
         - meta-llama/llama-3.2-11b-vision-instruct
       temperature: 0.1
       max_tokens: 384
+    # role_transcription / role_tts are audio API roles (not chat chains).
+    # Models are discovered live from OpenRouter catalog modalities.
 
 # Responsible AI safety layer. Limits are configuration, not literals in validators.
 guardrails:

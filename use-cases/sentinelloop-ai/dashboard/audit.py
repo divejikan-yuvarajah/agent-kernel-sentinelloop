@@ -587,8 +587,11 @@ def _voice_audit(incident: Incident, updates: list) -> AuditVoiceReport | None:
     from tools.voice_tools import confidence_band, language_display_name
 
     meta = _voice_meta(updates)
-    if not meta:
+    reply_meta = _voice_reply_meta(updates)
+    if not meta and not reply_meta:
         return None
+    if not meta:
+        meta = {}
     language = str(meta.get("detected_language") or incident.detected_language or "") or None
     cost = _as_float(meta.get("transcription_cost"))
     confidence = _as_float(meta.get("transcription_confidence"))
@@ -603,18 +606,33 @@ def _voice_audit(incident: Incident, updates: list) -> AuditVoiceReport | None:
             override = "Yes"
             break
     return AuditVoiceReport(
-        input_method="Voice",
+        input_method="Voice" if meta else ("Voice reply" if reply_meta.get("voice_reply_sent") else "Text"),
         audio_language=language_display_name(language) or language,
-        transcription=redact_text(incident.hazard_description or incident.original_message_text),
+        transcription=redact_text(incident.hazard_description or incident.original_message_text) if meta else None,
         ai_cost=f"${cost:.3f}" if cost is not None else None,
         human_override=override,
         duration_seconds=_as_float(meta.get("duration_seconds")),
         confidence_label=label,
-        audio_format=str(meta.get("audio_format") or "ogg"),
+        audio_format=str(meta.get("audio_format") or "ogg") if meta else None,
+        voice_reply_sent=bool(reply_meta.get("voice_reply_sent")) if reply_meta else None,
+        voice_language=str(reply_meta.get("voice_language") or "") or None if reply_meta else None,
+        voice_model=str(reply_meta.get("voice_model") or "") or None if reply_meta else None,
+        voice_cost_usd=_as_float(reply_meta.get("voice_cost_usd")) if reply_meta else None,
+        full_accessibility_loop=bool(reply_meta.get("full_accessibility_loop")) if reply_meta else None,
     )
 
 
-def build_audit_export(
+def _voice_reply_meta(updates: list) -> dict[str, Any]:
+    for update in updates:
+        meta = _meta(update)
+        kind = (update.update_type or "").lower()
+        if meta.get("voice_reply_sent") or kind in {
+            "voice_guidance_delivered",
+            "emergency_voice_reply",
+            "voice_reply_skipped",
+        }:
+            return meta
+    return {}
     *,
     incident: Incident,
     assignments: list[Assignment],
