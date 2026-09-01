@@ -18,6 +18,10 @@ type Props = {
   activeStage?: string | null;
   onSelectStage?: (stage: string) => void;
   loading?: boolean;
+  className?: string;
+  mode?: "filter" | "showcase";
+  centerLabel?: string;
+  centerValue?: string;
 };
 
 function polar(cx: number, cy: number, radius: number, angle: number) {
@@ -40,57 +44,83 @@ function donutSegment(cx: number, cy: number, inner: number, outer: number, star
   ].join(" ");
 }
 
-export function LoopRing({ stages, openCount, activeStage, onSelectStage, loading = false }: Props) {
+export function LoopRing({
+  stages,
+  openCount,
+  activeStage,
+  onSelectStage,
+  loading = false,
+  className = "",
+  mode = "filter",
+  centerLabel,
+  centerValue,
+}: Props) {
+  const showcase = mode === "showcase";
   const total = stages.reduce((sum, stage) => sum + stage.count, 0);
-  const cx = 120;
-  const cy = 120;
+  const size = showcase ? 280 : 240;
+  const cx = size / 2;
+  const cy = size / 2;
+  const inner = showcase ? 92 : 72;
+  const outer = showcase ? 132 : 104;
   const gap = 3;
   const sweep = 360 / Math.max(stages.length, 1);
   const padded = String(openCount).padStart(2, "0");
+  const figureClass = ["ds-loop", showcase ? "ds-loop--showcase" : "", className].filter(Boolean).join(" ");
 
   return (
-    <figure className="ds-loop" aria-label="SentinelLoop operational stages">
+    <figure className={figureClass} aria-label={showcase ? "SentinelLoop safety loop" : "SentinelLoop operational stages"}>
       <div className="ds-loop__ring">
-        <svg viewBox="0 0 240 240" role="presentation">
+        <svg viewBox={`0 0 ${size} ${size}`} role="presentation">
           {stages.map((stage, index) => {
             const start = index * sweep + gap / 2;
             const end = (index + 1) * sweep - gap / 2;
-            const filled = stage.count > 0;
+            const filled = showcase || stage.count > 0;
             const selected = activeStage === stage.stage;
-            const className = [
+            const segmentClass = [
               "ds-loop__segment",
               segmentTone(stage.stage, filled),
               selected ? "ds-loop__segment--active" : "",
             ]
               .filter(Boolean)
               .join(" ");
-            return <path key={stage.stage} d={donutSegment(cx, cy, 72, 104, start, end)} className={className} />;
+            return <path key={stage.stage} d={donutSegment(cx, cy, inner, outer, start, end)} className={segmentClass} />;
           })}
         </svg>
         <div className="ds-loop__center">
-          <span className="ds-loop__count ds-mono">{loading ? "—" : padded}</span>
-          <span className="ds-loop__center-label">Open incidents</span>
+          <span className="ds-loop__count ds-mono">{centerValue ?? (loading ? "—" : padded)}</span>
+          <span className="ds-loop__center-label">{centerLabel ?? "Open incidents"}</span>
         </div>
       </div>
-      <div className="ds-loop__controls" role="tablist" aria-label="Filter incidents by loop stage">
+      <div
+        className="ds-loop__controls"
+        role={showcase ? "group" : "tablist"}
+        aria-label={showcase ? "Loop stages" : "Filter incidents by loop stage"}
+      >
         {stages.map((stage) => {
-          const filled = stage.count > 0;
+          const filled = showcase || stage.count > 0;
           const percent = total ? stage.percentage : 0;
           return (
             <button
               key={stage.stage}
               type="button"
-              role="tab"
-              aria-selected={activeStage === stage.stage}
+              role={showcase ? undefined : "tab"}
+              aria-selected={showcase ? undefined : activeStage === stage.stage}
+              aria-current={showcase && activeStage === stage.stage ? "true" : undefined}
               className={`ds-loop__hit${activeStage === stage.stage ? " is-active" : ""}`}
-              title={`${stage.label}: ${stage.count} incidents (${percent}%)`}
-              aria-label={`${stage.label}: ${stage.count} incidents, ${percent} percent. ${filled ? "Filter dashboard by this stage." : "No incidents at this stage."}`}
+              title={showcase ? stage.label : `${stage.label}: ${stage.count} incidents (${percent}%)`}
+              aria-label={
+                showcase
+                  ? stage.label
+                  : `${stage.label}: ${stage.count} incidents, ${percent} percent. ${filled ? "Filter dashboard by this stage." : "No incidents at this stage."}`
+              }
               onClick={() => onSelectStage?.(stage.stage)}
             >
               <span className="ds-loop__hit-label">{stage.label}</span>
-              <span className="ds-mono ds-loop__hit-meta">
-                {stage.count} · {percent}%
-              </span>
+              {showcase ? null : (
+                <span className="ds-mono ds-loop__hit-meta">
+                  {stage.count} · {percent}%
+                </span>
+              )}
             </button>
           );
         })}

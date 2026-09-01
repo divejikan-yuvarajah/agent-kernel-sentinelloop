@@ -51,7 +51,7 @@ export function ForecastPage() {
   return (
     <AppShell title="Risk Forecast Explanation" operationalStatus="INVESTIGATING">
       <p className="ds-page-lead">
-        <Link to="/">Dashboard</Link>
+        <Link to="/dashboard">Dashboard</Link>
         {" / "}
         Why this zone is predicted
       </p>

@@ -269,3 +269,26 @@ def test_shift_handover_surfaces_on_dashboard_and_history():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "Phase 2:" in readme
     assert "Automatic shift-end scheduling using Agent Kernel scheduler." in readme
+
+
+def test_public_landing_page_is_separate_from_dashboard_route():
+    app = (FRONTEND / "src" / "App.tsx").read_text(encoding="utf-8")
+    assert "LandingPage" in app
+    assert 'path="/dashboard"' in app
+    nav = (FRONTEND / "src" / "navigation.ts").read_text(encoding="utf-8")
+    assert 'to: "/dashboard"' in nav
+    assert "Emergency Command Center" in nav
+    hero = (FRONTEND / "landing" / "components" / "Hero.tsx").read_text(encoding="utf-8")
+    assert "Report danger in seconds." in hero
+    assert "Prevent the next accident." in hero
+    assert "Message the bot on Telegram" in hero
+    assert "View live dashboard" in hero
+    constants = (FRONTEND / "landing" / "constants.ts").read_text(encoding="utf-8")
+    assert "zero AI in this path" in constants
+    assert "Language barriers" in constants
+    footer = (FRONTEND / "landing" / "components" / "Footer.tsx").read_text(encoding="utf-8")
+    assert "Built for IDEALIZE 2026 — Agent Kernel Mini-Competition" in footer
+    assert "Powered by" in footer
+    assert "Agent Kernel" in footer
+    loop = (FRONTEND / "design-system" / "components" / "LoopRing.tsx").read_text(encoding="utf-8")
+    assert 'mode?: "filter" | "showcase"' in loop

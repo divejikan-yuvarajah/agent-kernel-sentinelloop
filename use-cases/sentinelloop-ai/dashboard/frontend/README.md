@@ -25,7 +25,8 @@ npm run build
 
 ## Routes
 
-- `/` Dashboard
+- `/` Public marketing landing
+- `/dashboard` Operations command center
 - `/incidents` Active incidents
 - `/incidents/:incidentId` Incident workspace
 - `/evidence` Evidence review
