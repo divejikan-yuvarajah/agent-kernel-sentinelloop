@@ -28,7 +28,7 @@ _SECRET_KEYS = frozenset(
         "openrouter_api_key",
         "authorization",
         "slack_bot_token",
-        "whatsapp_token",
+        "telegram_token",
         "system_prompt",
         "prompt",
         "messages",

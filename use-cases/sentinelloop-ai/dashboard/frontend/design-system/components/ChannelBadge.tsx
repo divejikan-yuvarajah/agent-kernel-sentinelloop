@@ -1,8 +1,7 @@
 import { Badge } from "./Badge";
 
 const CHANNELS: Record<string, { emoji: string; label: string }> = {
-  telegram: { emoji: "📱", label: "Telegram" },
-  whatsapp: { emoji: "🟢", label: "WhatsApp" },
+  telegram: { emoji: "💬", label: "Telegram" },
   slack: { emoji: "💬", label: "Slack" },
   email: { emoji: "📧", label: "Email" },
 };

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 
+from integrations.inbound import NormalizedInboundMessage
 from integrations.telegram_handler import (
     SentinelLoopTelegramHandler,
     TelegramTransport,
@@ -13,10 +14,12 @@ from integrations.telegram_handler import (
     largest_photo,
     normalize_telegram_update,
     reset_telegram_health,
+    resolve_start_tag,
     rewrite_qr_kv,
     session_key,
+    start_command_handler,
+    start_payload,
 )
-from integrations.whatsapp_handler import NormalizedWhatsAppMessage
 from tools.duplicate_tools import DuplicateResult
 from tools.emergency_bypass import is_emergency_trigger
 from tools.voice_tools import transcribe_voice_note
@@ -43,10 +46,10 @@ def _text(text: str, *, chat_id: int = 48291033, message_id: int = 1) -> dict:
 
 class RecordingOrchestrator:
     def __init__(self) -> None:
-        self.messages: list[NormalizedWhatsAppMessage] = []
+        self.messages: list[NormalizedInboundMessage] = []
         self.order: list[str] = []
 
-    async def process_incoming_telegram_message(self, message: NormalizedWhatsAppMessage):
+    async def process_incoming_telegram_message(self, message: NormalizedInboundMessage):
         self.order.append("orchestrator")
         self.messages.append(message)
         return message
@@ -199,6 +202,25 @@ def test_is_start_command():
     assert is_start_command("/start")
     assert is_start_command("/start@SentinelLoop_ReportBot")
     assert not is_start_command("start the machine")
+    assert start_payload("/start SNT-LAB-B-M4-001") == "SNT-LAB-B-M4-001"
+    assert start_payload("/start") is None
+    handler = start_command_handler(lambda update, context: None)
+    assert "start" in handler.commands
+    assert resolve_start_tag("SNT-LAB-B-M4-001") == "[LOC:Lab B|Machine 4]"
+
+
+def test_start_tag_enters_pipeline_with_location():
+    reset_telegram_health()
+    orch = RecordingOrchestrator()
+    handler = SentinelLoopTelegramHandler(
+        orchestrator=orch,
+        transport=TelegramTransport(client=FakeTelegramClient()),
+        skip_kernel_init=True,
+    )
+    run(handler.handle_incoming_update(_text("/start SNT-LAB-B-M4-001")))
+    assert orch.messages
+    assert orch.messages[0].text == "[LOC:Lab B|Machine 4]"
+    assert orch.messages[0].sender_id == "telegram:48291033"
 
 
 def test_text_message_enters_pipeline():
@@ -333,7 +355,7 @@ def test_emergency_bypass_runs_first():
         return is_emergency_trigger(text)
 
     class OrderedOrch(RecordingOrchestrator):
-        async def process_incoming_telegram_message(self, message: NormalizedWhatsAppMessage):
+        async def process_incoming_telegram_message(self, message: NormalizedInboundMessage):
             order.append("orchestrator")
             return await super().process_incoming_telegram_message(message)
 
@@ -353,7 +375,7 @@ def test_duplicate_telegram_reuses_canonical_incident():
     from agentkernel.core.session.in_memory import InMemorySessionStore
 
     from integrations.incident_orchestrator import IncidentOrchestrator
-    from integrations.whatsapp_handler import WhatsAppCloudTransport
+    from integrations.telegram_handler import TelegramTransport
     from tests.test_incident_orchestrator import (
         FakeCoord,
         MemoryRepo,
@@ -382,7 +404,6 @@ def test_duplicate_telegram_reuses_canonical_incident():
 
     orch = IncidentOrchestrator(
         repository=repo,
-        whatsapp=WhatsAppCloudTransport(RecordingClient()),
         telegram=TelegramTransport(client=FakeTelegramClient()),
         coordination=FakeCoord(),
         intake_fn=Scripted("intake", default=_intake()),
@@ -393,19 +414,20 @@ def test_duplicate_telegram_reuses_canonical_incident():
         session_store=InMemorySessionStore(),
     )
     first = run(
-        orch.process_incoming_whatsapp_message(
-            NormalizedWhatsAppMessage(
-                provider_message_id="wamid.spark",
-                sender_id="94770000000",
+        orch.process_incoming_telegram_message(
+            NormalizedInboundMessage(
+                provider_message_id="tg.spark-1",
+                sender_id="telegram:1001",
                 message_type="text",
                 text="Machine sparking",
-                input_channel="whatsapp",
+                input_channel="telegram",
+                chat_id="1001",
             )
         )
     )
     second = run(
         orch.process_incoming_telegram_message(
-            NormalizedWhatsAppMessage(
+            NormalizedInboundMessage(
                 provider_message_id="tg.spark",
                 sender_id="telegram:48291033",
                 message_type="text",
@@ -418,7 +440,7 @@ def test_duplicate_telegram_reuses_canonical_incident():
     assert first.canonical_incident_id
     assert second.duplicate_detected is True
     assert second.canonical_incident_id == first.canonical_incident_id
-    assert repo.create_calls[0].source_channel == "whatsapp"
+    assert repo.create_calls[0].source_channel == "telegram"
     assert all(row.source_channel != "telegram" for row in repo.create_calls[1:])
 
 
@@ -426,7 +448,7 @@ def test_telegram_create_stores_input_channel():
     from agentkernel.core.session.in_memory import InMemorySessionStore
 
     from integrations.incident_orchestrator import IncidentOrchestrator
-    from integrations.whatsapp_handler import WhatsAppCloudTransport
+    from integrations.telegram_handler import TelegramTransport
     from tests.test_incident_orchestrator import (
         FakeCoord,
         MemoryRepo,
@@ -441,7 +463,6 @@ def test_telegram_create_stores_input_channel():
     repo = MemoryRepo()
     orch = IncidentOrchestrator(
         repository=repo,
-        whatsapp=WhatsAppCloudTransport(RecordingClient()),
         telegram=TelegramTransport(client=FakeTelegramClient()),
         coordination=FakeCoord(),
         intake_fn=Scripted("intake", default=_intake(raw_text="Machine area smoke coming")),
@@ -453,7 +474,7 @@ def test_telegram_create_stores_input_channel():
     )
     result = run(
         orch.process_incoming_telegram_message(
-            NormalizedWhatsAppMessage(
+            NormalizedInboundMessage(
                 provider_message_id="tg.smoke",
                 sender_id="telegram:48291033",
                 message_type="text",

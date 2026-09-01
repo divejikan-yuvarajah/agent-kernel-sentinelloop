@@ -200,7 +200,7 @@ def repo(backend: FakeBackend) -> IncidentRepository:
 def _create_payload(**overrides) -> IncidentCreate:
     data = {
         "incident_ref": "SL-2026-000001",
-        "reporter_id": "whatsapp:+94770000000",
+        "reporter_id": "telegram:+94770000000",
         "hazard_description": "Exposed cable",
         "hazard_category": "electrical",
     }
@@ -214,7 +214,7 @@ def test_incident_model_duplicate_count_default():
             "id": str(uuid4()),
             "incident_ref": "SL-2026-000002",
             "reporter_id": "r1",
-            "source_channel": "whatsapp",
+            "source_channel": "telegram",
             "status": "REPORTED",
         }
     )
@@ -227,7 +227,7 @@ def test_incident_model_unknown_injury_is_none():
             "id": str(uuid4()),
             "incident_ref": "SL-2026-000003",
             "reporter_id": "r1",
-            "source_channel": "whatsapp",
+            "source_channel": "telegram",
             "status": "OPEN",
             "injury_occurred": "unknown",
         }
@@ -242,7 +242,7 @@ def test_incident_model_rejects_invalid_uuid():
                 "id": "not-a-uuid",
                 "incident_ref": "x",
                 "reporter_id": "r1",
-                "source_channel": "whatsapp",
+                "source_channel": "telegram",
                 "status": "OPEN",
             }
         )

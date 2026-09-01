@@ -119,7 +119,6 @@ export function IncidentsPage() {
           options={[
             { value: "ALL", label: "All channels" },
             { value: "telegram", label: "Telegram" },
-            { value: "whatsapp", label: "WhatsApp" },
             { value: "slack", label: "Slack" },
             { value: "email", label: "Email" },
           ]}

@@ -13,10 +13,10 @@ from agentkernel.core.session.in_memory import InMemorySessionStore
 from database.schemas import IncidentCreate
 from guardrails.emergency_bypass import detect_emergency, extract_possible_location, is_emergency_trigger
 from guardrails.emergency_keywords import WORKER_EMERGENCY_REPLY
+from integrations.inbound import NormalizedInboundMessage
 from integrations.incident_orchestrator import IncidentOrchestrator
 from integrations.slack_handler import SlackHandler, SlackPostError
-from integrations.whatsapp import WhatsAppSendError
-from integrations.whatsapp_handler import NormalizedWhatsAppMessage, SentinelLoopWhatsAppHandler, WhatsAppCloudTransport
+from integrations.telegram_handler import SentinelLoopTelegramHandler, TelegramSendError, TelegramTransport
 from tools.duplicate_tools import DuplicateResult
 from tools.model_router import call_model as live_call_model
 
@@ -25,7 +25,7 @@ def run(coro):
     return asyncio.run(coro)
 
 
-class RecordingWhatsApp:
+class RecordingTelegram:
     def __init__(self) -> None:
         self.payloads: list[str] = []
         self.fail = False
@@ -34,7 +34,7 @@ class RecordingWhatsApp:
     async def send_text_message(self, to: str, text: str, **kwargs):
         self.calls += 1
         if self.fail:
-            raise WhatsAppSendError("whatsapp down")
+            raise TelegramSendError("telegram down")
         self.payloads.append(text)
         return {"id": f"wamid.out.{self.calls}"}
 
@@ -94,7 +94,7 @@ class Scripted:
         return SimpleNamespace(**self.default)
 
 
-def _msg(**kwargs) -> NormalizedWhatsAppMessage:
+def _msg(**kwargs) -> NormalizedInboundMessage:
     data = {
         "provider_message_id": kwargs.pop("provider_message_id", f"wamid.{uuid4()}"),
         "sender_id": kwargs.pop("sender_id", "94771234567"),
@@ -102,10 +102,10 @@ def _msg(**kwargs) -> NormalizedWhatsAppMessage:
         "text": "SOS",
         "received_at": datetime.now(timezone.utc),
         "supported": True,
-        "input_channel": "whatsapp",
+        "input_channel": "telegram",
     }
     data.update(kwargs)
-    return NormalizedWhatsAppMessage.model_validate(data)
+    return NormalizedInboundMessage.model_validate(data)
 
 
 class FakeCoord:
@@ -115,7 +115,7 @@ class FakeCoord:
 
 def _orch(**kwargs) -> IncidentOrchestrator:
     repo = kwargs.pop("repository", MemoryRepo())
-    whatsapp = kwargs.pop("whatsapp", RecordingWhatsApp())
+    telegram = kwargs.pop("telegram", RecordingTelegram())
     slack_client = kwargs.pop("slack_client", FakeSlackClient())
     intake = kwargs.pop(
         "intake_fn", Scripted("intake", {"raw_text": "SOS", "is_hazard_report": True, "language": "en"})
@@ -145,7 +145,7 @@ def _orch(**kwargs) -> IncidentOrchestrator:
 
     orch = IncidentOrchestrator(
         repository=repo,
-        whatsapp=whatsapp,
+        telegram=telegram,
         slack=SlackHandler(
             client=slack_client,
             destinations={"Emergency Response Team": "C-EMRG"},
@@ -163,7 +163,7 @@ def _orch(**kwargs) -> IncidentOrchestrator:
         **kwargs,
     )
     orch._repo = repo
-    orch._whatsapp_transport = whatsapp
+    orch._telegram_transport = telegram
     orch._slack_client = slack_client
     orch._intake_script = intake
     orch._incident_script = incident
@@ -229,7 +229,7 @@ def test_full_emergency_flow_order_and_no_model_before_reply(monkeypatch):
     orch = _orch()
 
     async def go():
-        result = await orch.process_incoming_whatsapp_message(_msg(text="Fire now 🔥"))
+        result = await orch.process_incoming_telegram_message(_msg(text="Fire now 🔥"))
         return result
 
     result = run(go())
@@ -254,15 +254,15 @@ def test_full_emergency_flow_order_and_no_model_before_reply(monkeypatch):
     slack_text = orch._slack_client.posts[0]["text"]
     assert "EMERGENCY ALERT" in slack_text
     assert "Bypassed" in slack_text
-    assert orch._whatsapp_transport.payloads
-    assert WORKER_EMERGENCY_REPLY["en"] in orch._whatsapp_transport.payloads[0]
+    assert orch._telegram_transport.payloads
+    assert WORKER_EMERGENCY_REPLY["en"] in orch._telegram_transport.payloads[0]
 
 
 def test_async_enrichment_updates_same_incident():
     orch = _orch()
 
     async def go():
-        result = await orch.process_incoming_whatsapp_message(_msg(text="SOS"))
+        result = await orch.process_incoming_telegram_message(_msg(text="SOS"))
         await orch.wait_for_emergency_enrichment()
         return result
 
@@ -281,9 +281,9 @@ def test_duplicate_sos_does_not_create_three_incidents():
     orch = _orch()
 
     async def go():
-        await orch.process_incoming_whatsapp_message(_msg(provider_message_id="wamid.1", text="SOS"))
-        await orch.process_incoming_whatsapp_message(_msg(provider_message_id="wamid.2", text="SOS"))
-        await orch.process_incoming_whatsapp_message(_msg(provider_message_id="wamid.3", text="SOS"))
+        await orch.process_incoming_telegram_message(_msg(provider_message_id="wamid.1", text="SOS"))
+        await orch.process_incoming_telegram_message(_msg(provider_message_id="wamid.2", text="SOS"))
+        await orch.process_incoming_telegram_message(_msg(provider_message_id="wamid.3", text="SOS"))
 
     run(go())
     assert len(orch._repo.create_calls) == 1
@@ -295,17 +295,17 @@ def test_slack_unavailable_still_creates_incident():
     slack = FakeSlackClient()
     slack.fail = "down"
     orch = _orch(slack_client=slack)
-    result = run(orch.process_incoming_whatsapp_message(_msg(text="SOS")))
+    result = run(orch.process_incoming_telegram_message(_msg(text="SOS")))
     assert len(orch._repo.create_calls) == 1
     assert result.canonical_incident_id
-    assert orch._whatsapp_transport.payloads
+    assert orch._telegram_transport.payloads
 
 
-def test_whatsapp_unavailable_still_stores_incident():
-    whatsapp = RecordingWhatsApp()
-    whatsapp.fail = True
-    orch = _orch(whatsapp=whatsapp)
-    result = run(orch.process_incoming_whatsapp_message(_msg(text="SOS")))
+def test_telegram_unavailable_still_stores_incident():
+    telegram = RecordingTelegram()
+    telegram.fail = True
+    orch = _orch(telegram=telegram)
+    result = run(orch.process_incoming_telegram_message(_msg(text="SOS")))
     assert len(orch._repo.create_calls) == 1
     assert result.canonical_incident_id
     assert orch._worker_retry_queue
@@ -318,25 +318,25 @@ def test_ai_unavailable_emergency_response_still_completes():
     orch = _orch(intake_fn=broken_intake)
 
     async def go():
-        result = await orch.process_incoming_whatsapp_message(_msg(text="SOS"))
+        result = await orch.process_incoming_telegram_message(_msg(text="SOS"))
         await orch.wait_for_emergency_enrichment()
         return result
 
     result = run(go())
     assert len(orch._repo.create_calls) == 1
     assert orch._slack_client.posts
-    assert orch._whatsapp_transport.payloads
+    assert orch._telegram_transport.payloads
     assert result.guidance_sent is True
 
 
-def test_whatsapp_emergency_check_runs_first():
+def test_telegram_emergency_check_runs_first():
     order: list[str] = []
 
     class Rec:
         def __init__(self) -> None:
             self.messages = []
 
-        async def process_incoming_whatsapp_message(self, message):
+        async def process_incoming_telegram_message(self, message):
             order.append("orchestrator")
             self.messages.append(message)
             return SimpleNamespace(provider_message_id=message.provider_message_id)
@@ -345,17 +345,23 @@ def test_whatsapp_emergency_check_runs_first():
         order.append("emergency")
         return is_emergency_trigger(text)
 
-    handler = SentinelLoopWhatsAppHandler(
+    handler = SentinelLoopTelegramHandler(
         orchestrator=Rec(),
-        transport=WhatsAppCloudTransport(client=AsyncMock()),
+        transport=TelegramTransport(client=AsyncMock()),
         skip_kernel_init=True,
         emergency_fn=emergency,
     )
     orch = handler._orchestrator
     run(
-        handler.handle_incoming_webhook_message(
-            {"id": "wamid.sos", "from": "94771234567", "type": "text", "text": {"body": "SOS"}},
-            {},
+        handler.handle_incoming_update(
+            {
+                "message": {
+                    "message_id": 1,
+                    "chat": {"id": 48291033},
+                    "from": {"id": 9001},
+                    "text": "SOS",
+                }
+            }
         )
     )
     assert order == ["emergency", "orchestrator"]
@@ -369,6 +375,6 @@ def test_slack_post_error_is_swallowed():
 
     orch = _orch()
     orch.slack = Boom(client=FakeSlackClient(), destinations={"Emergency Response Team": "C-EMRG"})
-    result = run(orch.process_incoming_whatsapp_message(_msg(text="SOS")))
+    result = run(orch.process_incoming_telegram_message(_msg(text="SOS")))
     assert len(orch._repo.create_calls) == 1
     assert result.canonical_incident_id

@@ -2,7 +2,7 @@
 
 Malformed webhook data, unsupported media, duplicate events, invalid
 payloads, and missing session linkage. PreHook on intake_agent plus
-direct validator calls from WhatsApp/Slack handlers.
+direct validator calls from Telegram/Slack handlers.
 """
 
 from guardrails.input_validation import (

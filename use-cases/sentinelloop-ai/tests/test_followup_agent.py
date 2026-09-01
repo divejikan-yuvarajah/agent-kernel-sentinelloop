@@ -1,4 +1,4 @@
-"""Follow-up verification tests. No live WhatsApp, Slack, or Supabase."""
+"""Follow-up verification tests. No live Telegram, Slack, or Supabase."""
 
 from __future__ import annotations
 
@@ -25,8 +25,9 @@ from agents.followup_agent import (
     MemoryFollowupStore,
     parse_verification_response,
 )
+from integrations.inbound import ACTION_STILL_EXISTS, ACTION_UNSURE, ACTION_YES, encode_action
 from integrations.slack_handler import SlackHandler
-from integrations.whatsapp import ACTION_STILL_EXISTS, ACTION_UNSURE, ACTION_YES, WhatsAppHandler, encode_action
+from integrations.telegram_handler import TelegramTransport
 from tools.lifecycle import STATUS_CLOSED, STATUS_IN_PROGRESS, STATUS_NEW, STATUS_RESOLVED
 
 
@@ -34,16 +35,19 @@ def run(coro):
     return asyncio.run(coro)
 
 
-class FakeWhatsApp:
+class FakeTelegram:
     def __init__(self) -> None:
         self.sent: list[dict] = []
         self.fail = False
 
-    async def __call__(self, payload: dict) -> dict:
+    async def __call__(self, method, payload=None):
+        if payload is None:
+            payload = method
         if self.fail:
-            raise RuntimeError("whatsapp down")
-        self.sent.append(payload)
-        return {"ok": True, "id": f"wamid.{len(self.sent)}"}
+            raise RuntimeError("telegram down")
+        item = payload if isinstance(payload, dict) else {"payload": payload, "method": method}
+        self.sent.append(item)
+        return {"ok": True, "result": {"message_id": len(self.sent)}}
 
 
 class FakeSlackClient:
@@ -117,7 +121,8 @@ def _incident(**kwargs) -> dict:
         "incident_ref": "INC-0042",
         "id": str(uuid4()),
         "status": STATUS_RESOLVED,
-        "worker_phone": "94770000000",
+        "worker_chat_id": "telegram:48291033",
+        "reporter_id": "telegram:48291033",
         "detected_language": "en",
         "location": "Electrical Room",
         "assigned_team": "Electrical Maintenance",
@@ -130,12 +135,12 @@ def _incident(**kwargs) -> dict:
     return base
 
 
-def _service(whatsapp: FakeWhatsApp | None = None, slack: FakeSlackClient | None = None, repo: FakeRepo | None = None):
-    wa = whatsapp or FakeWhatsApp()
+def _service(telegram: FakeTelegram | None = None, slack: FakeSlackClient | None = None, repo: FakeRepo | None = None):
+    wa = telegram or FakeTelegram()
     sl = slack or FakeSlackClient()
     return (
         FollowupService(
-            whatsapp=WhatsAppHandler(client=wa),
+            telegram=TelegramTransport(client=wa),
             slack=SlackHandler(client=sl),
             repository=repo,
             store=MemoryFollowupStore(),
@@ -167,10 +172,8 @@ def test_resolved_sends_verification_in_worker_language():
     assert result.worker_notified is True
     assert result.verification_status == VERIFICATION_PENDING
     assert result.error is None
-    assert wa.sent[0]["type"] == "interactive"
-    body = wa.sent[0]["interactive"]["body"]["text"]
-    assert "ආරක්ෂිතද" in body
-    ids = [b["reply"]["id"] for b in wa.sent[0]["interactive"]["action"]["buttons"]]
+    assert "ආරක්ෂිතද" in wa.sent[0]["text"]
+    ids = [btn["callback_data"] for row in wa.sent[0]["reply_markup"]["inline_keyboard"] for btn in row]
     assert any(ACTION_YES in item for item in ids)
     assert any(ACTION_STILL_EXISTS in item for item in ids)
     assert any(ACTION_UNSURE in item for item in ids)
@@ -179,7 +182,7 @@ def test_resolved_sends_verification_in_worker_language():
 def test_tamil_verification_semantics():
     service, wa, _ = _service()
     run(service.start_worker_verification(_incident(detected_language="ta")))
-    titles = [b["reply"]["title"] for b in wa.sent[0]["interactive"]["action"]["buttons"]]
+    titles = [btn["text"] for row in wa.sent[0]["reply_markup"]["inline_keyboard"] for btn in row]
     assert "ஆம்" in titles
     assert any("இன்னும்" in title for title in titles)
     assert "உறுதியில்லை" in titles
@@ -240,8 +243,8 @@ def test_ambiguous_reply_clarifies():
     result = run(service.handle_worker_verification_response(text="maybe", incident_id="INC-0042"))
     assert result.error == ERROR_AMBIGUOUS
     assert result.closed is False
-    assert any(item.get("type") == "text" for item in wa.sent)
-    assert "Yes" in wa.sent[-1]["text"]["body"]
+    assert any(isinstance(item.get("text"), str) for item in wa.sent)
+    assert "Yes" in wa.sent[-1]["text"]
 
 
 def test_interactive_ids_are_language_independent():
@@ -354,7 +357,7 @@ def test_duplicate_resolved_event_sends_once():
     assert len(wa.sent) == 1
 
 
-def test_whatsapp_retry_mutates_once():
+def test_telegram_retry_mutates_once():
     repo = FakeRepo()
     service, _, _ = _service(repo=repo)
     run(service.start_worker_verification(_incident()))
@@ -401,19 +404,19 @@ def test_closed_late_reply_ignored():
 
 def test_yes_without_verification_context():
     service, _, _ = _service()
-    result = run(service.handle_worker_verification_response(text="Yes", worker_phone="94770000000"))
+    result = run(service.handle_worker_verification_response(text="Yes", worker_chat_id="94770000000"))
     assert result.error == ERROR_STALE
     assert result.closed is False
 
 
 def test_multiple_incidents_use_action_context():
     service, _, _ = _service(repo=FakeRepo())
-    run(service.start_worker_verification(_incident(incident_ref="INC-1", worker_phone="9477")))
-    run(service.start_worker_verification(_incident(incident_ref="INC-2", worker_phone="9477")))
+    run(service.start_worker_verification(_incident(incident_ref="INC-1", worker_chat_id="9477")))
+    run(service.start_worker_verification(_incident(incident_ref="INC-2", worker_chat_id="9477")))
     result = run(
         service.handle_worker_verification_response(
             action_id=encode_action(ACTION_YES, "INC-2", 1),
-            worker_phone="9477",
+            worker_chat_id="9477",
         )
     )
     assert result.incident_id == "INC-2"
@@ -456,10 +459,10 @@ def test_slack_failure_after_reopen_keeps_in_progress():
     assert repo.incident_status == "IN_PROGRESS"
 
 
-def test_whatsapp_send_failure_does_not_close():
-    wa = FakeWhatsApp()
+def test_telegram_send_failure_does_not_close():
+    wa = FakeTelegram()
     wa.fail = True
-    service, _, _ = _service(whatsapp=wa, repo=FakeRepo())
+    service, _, _ = _service(telegram=wa, repo=FakeRepo())
     result = run(service.start_worker_verification(_incident()))
     assert result.worker_notified is False
     assert result.error == ERROR_DELIVERY
@@ -469,7 +472,7 @@ def test_whatsapp_send_failure_does_not_close():
 
 def test_missing_worker_identity():
     service, wa, _ = _service()
-    result = run(service.start_worker_verification(_incident(worker_phone=None, reporter_id=None)))
+    result = run(service.start_worker_verification(_incident(worker_chat_id=None, reporter_id=None)))
     assert result.error == ERROR_NO_WORKER
     assert wa.sent == []
 

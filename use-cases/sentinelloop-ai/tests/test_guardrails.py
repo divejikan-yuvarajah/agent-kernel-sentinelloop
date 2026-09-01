@@ -19,14 +19,14 @@ from guardrails.output_validation import (
     validate_guidance_output,
 )
 from integrations.slack_handler import SlackHandler
-from integrations.whatsapp import WhatsAppHandler
-from tests.conftest import FakeRepository, MockSlackClient, MockWhatsAppClient, run
+from integrations.telegram_handler import TelegramTransport
+from tests.conftest import FakeRepository, MockSlackClient, MockTelegramClient, run
 from tools.lifecycle import STATUS_CLOSED, STATUS_RESOLVED
 
 
-def _followup(repo: FakeRepository, whatsapp=None, slack=None) -> FollowupService:
+def _followup(repo: FakeRepository, telegram=None, slack=None) -> FollowupService:
     return FollowupService(
-        whatsapp=WhatsAppHandler(client=whatsapp or MockWhatsAppClient()),
+        telegram=TelegramTransport(client=telegram or MockTelegramClient()),
         slack=SlackHandler(client=slack or MockSlackClient()),
         repository=repo,
         store=MemoryFollowupStore(),
@@ -81,7 +81,7 @@ def test_guidance_close_paraphrase_is_accepted():
 
 
 def test_critical_worker_confirm_blocks_auto_close():
-    blocked = validate_closure_request(risk_level="Critical", source="whatsapp")
+    blocked = validate_closure_request(risk_level="Critical", source="telegram")
     assert blocked["approved"] is False
     assert blocked["human_review_required"] is True
 
@@ -99,7 +99,7 @@ def test_critical_worker_confirm_blocks_auto_close():
 
 
 def test_low_worker_confirm_allows_auto_close():
-    allowed = validate_closure_request(risk_level="Low", source="whatsapp")
+    allowed = validate_closure_request(risk_level="Low", source="telegram")
     assert allowed["approved"] is True
     assert allowed["human_review_required"] is False
 
@@ -115,11 +115,11 @@ def test_low_worker_confirm_allows_auto_close():
     assert repo.closed_at is not None
 
 
-def test_anonymous_analytics_omit_phone_and_whatsapp_id():
+def test_anonymous_analytics_omit_phone_and_telegram_id():
     cleaned = sanitize_analytics_record(
         {
             "phone_number": "+94771234567",
-            "whatsapp_id": "94771234567",
+            "telegram_id": "94771234567",
             "category": "electrical",
             "region": "Colombo",
             "is_anonymous": True,
@@ -127,33 +127,33 @@ def test_anonymous_analytics_omit_phone_and_whatsapp_id():
         is_anonymous=True,
     )
     assert "phone_number" not in cleaned
-    assert "whatsapp_id" not in cleaned
+    assert "telegram_id" not in cleaned
     assert "+9477" not in str(cleaned)
     event = build_safe_analytics_event(
         {
             "phone_number": "+94771234567",
-            "whatsapp_id": "94771234567",
+            "telegram_id": "94771234567",
             "category": "electrical",
             "region": "Colombo",
             "is_anonymous": True,
         }
     )
     assert "phone_number" not in event
-    assert "whatsapp_id" not in event
+    assert "telegram_id" not in event
     assert event["anonymous"] is True
 
 
 def test_non_anonymous_operational_storage_may_keep_phone():
     operational = {
         "phone_number": "+94771234567",
-        "whatsapp_id": "94771234567",
+        "telegram_id": "94771234567",
         "is_anonymous": False,
         "category": "fire/smoke",
     }
     assert operational["phone_number"] == "+94771234567"
     analytics = build_safe_analytics_event(operational)
     assert "phone_number" not in analytics
-    assert "whatsapp_id" not in analytics
+    assert "telegram_id" not in analytics
     assert analytics.get("reporter_present") is True
 
 

@@ -2,12 +2,12 @@
 
 Authoritative behavior lives in [`SPEC.md`](SPEC.md). This file is a compact map of the six agents for implementers.
 
-Framework (verified): OpenAI Agents SDK `Agent` objects registered together through one Agent Kernel `OpenAIModule`. Handoffs use SDK `handoffs=[...]`. WhatsApp `config.yaml` `whatsapp.agent` is `intake_agent`.
+Framework (verified): OpenAI Agents SDK `Agent` objects registered together through one Agent Kernel `OpenAIModule`. Handoffs use SDK `handoffs=[...]`. Telegram `config.yaml` `telegram.agent` is `intake_agent`.
 
 ## Pipeline
 
 ```text
-WhatsApp
+Telegram
    ↓
 intake_agent
    ↓
@@ -38,7 +38,7 @@ New or continuing reports go `intake_agent` → `incident_agent`. Pending worker
 ## `intake_agent`
 
 - **Responsibility:** Normalize inbound worker communication and attach it to the correct session/incident.
-- **Main inputs:** WhatsApp sender id, message id, text/image (and voice transcript if STT is added), timestamp, session cursor, open incidents for the reporter.
+- **Main inputs:** Telegram sender id, message id, text/image (and voice transcript if STT is added), timestamp, session cursor, open incidents for the reporter.
 - **Main outputs:** Detected language, normalized content, reporter reference, message type, session reference, new-vs-existing incident, media references, next handoff.
 - **Allowed next handoff(s):** `incident_agent`; `followup_agent` when the message is verification or remediation evidence.
 - **Must not:** Score risk, invent incident facts, close incidents, send Slack operational alerts.
@@ -48,7 +48,7 @@ New or continuing reports go `intake_agent` → `incident_agent`. Pending worker
 - **Responsibility:** Extract structured incident facts and ask only safety-critical clarifications. `unknown` is not `false`.
 - **Main inputs:** Normalized report, session context, existing incident row, evidence metadata.
 - **Main outputs:** Structured facts, missing fields, optional clarification question, extraction confidence when honest.
-- **Allowed next handoff(s):** `risk_agent` when minimum viable facts exist; otherwise reply to the worker and wait for the next WhatsApp turn.
+- **Allowed next handoff(s):** `risk_agent` when minimum viable facts exist; otherwise reply to the worker and wait for the next Telegram turn.
 - **Must not:** Compute the official risk score, invent safety procedures, notify Slack, close or reopen.
 
 ## `risk_agent`

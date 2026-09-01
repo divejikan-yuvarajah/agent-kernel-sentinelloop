@@ -1,4 +1,4 @@
-"""Unit tests for SentinelLoop intake. Model router and live WhatsApp are mocked."""
+"""Unit tests for SentinelLoop intake. Model router and live Telegram are mocked."""
 
 from __future__ import annotations
 

@@ -38,7 +38,7 @@ def normalize_incident_row(row: dict) -> dict:
         "id": coerce_uuid(pk),
         "incident_ref": str(pk) if pk is not None else str(coerce_uuid("unknown")),
         "reporter_id": row.get("reporter_id") or "unknown",
-        "source_channel": row.get("source_channel") or "whatsapp",
+        "source_channel": row.get("source_channel") or "telegram",
         "detected_language": row.get("reporter_language"),
         "hazard_category": row.get("category"),
         "hazard_description": description,

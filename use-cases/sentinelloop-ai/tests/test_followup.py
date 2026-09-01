@@ -11,17 +11,17 @@ from agents.followup_agent import (
     MemoryFollowupStore,
 )
 from integrations.slack_handler import SlackHandler
-from integrations.whatsapp import WhatsAppHandler
-from tests.conftest import FakeRepository, MockSlackClient, MockWhatsAppClient, run
+from integrations.telegram_handler import TelegramTransport
+from tests.conftest import FakeRepository, MockSlackClient, MockTelegramClient, run
 from tools.lifecycle import STATUS_CLOSED, STATUS_IN_PROGRESS, STATUS_RESOLVED
 
 
 def _service(repo: FakeRepository, slack: MockSlackClient | None = None):
-    wa = MockWhatsAppClient()
+    wa = MockTelegramClient()
     sl = slack or MockSlackClient()
     return (
         FollowupService(
-            whatsapp=WhatsAppHandler(client=wa),
+            telegram=TelegramTransport(client=wa),
             slack=SlackHandler(client=sl),
             repository=repo,
             store=MemoryFollowupStore(),

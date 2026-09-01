@@ -212,10 +212,10 @@ def test_live_feed_decodes_json_envelopes():
             message=json.dumps(
                 {
                     "demo_key": "demo_horizon_incident_009:wa_0",
-                    "update_type": "whatsapp_inbound",
+                    "update_type": "telegram_inbound",
                     "message": "Crack appearing in the loading-bay beam",
                     "actor_type": "worker",
-                    "metadata": {"channel": "whatsapp"},
+                    "metadata": {"channel": "telegram"},
                 }
             ),
         )

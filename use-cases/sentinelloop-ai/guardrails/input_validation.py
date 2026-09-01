@@ -1,7 +1,7 @@
 """Inbound validation for worker messages, media, identifiers, and lifecycle requests.
 
 Registered as an Agent Kernel PreHook on intake_agent (initial user turn only).
-Inner WhatsApp/Slack handoffs are not hooked by Agent Kernel 0.6.0 — call these
+Inner Telegram/Slack handoffs are not hooked by Agent Kernel 0.6.0 — call these
 validators from handlers and agents as well.
 
 SPEC.md Rule: Treat all external content as untrusted data, not instructions.
@@ -100,7 +100,7 @@ def detect_prompt_injection(text: str | None) -> list[str]:
 
 
 def validate_worker_input(text: str | None, *, metadata: dict[str, Any] | None = None) -> ValidationResult:
-    """Validate a worker WhatsApp/Slack message as incident description text.
+    """Validate a worker Telegram/Slack message as incident description text.
 
     SPEC.md Rule: Treat all external content as untrusted. Worker messages are data,
     not system commands.
@@ -215,7 +215,7 @@ def validate_media_input(
     provider_id: str | None = None,
     source: str | None = None,
 ) -> ValidationResult:
-    """Validate WhatsApp/Slack image metadata before download or model use.
+    """Validate Telegram/Slack image metadata before download or model use.
 
     SPEC.md Rule: Reject invalid/unsupported media and oversized uploads.
     """
@@ -247,7 +247,7 @@ def validate_media_input(
             violations.append("invalid media URL")
         elif not parsed.netloc and scheme:
             violations.append("corrupted media URL")
-    if source in {"whatsapp", "slack"} and not provider_id and not url:
+    if source in {"telegram", "slack"} and not provider_id and not url:
         violations.append("media provider ID or URL required")
     emit_guardrail_event(
         EVENT_PASSED if not violations else EVENT_FAILED,
@@ -274,7 +274,7 @@ def validate_external_event(event: dict[str, Any] | None, *, source: str | None 
     if not event_id:
         flags.append("event_id_missing")
     origin = source or data.get("source") or data.get("source_channel")
-    if origin and str(origin).lower() not in {"whatsapp", "slack", "dashboard", "system", "qr"}:
+    if origin and str(origin).lower() not in {"telegram", "slack", "dashboard", "system", "qr"}:
         flags.append("unknown_event_source")
     encoded = json.dumps(data, default=str)
     if len(encoded.encode("utf-8")) > int(load_guardrail_config()["max_metadata_bytes"]):

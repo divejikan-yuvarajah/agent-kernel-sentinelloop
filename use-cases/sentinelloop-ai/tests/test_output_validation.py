@@ -1,4 +1,4 @@
-"""Output validation tests. No live OpenRouter, WhatsApp, or Slack."""
+"""Output validation tests. No live OpenRouter, Telegram, or Slack."""
 
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ def test_invented_instruction_is_blocked():
 
 
 def test_low_auto_close_allowed():
-    result = validate_closure_request(risk_level="Low", source="whatsapp")
+    result = validate_closure_request(risk_level="Low", source="telegram")
     assert result["approved"] is True
     assert result["human_review_required"] is False
 
@@ -74,13 +74,13 @@ def test_medium_auto_close_allowed():
 
 
 def test_high_auto_close_blocked():
-    result = validate_closure_request(risk_level="High", source="whatsapp")
+    result = validate_closure_request(risk_level="High", source="telegram")
     assert result["approved"] is False
     assert result["human_review_required"] is True
 
 
 def test_critical_auto_close_blocked():
-    result = validate_closure_request(risk_level="Critical", source="whatsapp")
+    result = validate_closure_request(risk_level="Critical", source="telegram")
     assert result["approved"] is False
 
 

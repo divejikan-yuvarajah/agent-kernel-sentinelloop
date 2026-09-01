@@ -6,7 +6,7 @@ It may only select, translate, or lightly rephrase instructions loaded
 from the approved knowledge-base file. Any output that cannot be linked
 to a supplied source_id must be rejected.
 
-This agent does not send WhatsApp, notify Slack, change risk scores, or
+This agent does not send Telegram, notify Slack, change risk scores, or
 reclassify hazards.
 """
 
@@ -125,7 +125,7 @@ class GuidanceResult(BaseModel):
     hallucination_check: str | None = None
 
     def worker_text(self) -> str:
-        """Worker-facing WhatsApp text. No source IDs or file paths."""
+        """Worker-facing Telegram text. No source IDs or file paths."""
         if not self.guidance:
             return self.safety_footer.output_text if self.safety_footer else ""
         lines = ["Please do this now:", ""]

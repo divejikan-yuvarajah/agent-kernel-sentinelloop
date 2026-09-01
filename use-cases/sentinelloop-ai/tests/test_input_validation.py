@@ -1,4 +1,4 @@
-"""Input validation tests. No live WhatsApp, Slack, or OpenRouter."""
+"""Input validation tests. No live Telegram, Slack, or OpenRouter."""
 
 from __future__ import annotations
 
@@ -56,14 +56,14 @@ def test_oversize_text_is_rejected():
 
 def test_incomplete_incident_is_not_rejected_at_intake():
     result = validate_incident_payload(
-        {"source": "whatsapp", "reporter_id": "9477", "timestamp": "2026-08-31T00:00:00Z"},
+        {"source": "telegram", "reporter_id": "9477", "timestamp": "2026-08-31T00:00:00Z"},
         stage="intake",
     )
     assert result.approved is True
 
 
 def test_agent_stage_requires_incident_id():
-    result = validate_incident_payload({"source": "whatsapp"}, stage="agent")
+    result = validate_incident_payload({"source": "telegram"}, stage="agent")
     assert result.approved is False
 
 
@@ -72,7 +72,7 @@ def test_media_rejects_executable_disguised_as_image():
         mime_type="application/x-msdownload",
         filename="photo.jpg.exe",
         size_bytes=12,
-        source="whatsapp",
+        source="telegram",
         provider_id="MEDIA1",
     )
     assert result.approved is False
@@ -83,7 +83,7 @@ def test_media_allows_jpeg():
         mime_type="image/jpeg",
         filename="after.jpg",
         size_bytes=2048,
-        source="whatsapp",
+        source="telegram",
         provider_id="MEDIA1",
     )
     assert result.approved is True

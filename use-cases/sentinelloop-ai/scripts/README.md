@@ -8,9 +8,9 @@ Operational helpers. Incident business logic stays in agents and tools.
 uv run python scripts/generate_location_qr.py
 ```
 
-Reads `locations.yaml`, writes PNG stickers and A4 posters to `assets/qr/`, and writes `assets/qr/location_registry.json`. Requires `WHATSAPP_QR_NUMBER` (E.164 digits, no `+`) or `--whatsapp-number`.
+Reads `locations.yaml`, writes PNG stickers and A4 posters to `assets/qr/`, and writes `assets/qr/location_registry.json`. Requires `TELEGRAM_BOT_USERNAME` (E.164 digits, no `+`) or `--bot-username`.
 
-Does not call agents, mutate incidents, or contact WhatsApp.
+Does not call agents, mutate incidents, or contact Telegram.
 
 See `docs/qr_location_system.md`.
 
@@ -23,4 +23,4 @@ uv run python scripts/seed_demo_data.py --verbose
 uv run python scripts/seed_demo_data.py --summary
 ```
 
-Populates the existing five Supabase tables with a fictional **Horizon Engineering Workshop** environment (9 linked incidents, multilingual reports, duplicate electrical hazard, QR tags, Slack/WhatsApp simulation, evidence, and audit history). Requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. `--reset` deletes only `DEMO-HORIZON-*` rows. Safe to rerun: existing demo refs are reused, not duplicated.
+Populates the existing five Supabase tables with a fictional **Horizon Engineering Workshop** environment (9 linked incidents, multilingual reports, duplicate electrical hazard, QR tags, Slack/Telegram simulation, evidence, and audit history). Requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. `--reset` deletes only `DEMO-HORIZON-*` rows. Safe to rerun: existing demo refs are reused, not duplicated.

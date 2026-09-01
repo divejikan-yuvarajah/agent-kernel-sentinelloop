@@ -206,10 +206,8 @@ export function IncidentDetailPage() {
               <p>
                 Channel:{" "}
                 {(detail.input_channel || detail.reporter.source_channel) === "telegram"
-                  ? "📱 Telegram Image"
-                  : (detail.input_channel || detail.reporter.source_channel) === "whatsapp"
-                    ? "💬 WhatsApp Image"
-                    : detail.input_channel || detail.reporter.source_channel || "Workshop"}
+                  ? "Source: Telegram 💬"
+                  : detail.input_channel || detail.reporter.source_channel || "Workshop"}
               </p>
               <p className="ds-mono">AI Processing: Completed</p>
               <EvidenceImage src={pair.before} alt={detail.title || "Worker evidence"} ratio="16/9" />

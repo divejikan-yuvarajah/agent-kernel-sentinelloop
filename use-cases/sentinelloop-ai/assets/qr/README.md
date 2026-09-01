@@ -1,11 +1,11 @@
 # QR assets
 
-Printable location tags for the WhatsApp reporting flow.
+Printable location tags for the Telegram reporting flow.
 
 Generate from `use-cases/sentinelloop-ai`:
 
 ```bash
-uv run python scripts/generate_location_qr.py --whatsapp-number <WHATSAPP_QR_NUMBER>
+uv run python scripts/generate_location_qr.py --bot-username <TELEGRAM_BOT_USERNAME>
 ```
 
 See `docs/qr_location_system.md` for payload format, intake tagging, and the demo scan path.

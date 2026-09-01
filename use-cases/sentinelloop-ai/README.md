@@ -205,7 +205,7 @@ Typography: `Space Grotesk` (headers/KPIs), `IBM Plex Sans` (UI text), `IBM Plex
 * 🆘 **Deterministic emergency bypass** — "SOS"/🆘 in any supported language triggers an instant, hardcoded Critical alert with **zero LLM calls** in the critical path.
 * 📈 **Predictive hazard forecasting** — recurring category+location patterns surface as "recommend inspection before next shift," turning the system reactive → preventive.
 * 🖼️ **Vision-based triage** — a hazard photo with little/no caption still gets a category suggestion via a vision-capable model.
-* 🎙️ **Voice message reporting** — WhatsApp and Telegram voice notes transcribed via OpenRouter's unified audio endpoint, in the worker's own language, with spend tracked against the same OpenRouter budget ceiling as text and vision.
+* 🎙️ **Voice message reporting** — Telegram and Telegram voice notes transcribed via OpenRouter's unified audio endpoint, in the worker's own language, with spend tracked against the same OpenRouter budget ceiling as text and vision.
 * 🗒️ **Automated shift handover briefings** — `handover_agent` collects open/critical/review/overdue incidents, calls `role_fast` **once** to phrase a bullet briefing, stores it in `handover_summaries`, and posts it to the Slack Safety Channel. Judges can trigger **Generate Shift Handover** from the dashboard. Agent Kernel has no in-process cron/scheduler, so automatic shift-end jobs are not wired here.
 
 ```
@@ -259,7 +259,14 @@ Create a project at [supabase.com](https://supabase.com), copy the URL and `serv
 Create an account and API key at [openrouter.ai](https://openrouter.ai). Add credits if you want paid-model fallback beyond the free tier.
 
 ### 12.4 Telegram
-Message [@BotFather](https://t.me/BotFather), `/newbot`, save the token — no webhook or public URL needed for local development.
+Create a bot with [@BotFather](https://t.me/BotFather) (`/newbot`). Copy `TELEGRAM_BOT_TOKEN` and the public username (no `@`) into `.env` as `TELEGRAM_BOT_USERNAME`. Local mode is polling (`TELEGRAM_MODE=polling`):
+
+```bash
+cd use-cases/sentinelloop-ai
+uv run python -m integrations.telegram_handler
+```
+
+No Meta Developer account, Cloud API, or phone number ID is required.
 
 ### 12.5 Environment
 ```bash

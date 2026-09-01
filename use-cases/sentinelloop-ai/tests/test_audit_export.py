@@ -92,7 +92,7 @@ def _seed_audit(repo: IncidentRepository, backend: FakeBackend) -> object:
             update_type="incident_created",
             new_status="REPORTED",
             actor_type="system",
-            actor_reference="whatsapp_orchestrator",
+            actor_reference="telegram_orchestrator",
             message="Report received",
         )
     )
@@ -217,7 +217,7 @@ def test_audit_export_complete_structure(tmp_path, monkeypatch):
     assert info["duplicate_count"] == 3
     assert info["current_risk_level"] == "CRITICAL"
     report = body["original_report"]
-    assert report["source"] == "WhatsApp"
+    assert report["source"] == "Telegram"
     assert report["message"].startswith("[LOC:Bay 4|Hydraulic Press]")
     assert "எண்ணெய்" in report["message"]
     language = body["language_processing"]

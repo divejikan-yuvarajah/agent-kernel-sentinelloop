@@ -1085,9 +1085,7 @@ class ModelRouter:
             served = body.get("model") if isinstance(body.get("model"), str) else model.id
             cost = self._cost_for_response(model, usage, gen, messages, paid=paid)
             if paid:
-                await self._commit_paid(
-                    model.id, cost, reservation, kind="vision" if role == ROLE_VISION else "text"
-                )
+                await self._commit_paid(model.id, cost, reservation, kind="vision" if role == ROLE_VISION else "text")
             else:
                 if reservation:
                     await self._release(reservation)
@@ -1188,9 +1186,7 @@ class ModelRouter:
         async with self._ledger_lock:
             self._reserved = max(_ZERO, self._reserved - reservation)
 
-    async def _commit_paid(
-        self, model_id: str, actual: Decimal, reservation: Decimal, *, kind: str = "text"
-    ) -> None:
+    async def _commit_paid(self, model_id: str, actual: Decimal, reservation: Decimal, *, kind: str = "text") -> None:
         async with self._ledger_lock:
             self._reserved = max(_ZERO, self._reserved - reservation)
             self._cumulative += actual

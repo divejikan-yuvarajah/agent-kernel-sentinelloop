@@ -1,6 +1,6 @@
 """Voice-note transcription for worker safety reports.
 
-Telegram voice notes arrive as ogg/opus. WhatsApp Cloud API voice notes are
+Telegram voice notes arrive as ogg/opus. Telegram Bot API voice notes are
 ``type=audio`` with ``audio.voice=true`` (Prompt 0 / Meta payload). OpenRouter
 accepts those formats directly — this module does not convert codecs.
 
@@ -41,12 +41,8 @@ MIME_TO_FORMAT = {
 MAX_AUDIO_BYTES = 10 * 1024 * 1024
 LOW_CONFIDENCE_THRESHOLD = 0.55
 BUDGET_BLOCK_REASON = "AI budget ceiling reached"
-VOICE_RETRY_MESSAGE = (
-    "I could not clearly understand the voice message.\nPlease repeat or send text."
-)
-VOICE_INVALID_MESSAGE = (
-    "I could not read that voice message. Please send a short text description of the hazard."
-)
+VOICE_RETRY_MESSAGE = "I could not clearly understand the voice message.\nPlease repeat or send text."
+VOICE_INVALID_MESSAGE = "I could not read that voice message. Please send a short text description of the hazard."
 VOICE_UNAVAILABLE_MESSAGE = (
     "I could not process the voice message right now. Please send a short text description of the hazard."
 )

@@ -301,7 +301,7 @@ class IncidentAnalysis(BaseModel):
 
 
 def redact_phone(phone: str) -> str:
-    """Redact a worker phone for logs. WhatsApp session ids are sender numbers."""
+    """Redact a worker phone for logs. Telegram session ids are sender numbers."""
     text = (phone or "").strip()
     if len(text) <= 4:
         return "****"

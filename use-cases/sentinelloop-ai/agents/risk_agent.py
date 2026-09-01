@@ -3,7 +3,7 @@
 Estimates severity and likelihood via ``call_model(role="role_reasoning")``.
 The official score and Low/Medium/High/Critical level come only from
 ``tools.risk_tools.calculate_risk``. This agent does not persist assessments,
-notify Slack, or send WhatsApp.
+notify Slack, or send Telegram.
 """
 
 from __future__ import annotations

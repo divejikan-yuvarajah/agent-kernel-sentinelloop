@@ -1,6 +1,6 @@
 """Webhook / provider-event idempotency.
 
-Deduplicate WhatsApp and Slack deliveries by stable provider message or
+Deduplicate Telegram and Slack deliveries by stable provider message or
 event ids. This is not semantic incident-duplicate detection.
 """
 

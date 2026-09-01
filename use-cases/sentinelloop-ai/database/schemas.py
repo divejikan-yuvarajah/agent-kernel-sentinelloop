@@ -42,7 +42,7 @@ class IncidentCreate(_InputModel):
 
     incident_ref: str
     reporter_id: str
-    source_channel: str = "whatsapp"
+    source_channel: str = "telegram"
     session_id: str | None = None
     detected_language: str | None = None
     hazard_category: str | None = None
@@ -56,6 +56,9 @@ class IncidentCreate(_InputModel):
     original_message_id: str | None = None
     original_message_text: str | None = None
     site_id: str | None = None
+    telegram_chat_id: str | None = None
+    telegram_user_id: str | None = None
+    telegram_message_id: str | None = None
 
     @field_validator("injury_occurred", "hazard_currently_active", mode="before")
     @classmethod
@@ -114,7 +117,7 @@ class IncidentUpdateCreate(_InputModel):
 
 @dataclass(frozen=True)
 class EvidenceFile:
-    """Transport-neutral file payload (WhatsApp media or dashboard upload)."""
+    """Transport-neutral file payload (Telegram media or dashboard upload)."""
 
     content: bytes
     filename: str | None = None

@@ -1,4 +1,4 @@
-"""Generate WhatsApp location QR codes from locations.yaml.
+"""Generate Telegram location QR codes from locations.yaml.
 
 Does not mutate incidents or call agents. Output is print-ready PNGs plus
 ``location_registry.json`` for dashboard analytics.
@@ -39,20 +39,21 @@ def _now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def _whatsapp_number() -> str:
-    raw = os.environ.get("WHATSAPP_QR_NUMBER") or os.environ.get("WHATSAPP_DISPLAY_NUMBER") or ""
-    digits = re.sub(r"\D", "", raw)
-    if len(digits) < 8:
+def _bot_username() -> str:
+    raw = (os.environ.get("TELEGRAM_BOT_USERNAME") or "").strip().lstrip("@")
+    if not re.fullmatch(r"[A-Za-z0-9_]{5,32}", raw):
         raise LocationConfigError(
-            "WHATSAPP_QR_NUMBER is required (E.164 digits, no plus). Set it in .env before generating QR codes."
+            "TELEGRAM_BOT_USERNAME is required (BotFather username, no @). Set it in .env before generating QR codes."
         )
-    if len(digits) > 16:
-        raise LocationConfigError("WHATSAPP_QR_NUMBER is too long")
-    return digits
+    return raw
 
 
-def deep_link(number: str, encoded_message: str) -> str:
-    return f"https://wa.me/{number}?text={quote(encoded_message)}"
+def deep_link(username: str, start_tag: str) -> str:
+    tag = (start_tag or "").strip()
+    name = (username or "").strip().lstrip("@")
+    if tag:
+        return f"https://t.me/{name}?start={quote(tag)}"
+    return f"https://t.me/{name}"
 
 
 def _font(size: int):
@@ -130,10 +131,10 @@ def generate_location_qrs(
     *,
     config_path: Path,
     output_dir: Path,
-    whatsapp_number: str | None = None,
+    bot_username: str | None = None,
 ) -> dict[str, Any]:
     entries = load_locations(config_path)
-    number = whatsapp_number or _whatsapp_number()
+    number = bot_username or _bot_username()
     stickers = output_dir
     posters = output_dir / "posters"
     stickers.mkdir(parents=True, exist_ok=True)
@@ -145,14 +146,14 @@ def generate_location_qrs(
     for entry in entries:
         assert entry.qr_id is not None
         encoded = format_loc_prefix(entry.location, entry.equipment)
-        url = deep_link(number, encoded)
+        url = deep_link(number, entry.qr_id)
         qr_hi = _qr_image(url, box_size=14)
         sticker = _compose_frame(entry, qr_hi, STICKER_PX, subtitle="Scan to report a workplace hazard")
         poster = _compose_frame(
             entry,
             _qr_image(url, box_size=18),
             A4_PX,
-            subtitle="Camera or WhatsApp scan  ·  then describe the hazard  ·  location is already filled",
+            subtitle="Camera or Telegram scan  ·  then describe the hazard  ·  location is already filled",
         )
         sticker_name = f"{entry.qr_id}.png"
         poster_name = f"{entry.qr_id}-poster.png"
@@ -214,13 +215,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate SentinelLoop location QR posters.")
     parser.add_argument("--config", type=Path, default=ROOT / "locations.yaml")
     parser.add_argument("--output", type=Path, default=ROOT / "assets" / "qr")
-    parser.add_argument("--whatsapp-number", default=None, help="Override WHATSAPP_QR_NUMBER (digits only).")
+    parser.add_argument("--bot-username", default=None, help="Override TELEGRAM_BOT_USERNAME (no @).")
     args = parser.parse_args(argv)
     try:
         result = generate_location_qrs(
             config_path=args.config,
             output_dir=args.output,
-            whatsapp_number=args.whatsapp_number,
+            bot_username=args.bot_username,
         )
     except LocationConfigError as exc:
         print(f"QR generation failed: {exc}", file=sys.stderr)

@@ -47,6 +47,9 @@ slack = [
     { name = "httpx" },
     { name = "slack-bolt" },
 ]
+telegram = [
+    { name = "httpx" },
+]
 test = [
     { name = "datasets" },
     { name = "langchain-community" },
@@ -59,9 +62,6 @@ test = [
     { name = "pytest-order" },
     { name = "ragas" },
     { name = "rapidfuzz" },
-]
-whatsapp = [
-    { name = "httpx" },
 ]
 
 [[package]]
@@ -3853,7 +3853,7 @@ name = "sentinelloop-ai"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "agentkernel", extra = ["api", "openai", "slack", "whatsapp"] },
+    { name = "agentkernel", extra = ["api", "openai", "slack", "telegram"] },
     { name = "python-telegram-bot" },
     { name = "qrcode", extra = ["pil"] },
     { name = "supabase" },
@@ -3871,7 +3871,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agentkernel", extras = ["cli", "api", "openai", "whatsapp", "slack"], specifier = ">=0.6.0" },
+    { name = "agentkernel", extras = ["cli", "api", "openai", "telegram", "slack"], specifier = ">=0.6.0" },
     { name = "python-telegram-bot", specifier = ">=22.8" },
     { name = "qrcode", extras = ["pil"], specifier = ">=8.2" },
     { name = "supabase", specifier = ">=2.31.0" },

@@ -4,10 +4,11 @@ Owns polling/webhook delivery, message normalization, media download, and
 worker-facing sends. Incident business logic stays in the orchestrator.
 
 Agent Kernel already ships ``AgentTelegramRequestHandler`` (webhook). This
-module subclasses it the same way WhatsApp does, and adds
-``python-telegram-bot`` polling for local hackathon demos.
+module subclasses it for webhook delivery and uses httpx long-polling locally
+(``Application.run_polling`` can hang silently on Windows).
 
-Session identity is always ``telegram:<chat_id>``. Username is never the key.
+``/start`` is handled equivalently to ``CommandHandler("start")``. Session
+identity is always ``telegram:<chat_id>``. Username is never the key.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from integrations.whatsapp_handler import NormalizedWhatsAppMessage, WhatsAppMedia
+from integrations.inbound import InboundMedia, NormalizedInboundMessage
 from tools.emergency_bypass import is_emergency_trigger
 from tools.voice_tools import audio_format_from_mime, is_low_confidence, transcribe_voice_note
 
@@ -129,6 +130,42 @@ def is_start_command(text: str | None) -> bool:
     return command == "/start"
 
 
+def start_payload(text: str | None) -> str | None:
+    raw = (text or "").strip()
+    if not is_start_command(raw):
+        return None
+    parts = raw.split(maxsplit=1)
+    if len(parts) < 2:
+        return None
+    tag = parts[1].strip()
+    return tag or None
+
+
+def start_command_handler(callback: Any) -> Any:
+    """``CommandHandler("start")`` factory for PTB Application integrations."""
+    from telegram.ext import CommandHandler
+
+    return CommandHandler("start", callback)
+
+
+def resolve_start_tag(tag: str | None) -> str | None:
+    """Map a Telegram ``/start`` payload (qr_id) onto an intake ``[LOC:...]`` prefix."""
+    ident = (tag or "").strip().upper()
+    if not ident:
+        return None
+    try:
+        from tools.location_catalog import load_locations
+        from tools.qr_tags import format_loc_prefix
+
+        catalog = Path(__file__).resolve().parent.parent / "locations.yaml"
+        for entry in load_locations(catalog):
+            if (entry.qr_id or "").upper() == ident:
+                return format_loc_prefix(entry.location, entry.equipment)
+    except Exception:
+        log.warning("telegram_start_tag_unresolved")
+    return None
+
+
 def rewrite_qr_kv(text: str | None) -> str:
     """Map QR_LOCATION=/QR_EQUIPMENT= lines onto the existing SLQR prefix."""
     if not text:
@@ -231,7 +268,7 @@ def inline_keyboard(incident_id: str | None = None) -> dict[str, Any]:
     }
 
 
-def normalize_telegram_update(update: dict[str, Any] | None) -> NormalizedWhatsAppMessage | None:
+def normalize_telegram_update(update: dict[str, Any] | None) -> NormalizedInboundMessage | None:
     """Turn a Telegram Update/message object into the shared inbound envelope."""
     if not isinstance(update, dict):
         return None
@@ -249,7 +286,7 @@ def normalize_telegram_update(update: dict[str, Any] | None) -> NormalizedWhatsA
         return None
     if message.get("sticker") or message.get("animation"):
         log.info("telegram_sticker_ignored")
-        return NormalizedWhatsAppMessage(
+        return NormalizedInboundMessage(
             provider_message_id=str(message_id),
             sender_id=session_key(chat_id),
             message_type="sticker",
@@ -265,7 +302,7 @@ def normalize_telegram_update(update: dict[str, Any] | None) -> NormalizedWhatsA
     voice = message.get("voice") if isinstance(message.get("voice"), dict) else None
     document = message.get("document") if isinstance(message.get("document"), dict) else None
     location = message.get("location") if isinstance(message.get("location"), dict) else None
-    media: WhatsAppMedia | None = None
+    media: InboundMedia | None = None
     message_type = "text"
     supported = True
     voice_duration: float | None = None
@@ -273,7 +310,7 @@ def normalize_telegram_update(update: dict[str, Any] | None) -> NormalizedWhatsA
         photo = largest_photo(photos)
         message_type = "image"
         if photo:
-            media = WhatsAppMedia(
+            media = InboundMedia(
                 media_id=str(photo.get("file_id") or ""),
                 mime_type="image/jpeg",
                 provider_reference=str(photo.get("file_id") or ""),
@@ -281,7 +318,7 @@ def normalize_telegram_update(update: dict[str, Any] | None) -> NormalizedWhatsA
             )
     elif voice:
         message_type = "voice"
-        media = WhatsAppMedia(
+        media = InboundMedia(
             media_id=str(voice.get("file_id") or ""),
             mime_type="audio/ogg",
             provider_reference=str(voice.get("file_id") or ""),
@@ -294,7 +331,7 @@ def normalize_telegram_update(update: dict[str, Any] | None) -> NormalizedWhatsA
     elif document:
         message_type = "document"
         mime = str(document.get("mime_type") or "application/octet-stream")
-        media = WhatsAppMedia(
+        media = InboundMedia(
             media_id=str(document.get("file_id") or ""),
             mime_type=mime,
             filename=document.get("file_name"),
@@ -308,7 +345,7 @@ def normalize_telegram_update(update: dict[str, Any] | None) -> NormalizedWhatsA
         text = "Worker shared a live location."
     if not text and not media and not location:
         log.info("telegram_empty_ignored")
-        return NormalizedWhatsAppMessage(
+        return NormalizedInboundMessage(
             provider_message_id=str(message_id),
             sender_id=session_key(chat_id),
             message_type="unknown",
@@ -318,7 +355,7 @@ def normalize_telegram_update(update: dict[str, Any] | None) -> NormalizedWhatsA
         )
     latitude = location.get("latitude") if location else None
     longitude = location.get("longitude") if location else None
-    return NormalizedWhatsAppMessage(
+    return NormalizedInboundMessage(
         provider_message_id=str(message_id),
         sender_id=session_key(chat_id),
         message_type=message_type,
@@ -338,14 +375,14 @@ def normalize_telegram_update(update: dict[str, Any] | None) -> NormalizedWhatsA
     )
 
 
-def _normalize_callback(query: dict[str, Any]) -> NormalizedWhatsAppMessage | None:
+def _normalize_callback(query: dict[str, Any]) -> NormalizedInboundMessage | None:
     message = query.get("message") if isinstance(query.get("message"), dict) else {}
     chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
     chat_id = chat.get("id") or (query.get("from") or {}).get("id")
     if chat_id is None:
         return None
     data = str(query.get("data") or "")
-    return NormalizedWhatsAppMessage(
+    return NormalizedInboundMessage(
         provider_message_id=str(query.get("id") or message.get("message_id") or ""),
         sender_id=session_key(chat_id),
         message_type="interactive",
@@ -442,7 +479,7 @@ class TelegramTransport:
             downloaded.raise_for_status()
             return downloaded.content, None
 
-    async def resolve_media(self, media: WhatsAppMedia | None) -> WhatsAppMedia | None:
+    async def resolve_media(self, media: InboundMedia | None) -> InboundMedia | None:
         if media is None or not media.media_id:
             return media
         try:
@@ -466,9 +503,16 @@ class TelegramTransport:
 
     async def _post(self, method: str, payload: dict[str, Any]) -> dict[str, Any]:
         if self._client is not None:
-            result = self._client(method, payload)
-            if hasattr(result, "__await__"):
-                result = await result
+            try:
+                result = self._client(method, payload)
+                if hasattr(result, "__await__"):
+                    result = await result
+            except TelegramSendError:
+                raise
+            except Exception as exc:
+                log.warning("telegram_delivery_failed method=%s", method)
+                _health.errors += 1
+                raise TelegramSendError("telegram_send_failed") from exc
             if not isinstance(result, dict):
                 raise TelegramSendError("telegram_send_failed")
             return _normalize_telegram_send(result)
@@ -581,12 +625,18 @@ class SentinelLoopTelegramHandler(_KernelTelegramHandler):  # type: ignore[misc]
 
         raw = normalized.text or normalized.caption or ""
         if is_start_command(raw):
-            try:
-                await self._send_demo_status_card(normalized.sender_id, language=normalized.language_code)
-                log.info("telegram_guidance_sent reason=start")
-            except TelegramSendError:
-                log.warning("telegram_delivery_failed reason=start")
-            return None
+            tag = start_payload(raw)
+            loc_prefix = resolve_start_tag(tag) if tag else None
+            if loc_prefix:
+                normalized.text = loc_prefix
+                log.info("telegram_qr_start_resolved")
+            else:
+                try:
+                    await self._send_demo_status_card(normalized.sender_id, language=normalized.language_code)
+                    log.info("telegram_guidance_sent reason=start")
+                except TelegramSendError:
+                    log.warning("telegram_delivery_failed reason=start")
+                return None
         if self._emergency_fn(raw):
             normalized.emergency_bypass = True
             _health.emergency_reports += 1
@@ -624,7 +674,7 @@ class SentinelLoopTelegramHandler(_KernelTelegramHandler):  # type: ignore[misc]
                 log.warning("telegram_delivery_failed reason=pipeline_fallback")
             return None
 
-    async def _transcribe_voice(self, message: NormalizedWhatsAppMessage) -> str | None:
+    async def _transcribe_voice(self, message: NormalizedInboundMessage) -> str | None:
         content = message.media.content if message.media else None
         if not content:
             return None
@@ -744,7 +794,9 @@ async def discover_recent_chat_id() -> str | None:
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         await client.post(f"https://api.telegram.org/bot{token}/deleteWebhook", json={"drop_pending_updates": False})
-        response = await client.get(f"https://api.telegram.org/bot{token}/getUpdates", params={"limit": 20, "timeout": 0})
+        response = await client.get(
+            f"https://api.telegram.org/bot{token}/getUpdates", params={"limit": 20, "timeout": 0}
+        )
         response.raise_for_status()
         payload = response.json()
     if not payload.get("ok"):

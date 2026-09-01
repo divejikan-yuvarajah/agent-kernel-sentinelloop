@@ -1,11 +1,11 @@
 # Location QR reporting
 
-Workers scan a posted QR code. WhatsApp opens with the location already filled in. The worker only types the hazard. SentinelLoop never asks “Where are you?” or “What equipment is involved?”
+Workers scan a posted QR code. Telegram opens with the location already filled in. The worker only types the hazard. SentinelLoop never asks “Where are you?” or “What equipment is involved?”
 
 ```text
 SCAN QR
     ↓
-WhatsApp opens with [LOC:Lab B|Machine 4]
+Telegram opens with [LOC:Lab B|Machine 4]
     ↓
 Worker writes the hazard
     ↓
@@ -26,16 +26,16 @@ From `use-cases/sentinelloop-ai`:
 
 ```bash
 # E.164 digits only, no plus. Example: 94771234567
-uv run python scripts/generate_location_qr.py --whatsapp-number <WHATSAPP_QR_NUMBER>
+uv run python scripts/generate_location_qr.py --bot-username <TELEGRAM_BOT_USERNAME>
 ```
 
-Or set `WHATSAPP_QR_NUMBER` in the local env file (never commit it).
+Or set `TELEGRAM_BOT_USERNAME` in the local env file (never commit it).
 
 The script:
 
 1. Loads `locations.yaml`.
 2. Validates required fields (`location`, `equipment`), unique `qr_id`, and payload length.
-3. Encodes a WhatsApp deep link per site.
+3. Encodes a Telegram deep link per site.
 4. Writes high-contrast PNG stickers and A4 posters.
 5. Writes `assets/qr/location_registry.json`.
 
@@ -59,12 +59,12 @@ Regenerate posters when equipment changes. Bump `version` (or set a new `qr_id`)
   version: 2          # becomes SNT-LAB-B-M4-V2 if qr_id is omitted
 ```
 
-## WhatsApp deep link
+## Telegram deep link
 
 Each QR encodes:
 
 ```text
-https://wa.me/<digits>?text=<url-encoded-message>
+https://t.me/<digits>?text=<url-encoded-message>
 ```
 
 The prefilled message is always:
@@ -73,7 +73,7 @@ The prefilled message is always:
 [LOC:<location>|<equipment>]
 ```
 
-Example scan result in WhatsApp:
+Example scan result in Telegram:
 
 ```text
 [LOC:Lab B|Machine 4]
@@ -99,7 +99,7 @@ Location and equipment names are sanitized (no URLs, scripts, control characters
 
 Stored envelope:
 
-- `raw_text` — original WhatsApp body, including the prefix
+- `raw_text` — original Telegram body, including the prefix
 - `clean_text` — worker description only (this is what the model classifies)
 - `source` — `QR_TAGGED` when the tag is valid
 - `location_confidence` — `1.0` because the site came from a printed tag
@@ -115,8 +115,8 @@ The same QR fields stay on the session. A clarification reply without a new tag 
 ## Demo workflow (hackathon)
 
 1. Print `assets/qr/posters/SNT-CHEM-SA-01-poster.png`.
-2. A judge scans it with a phone camera or WhatsApp.
-3. WhatsApp opens with `[LOC:Chemical Storage|Storage Cabinet A]`.
+2. A judge scans it with a phone camera or Telegram.
+3. Telegram opens with `[LOC:Chemical Storage|Storage Cabinet A]`.
 4. The judge types `Chemical smell detected` and sends.
 5. Intake strips the tag. Incident creation skips location questions.
 6. The command dashboard card shows **QR Tagged** and **Location verified**.

@@ -111,7 +111,7 @@ _TIMELINE_TITLES = {
     "slack_coordination_failed": "Coordination failed",
     "duplicate_report_linked": "AI merged reports",
     "duplicate_threshold_reached": "Priority increased",
-    "whatsapp_inbound": "Worker message received",
+    "telegram_inbound": "Worker message received",
     "vision_suggestion": "Vision AI analyzed image",
     "vision_override": "Human overrode vision suggestion",
     "voice_report": "Voice message received",
@@ -124,7 +124,7 @@ _TIMELINE_TITLES = {
     "emergency_worker_notified": "Worker notified",
     "emergency_enrichment_completed": "AI enrichment completed",
     "emergency_enrichment_failed": "AI enrichment unavailable",
-    "whatsapp_outbound": "Reply sent to worker",
+    "telegram_outbound": "Reply sent to worker",
     "incident_resolved": "Incident resolved",
     "incident_closed": "Incident closed",
     "incident_reopened": "Incident reopened",
@@ -147,8 +147,8 @@ _ACTIVITY_KINDS = {
     "escalation_sent": "Escalated",
     "duplicate_report_linked": "Duplicate report",
     "duplicate_threshold_reached": "Priority increase",
-    "whatsapp_inbound": "Worker report",
-    "whatsapp_outbound": "Guidance sent",
+    "telegram_inbound": "Worker report",
+    "telegram_outbound": "Guidance sent",
     "guidance_sent": "Guidance sent",
     "guidance_generated": "Guidance sent",
     "guidance_fallback": "Guardrail blocked",
@@ -489,9 +489,7 @@ def _safe_storage_available(reference: str | None) -> bool:
     if _SECRET_URL_RE.search(reference):
         return False
     lower = reference.lower()
-    if "graph.facebook.com" in lower or "whatsapp" in lower:
-        return False
-    if "api.telegram.org" in lower or "telegram" in lower:
+    if "api.telegram.org" in lower:
         return False
     return True
 
@@ -1496,11 +1494,11 @@ def _channel_share(incidents: list[Incident]) -> list[ChannelShare]:
     counts: dict[str, int] = {}
     for incident in incidents:
         key = (incident.source_channel or "other").strip().lower() or "other"
-        if key not in {"telegram", "whatsapp"}:
+        if key not in {"telegram", "slack"}:
             key = "other"
         counts[key] = counts.get(key, 0) + 1
     total = len(incidents) or 1
-    order = ("telegram", "whatsapp", "other")
+    order = ("telegram", "slack", "other")
     return [
         ChannelShare(channel=name, count=counts.get(name, 0), percentage=round(100 * counts.get(name, 0) / total, 1))
         for name in order
@@ -1584,6 +1582,7 @@ def _voice_analytics(incidents: list[Incident], updates: list[IncidentUpdate]) -
     by_id = {str(item.id): item for item in incidents}
     voice_incidents = [by_id[iid] for iid in voice_ids if iid in by_id]
     text_incidents = [item for item in incidents if str(item.id) not in voice_ids]
+
     def _rate(rows: list[Incident]) -> float | None:
         if not rows:
             return None
@@ -1600,8 +1599,7 @@ def _voice_analytics(incidents: list[Incident], updates: list[IncidentUpdate]) -
         most = language_display_name(top) or top
     lang_total = sum(languages.values()) or 1
     lang_share = {
-        language_display_name(code) or code: round(100 * count / lang_total, 1)
-        for code, count in languages.items()
+        language_display_name(code) or code: round(100 * count / lang_total, 1) for code, count in languages.items()
     }
     return VoiceAnalytics(
         reports_today=reports_today,

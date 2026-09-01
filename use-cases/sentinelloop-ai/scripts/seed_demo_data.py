@@ -61,7 +61,7 @@ WORKERS = (
         "name": "Nimal Perera",
         "language": "si",
         "language_name": "Sinhala",
-        "reporter_id": "whatsapp:demo_worker_001",
+        "reporter_id": "telegram:demo_worker_001",
         "anonymous": False,
     },
     {
@@ -69,7 +69,7 @@ WORKERS = (
         "name": "Kavitha Rajan",
         "language": "ta",
         "language_name": "Tamil",
-        "reporter_id": "whatsapp:demo_worker_002",
+        "reporter_id": "telegram:demo_worker_002",
         "anonymous": False,
     },
     {
@@ -77,7 +77,7 @@ WORKERS = (
         "name": "James Cole",
         "language": "en",
         "language_name": "English",
-        "reporter_id": "whatsapp:demo_worker_003",
+        "reporter_id": "telegram:demo_worker_003",
         "anonymous": False,
     },
     {
@@ -169,7 +169,7 @@ class IncidentSpec:
     blocked_guidance: str | None = None
     evidence: tuple[tuple[str, str, str], ...] = ()
     slack_actions: tuple[str, ...] = ()
-    whatsapp: tuple[tuple[str, str], ...] = ()
+    telegram: tuple[tuple[str, str], ...] = ()
 
 
 def _utc(hours_ago: float = 0) -> datetime:
@@ -245,7 +245,7 @@ def incident_catalog() -> tuple[IncidentSpec, ...]:
             guidance_file="electrical_safety.md",
             guidance_line=electrical_line,
             slack_actions=("notified",),
-            whatsapp=(
+            telegram=(
                 ("inbound", "මැෂින් panel එකෙන් spark එනවා"),
                 ("inbound", "කේබල් එක කැඩිලා තියෙනවා"),
                 ("outbound", "Keep away from exposed wires, sparks, smoke, or damaged electrical equipment."),
@@ -272,7 +272,7 @@ def incident_catalog() -> tuple[IncidentSpec, ...]:
             guidance_file="fire_safety.md",
             guidance_line=fire_line,
             slack_actions=("notified", "accepted", "escalated"),
-            whatsapp=(("inbound", "Worker reported smoke near welding station"), ("outbound", fire_line)),
+            telegram=(("inbound", "Worker reported smoke near welding station"), ("outbound", fire_line)),
         ),
         IncidentSpec(
             demo_id="demo_horizon_incident_003",
@@ -302,7 +302,7 @@ def incident_catalog() -> tuple[IncidentSpec, ...]:
                 ),
             ),
             slack_actions=("notified", "accepted"),
-            whatsapp=(
+            telegram=(
                 ("inbound", "இயந்திரத்தில் எண்ணெய் கசிவு உள்ளது"),
                 ("outbound", chemical_line),
                 ("inbound", "Not sure"),
@@ -352,7 +352,7 @@ def incident_catalog() -> tuple[IncidentSpec, ...]:
                 ),
             ),
             slack_actions=("notified", "accepted", "escalated"),
-            whatsapp=(
+            telegram=(
                 ("inbound", "Machine panel spark noticed"),
                 ("inbound", "Same electrical smell and sparks"),
                 ("inbound", "Repeated issue at same machine"),
@@ -378,7 +378,7 @@ def incident_catalog() -> tuple[IncidentSpec, ...]:
             guidance_file="general_hazards.md",
             guidance_line=general_line,
             slack_actions=("notified",),
-            whatsapp=(("inbound", "Helmet illa"), ("outbound", general_line)),
+            telegram=(("inbound", "Helmet illa"), ("outbound", general_line)),
         ),
         IncidentSpec(
             demo_id="demo_horizon_incident_006",
@@ -404,7 +404,7 @@ def incident_catalog() -> tuple[IncidentSpec, ...]:
                 ("verification", "after_cleaned.png", "After: area cleaned and dry"),
             ),
             slack_actions=("notified", "accepted", "closed"),
-            whatsapp=(
+            telegram=(
                 ("inbound", "Oil on the loading-bay floor, easy to slip"),
                 ("outbound", general_line),
                 ("inbound", "Yes"),
@@ -433,7 +433,7 @@ def incident_catalog() -> tuple[IncidentSpec, ...]:
             guidance_file="fire_safety.md",
             guidance_line=fire_line,
             slack_actions=("notified",),
-            whatsapp=(("inbound", f"{welding_qr} Smoke coming from equipment"), ("outbound", fire_line)),
+            telegram=(("inbound", f"{welding_qr} Smoke coming from equipment"), ("outbound", fire_line)),
         ),
         IncidentSpec(
             demo_id="demo_horizon_incident_008",
@@ -456,7 +456,7 @@ def incident_catalog() -> tuple[IncidentSpec, ...]:
             guidance_file="general_hazards.md",
             guidance_line=general_line,
             slack_actions=("notified",),
-            whatsapp=(("inbound", "Operator bypassed the press guard to speed the cycle"),),
+            telegram=(("inbound", "Operator bypassed the press guard to speed the cycle"),),
         ),
         IncidentSpec(
             demo_id="demo_horizon_incident_009",
@@ -477,7 +477,7 @@ def incident_catalog() -> tuple[IncidentSpec, ...]:
             guidance_file="general_hazards.md",
             guidance_line=general_line,
             blocked_guidance="Turn off the electrical supply yourself.",
-            whatsapp=(("inbound", "Crack appearing in the loading-bay beam"),),
+            telegram=(("inbound", "Crack appearing in the loading-bay beam"),),
         ),
     )
 
@@ -704,7 +704,7 @@ class DemoSeeder:
             IncidentCreate(
                 incident_ref=spec.ref,
                 reporter_id=reporter,
-                source_channel="whatsapp",
+                source_channel="telegram",
                 session_id=f"demo_session_{spec.demo_id}",
                 detected_language=spec.language,
                 hazard_category=spec.category,
@@ -1168,7 +1168,7 @@ class DemoSeeder:
                     actor_reference=worker["reporter_id"],
                     previous_status="RESOLVED",
                     new_status="CLOSED",
-                    metadata={"whatsapp_reply": "Yes"},
+                    metadata={"telegram_reply": "Yes"},
                 )
             )
             events.append(
@@ -1186,19 +1186,19 @@ class DemoSeeder:
                     },
                 )
             )
-        for index, (direction, text) in enumerate(spec.whatsapp):
+        for index, (direction, text) in enumerate(spec.telegram):
             events.append(
                 TimelineEventSpec(
                     f"{spec.demo_id}:wa_{index}",
                     (
-                        "whatsapp_inbound"
+                        "telegram_inbound"
                         if direction == "inbound"
-                        else ("whatsapp_outbound" if direction == "outbound" else "system_note")
+                        else ("telegram_outbound" if direction == "outbound" else "system_note")
                     ),
                     text,
                     actor_type="worker" if direction == "inbound" else "agent",
-                    actor_reference=worker["reporter_id"] if direction == "inbound" else "whatsapp_handler",
-                    metadata={"channel": "whatsapp", "direction": direction, "is_anonymous": spec.anonymous},
+                    actor_reference=worker["reporter_id"] if direction == "inbound" else "telegram_handler",
+                    metadata={"channel": "telegram", "direction": direction, "is_anonymous": spec.anonymous},
                 )
             )
         if spec.display_status == "In Progress" and spec.duplicate_count:
@@ -1211,7 +1211,7 @@ class DemoSeeder:
                     actor_reference=worker["reporter_id"],
                     previous_status="RESOLVED",
                     new_status="IN_PROGRESS",
-                    metadata={"whatsapp_reply": "No, still exists", "team_renotified": True},
+                    metadata={"telegram_reply": "No, still exists", "team_renotified": True},
                 )
             )
         path = _lifecycle_path(spec.display_status)
@@ -1267,7 +1267,7 @@ class DemoSeeder:
                 continue
             metadata = EvidenceCreate(
                 evidence_type="image/png",
-                source="whatsapp" if stage == "report" else "slack",
+                source="telegram" if stage == "report" else "slack",
                 caption_or_description=caption,
                 uploaded_by=worker["id"] if spec.anonymous is False else "anonymous",
                 external_message_id=f"wamid.{spec.demo_id}.{stage}",

@@ -1,6 +1,6 @@
 """SentinelLoop intake agent.
 
-Single responsibility: turn a worker WhatsApp text/caption into a structured
+Single responsibility: turn a worker Telegram text/caption into a structured
 intake envelope (language, English meaning, hazard intent, QR context, session).
 
 Deterministic QR parse and Agent Kernel session lookup happen before the model.
@@ -54,7 +54,7 @@ NV_QR_SOURCE = "qr_source"
 
 ROLE_FAST = "role_fast"
 
-INTAKE_SYSTEM_PROMPT = """You are SentinelLoop intake. Classify one worker WhatsApp message.
+INTAKE_SYSTEM_PROMPT = """You are SentinelLoop intake. Classify one worker Telegram message.
 Return JSON only with keys:
 language, translated_text, is_hazard_report, language_confidence, hazard_confidence, needs_clarification.
 
@@ -149,7 +149,7 @@ CallModelFn = Callable[..., Awaitable[ModelCallResult]]
 
 
 def redact_phone(phone: str) -> str:
-    """Redact a worker phone for logs. WhatsApp session ids are sender numbers."""
+    """Redact a worker phone for logs. Telegram session ids are sender numbers."""
     text = (phone or "").strip()
     if len(text) <= 4:
         return "****"
@@ -176,7 +176,7 @@ def _load_intake_settings() -> dict[str, Any]:
 def parse_qr_prefix(text: str, *, field_max: int = 200) -> QrParse:
     """Parse a leading location tag.
 
-    ``[LOC:location|equipment]`` is the WhatsApp deep-link format. The original
+    ``[LOC:location|equipment]`` is the Telegram deep-link format. The original
     SLQR prefixes remain supported and unchanged:
 
     - ``SLQR location="..." equipment="..."``
@@ -372,7 +372,7 @@ async def process_intake(
 ) -> IntakeResult:
     """Process one inbound worker text/caption into an intake envelope.
 
-    Session identity is the WhatsApp sender phone (Agent Kernel convention).
+    Session identity is the Telegram sender phone (Agent Kernel convention).
     """
     started = time.monotonic()
     settings = _load_intake_settings()
@@ -614,7 +614,7 @@ def create_intake_agent(*, model: Any = None, handoffs: list[Any] | None = None)
         kwargs["handoffs"] = handoffs
     return Agent(
         name="intake_agent",
-        handoff_description="Normalizes worker language, classifies hazard intent, and attaches the WhatsApp session.",
+        handoff_description="Normalizes worker language, classifies hazard intent, and attaches the Telegram session.",
         instructions=(
             "You are intake_agent. For every worker message, call ingest_worker_message with the worker text "
             "or image caption. Return that JSON. Do not score risk, do not give safety guidance, "

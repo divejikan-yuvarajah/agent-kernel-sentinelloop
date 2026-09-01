@@ -5,7 +5,7 @@ description = "Multilingual workplace hazard reporting and closed-loop safety fo
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "agentkernel[cli,api,openai,whatsapp,slack]>=0.6.0",
+    "agentkernel[cli,api,openai,telegram,slack]>=0.6.0",
     "python-telegram-bot>=22.8",
     "qrcode[pil]>=8.2",
     "supabase>=2.31.0",

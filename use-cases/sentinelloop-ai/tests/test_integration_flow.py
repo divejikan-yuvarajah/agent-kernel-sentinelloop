@@ -1,4 +1,4 @@
-"""Full mocked WhatsApp → intake → duplicate → incident → risk → guardrails → guidance → Slack → repository flow."""
+"""Full mocked Telegram → intake → duplicate → incident → risk → guardrails → guidance → Slack → repository flow."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from tools.risk_tools import calculate_risk
 
 def test_full_mocked_pipeline_order_and_data_passing():
     orch = _orch()
-    result = run(orch.process_incoming_whatsapp_message(_msg()))
+    result = run(orch.process_incoming_telegram_message(_msg()))
     assert "intake_agent" in orch.pipeline_trace
     assert "duplicate_tools" in orch.pipeline_trace
     assert "incident_agent" in orch.pipeline_trace
@@ -40,17 +40,17 @@ def test_slack_unavailable_still_saves_incident():
     coord = FakeCoord()
     coord.fail = True
     orch = _orch(coordination=coord)
-    result = run(orch.process_incoming_whatsapp_message(_msg(provider_message_id="wamid.slack-down")))
+    result = run(orch.process_incoming_telegram_message(_msg(provider_message_id="wamid.slack-down")))
     assert result.incident_id is not None
     assert orch._repo.create_calls
     assert result.coordination_completed is False
 
 
-def test_whatsapp_unavailable_still_saves_incident():
+def test_telegram_unavailable_still_saves_incident():
     client = RecordingClient()
     client.fail = True
     orch = _orch(client=client)
-    result = run(orch.process_incoming_whatsapp_message(_msg(provider_message_id="wamid.wa-down")))
+    result = run(orch.process_incoming_telegram_message(_msg(provider_message_id="wamid.wa-down")))
     assert result.incident_id is not None
     assert orch._repo.create_calls
     assert result.guidance_sent is False
@@ -60,7 +60,7 @@ def test_repository_unavailable_is_not_false_success():
     repo = MemoryRepo()
     repo.fail_create = True
     orch = _orch(repository=repo)
-    result = run(orch.process_incoming_whatsapp_message(_msg(provider_message_id="wamid.repo-down")))
+    result = run(orch.process_incoming_telegram_message(_msg(provider_message_id="wamid.repo-down")))
     assert result.incident_id is None
     assert result.coordination_completed is False
     assert result.error
@@ -70,7 +70,7 @@ def test_model_unavailable_preserves_saved_incident_or_fallback():
     from tests.test_incident_orchestrator import Scripted
 
     orch = _orch(risk_fn=Scripted("risk", responses=[RuntimeError("model down")]))
-    result = run(orch.process_incoming_whatsapp_message(_msg(provider_message_id="wamid.model-down")))
+    result = run(orch.process_incoming_telegram_message(_msg(provider_message_id="wamid.model-down")))
     assert result.incident_id is not None
     assert orch._repo.create_calls
 

@@ -118,7 +118,7 @@ def record_emergency_alert(
     incident_ref: str,
     incident_uuid: str | None = None,
     trigger_keyword: str | None = None,
-    channel: str = "whatsapp",
+    channel: str = "telegram",
     detection_time: str | None = None,
     response_time_ms: float | None = None,
     location: str | None = None,

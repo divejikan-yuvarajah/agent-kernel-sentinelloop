@@ -179,7 +179,7 @@ def test_guardrail_blocked_and_approved_guidance_examples():
     )
 
 
-def test_whatsapp_reopen_and_qr_workshop_tag():
+def test_telegram_reopen_and_qr_workshop_tag():
     repo, _backend = _repo()
     seed_demo(repo)
     recurring = repo.get_incident_by_ref("DEMO-HORIZON-004")
@@ -189,8 +189,8 @@ def test_whatsapp_reopen_and_qr_workshop_tag():
     assert origin["qr_equipment"] == "CNC-04"
     updates = repo.list_updates_for_incident(recurring.id)
     assert any(row.update_type == "incident_reopened" for row in updates)
-    assert any((row.metadata or {}).get("whatsapp_reply") == "No, still exists" for row in updates)
-    inbound = [row for row in updates if row.update_type == "whatsapp_inbound"]
+    assert any((row.metadata or {}).get("telegram_reply") == "No, still exists" for row in updates)
+    inbound = [row for row in updates if row.update_type == "telegram_inbound"]
     assert inbound
 
 

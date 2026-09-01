@@ -1,6 +1,6 @@
 # Duplicate hazard detection
 
-SentinelLoop does not open a new incident for every similar WhatsApp report. It checks whether workers are describing the **same open hazard**, then raises priority when several people confirm it.
+SentinelLoop does not open a new incident for every similar Telegram report. It checks whether workers are describing the **same open hazard**, then raises priority when several people confirm it.
 
 Incident creation is unchanged: a duplicate match updates the existing record; otherwise the orchestrator creates one incident as before.
 

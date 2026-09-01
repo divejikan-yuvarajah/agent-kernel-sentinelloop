@@ -176,7 +176,7 @@ export const demoImages = {
       src: img("oil_spill_floor.jpg"),
       alt: "Oil spill on Loading Bay floor",
       incident_id: "INC-2026-00417",
-      source: "WhatsApp",
+      source: "Telegram",
       uploaded_by: "Worker",
       timestamp: "2026-08-20",
       type: "before" as const,
@@ -319,11 +319,11 @@ export const recentEvidenceFeed = [
     incident_id: "INC-2026-00422",
   },
   {
-    title: "WhatsApp photo attached",
+    title: "Telegram photo attached",
     src: img("electrical_panel_damage.jpg"),
     location: "CNC Area",
     when: "18 minutes ago",
-    channel: "whatsapp",
+    channel: "telegram",
     incident_id: "INC-2026-00421",
   },
 ];

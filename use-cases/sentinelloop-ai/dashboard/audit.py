@@ -58,7 +58,7 @@ from tools.risk_tools import RiskInputError, calculate_risk
 log = logging.getLogger("sentinelloop.dashboard.audit")
 
 _CHANNEL_LABEL = {
-    "whatsapp": "WhatsApp",
+    "telegram": "Telegram",
     "slack": "Slack",
     "telegram": "Telegram",
 }

@@ -23,7 +23,7 @@ def test_live_incident_row_maps_to_spec_model():
                 "status": "OPEN",
                 "risk_level": "HIGH",
                 "reported_date": "2026-08-31T10:00:00+00:00",
-                "reporter_id": "whatsapp:+94770000000",
+                "reporter_id": "telegram:+94770000000",
                 "reporter_language": "en",
                 "duplicate_count": 2,
                 "is_anonymous": True,
@@ -35,7 +35,7 @@ def test_live_incident_row_maps_to_spec_model():
     assert incident.hazard_category == "Mechanical"
     assert incident.hazard_description == "Oil on floor near press"
     assert incident.current_risk_level == "HIGH"
-    assert incident.source_channel == "whatsapp"
+    assert incident.source_channel == "telegram"
     assert incident.is_anonymous is True
 
 
@@ -44,7 +44,7 @@ def test_spec_incident_row_is_unchanged():
         "id": "11111111-1111-1111-1111-111111111111",
         "incident_ref": "SL-2026-000001",
         "reporter_id": "r1",
-        "source_channel": "whatsapp",
+        "source_channel": "telegram",
         "status": "OPEN",
         "created_at": "2026-08-31T10:00:00+00:00",
     }
@@ -112,8 +112,8 @@ def test_related_live_rows_validate():
                 "update_id": "44444444-4444-4444-4444-444444444446",
                 "incident_id": "SL-2026-000042",
                 "message": {
-                    "demo_key": "demo:whatsapp",
-                    "update_type": "whatsapp_inbound",
+                    "demo_key": "demo:telegram",
+                    "update_type": "telegram_inbound",
                     "message": "Crack appearing in the loading-bay beam",
                 },
                 "timestamp": "2026-08-31T10:04:00+00:00",
@@ -121,7 +121,7 @@ def test_related_live_rows_validate():
             }
         )
     )
-    assert as_object.update_type == "whatsapp_inbound"
+    assert as_object.update_type == "telegram_inbound"
     assert as_object.message == "Crack appearing in the loading-bay beam"
     risk = RiskAssessment.model_validate(
         normalize_risk_row(

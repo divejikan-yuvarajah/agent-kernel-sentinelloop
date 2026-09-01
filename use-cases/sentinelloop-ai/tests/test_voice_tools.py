@@ -1,4 +1,4 @@
-"""Voice transcription tests. No live OpenRouter, WhatsApp, or Telegram calls."""
+"""Voice transcription tests. No live OpenRouter, Telegram, or Telegram calls."""
 
 from __future__ import annotations
 
@@ -10,11 +10,8 @@ from pathlib import Path
 
 import httpx
 
-from integrations.whatsapp_handler import (
-    SentinelLoopWhatsAppHandler,
-    WhatsAppCloudTransport,
-    normalize_incoming_message,
-)
+from integrations.telegram_handler import SentinelLoopTelegramHandler, TelegramTransport, normalize_telegram_update
+from tests.test_model_router import FakeOpenRouter, make_router
 from tools.model_router import TRANSCRIPTIONS_URL, ModelRouter
 from tools.voice_tools import (
     BUDGET_BLOCK_REASON,
@@ -23,7 +20,6 @@ from tools.voice_tools import (
     transcribe_voice_note,
     worker_voice_fallback_message,
 )
-from tests.test_model_router import FakeOpenRouter, make_router
 
 AUDIO_BYTES = b"OggS" + b"\x00" * 64
 AUDIO_B64 = base64.b64encode(AUDIO_BYTES).decode("ascii")
@@ -147,34 +143,44 @@ class RecordingOrch:
     def __init__(self) -> None:
         self.messages = []
 
-    async def process_incoming_whatsapp_message(self, message):
+    async def process_incoming_telegram_message(self, message):
         self.messages.append(message)
         return message
 
 
-def test_whatsapp_voice_payload_detected():
-    payload = {
-        "id": "wamid.voice",
-        "from": "94771234567",
-        "type": "audio",
-        "timestamp": "1710000000",
-        "audio": {
-            "id": "AUDIO1",
-            "mime_type": "audio/ogg; codecs=opus",
-            "voice": True,
-            "duration": 18,
-        },
+def _voice_update(*, file_id: str = "AUDIO1", chat_id: int = 48291033, message_id: int = 11) -> dict:
+    return {
+        "message": {
+            "message_id": message_id,
+            "chat": {"id": chat_id},
+            "from": {"id": 9001, "language_code": "en"},
+            "voice": {"file_id": file_id, "duration": 8, "mime_type": "audio/ogg"},
+        }
     }
-    normalized = normalize_incoming_message(payload)
+
+
+class VoiceClient:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, object]] = []
+
+    async def __call__(self, method: str, payload):
+        self.calls.append((method, payload))
+        if method == "getFile":
+            return {"content": AUDIO_BYTES, "mime_type": "audio/ogg"}
+        return {"ok": True, "result": {"message_id": 77}}
+
+
+def test_telegram_voice_payload_detected():
+    normalized = normalize_telegram_update(_voice_update())
     assert normalized is not None
     assert normalized.supported is True
     assert normalized.message_type == "voice"
     assert normalized.media is not None
     assert normalized.media.media_id == "AUDIO1"
-    assert normalized.audio_format == "ogg"
+    assert normalized.sender_id == "telegram:48291033"
 
 
-def test_whatsapp_voice_downloads_transcribes_and_sets_input_method():
+def test_telegram_voice_downloads_transcribes_and_sets_input_method():
     seen: dict[str, object] = {}
 
     def transcribe(audio_b64: str, *, audio_format: str = "ogg", **kwargs):
@@ -187,29 +193,14 @@ def test_whatsapp_voice_downloads_transcribes_and_sets_input_method():
             "confidence": 0.92,
         }
 
-    async def media_client(op, media_id):
-        assert op == "download"
-        assert media_id == "AUDIO1"
-        return {"content": AUDIO_BYTES, "mime_type": "audio/ogg"}
-
     orch = RecordingOrch()
-    handler = SentinelLoopWhatsAppHandler(
+    handler = SentinelLoopTelegramHandler(
         orchestrator=orch,
-        transport=WhatsAppCloudTransport(media_client=media_client),
+        transport=TelegramTransport(client=VoiceClient()),
         skip_kernel_init=True,
         transcribe_fn=transcribe,
     )
-    run(
-        handler.handle_incoming_webhook(
-            {
-                "id": "wamid.voice-1",
-                "from": "94771234567",
-                "type": "audio",
-                "audio": {"id": "AUDIO1", "mime_type": "audio/ogg; codecs=opus", "voice": True},
-            },
-            {},
-        )
-    )
+    run(handler.handle_incoming_update(_voice_update()))
     assert seen["format"] == "ogg"
     assert seen["b64"] == AUDIO_B64
     assert len(orch.messages) == 1
@@ -219,9 +210,10 @@ def test_whatsapp_voice_downloads_transcribes_and_sets_input_method():
     assert message.voice_used is True
     assert message.audio_used is True
     assert message.transcription_available is True
+    assert message.audio_format == "ogg"
 
 
-def test_whatsapp_text_does_not_transcribe():
+def test_telegram_text_does_not_transcribe():
     called = {"n": 0}
 
     def transcribe(*args, **kwargs):
@@ -229,21 +221,22 @@ def test_whatsapp_text_does_not_transcribe():
         raise AssertionError("transcription must not run for text")
 
     orch = RecordingOrch()
-    handler = SentinelLoopWhatsAppHandler(
+    handler = SentinelLoopTelegramHandler(
         orchestrator=orch,
-        transport=WhatsAppCloudTransport(),
+        transport=TelegramTransport(client=VoiceClient()),
         skip_kernel_init=True,
         transcribe_fn=transcribe,
     )
     run(
-        handler.handle_incoming_webhook(
+        handler.handle_incoming_update(
             {
-                "id": "wamid.text-1",
-                "from": "94771234567",
-                "type": "text",
-                "text": {"body": "oil on the floor"},
-            },
-            {},
+                "message": {
+                    "message_id": 2,
+                    "chat": {"id": 48291033},
+                    "from": {"id": 9001},
+                    "text": "oil on the floor",
+                }
+            }
         )
     )
     assert called["n"] == 0
@@ -251,105 +244,58 @@ def test_whatsapp_text_does_not_transcribe():
     assert orch.messages[0].input_method is None
 
 
-def test_whatsapp_invalid_audio_sends_friendly_message():
-    client_payloads: list[dict] = []
-
-    class Client:
-        async def __call__(self, payload):
-            client_payloads.append(payload)
-            return {"messages": [{"id": "wamid.out"}]}
-
-    async def media_client(op, media_id):
-        return {"content": AUDIO_BYTES, "mime_type": "audio/ogg"}
+def test_telegram_invalid_audio_sends_friendly_message():
+    client = VoiceClient()
 
     def transcribe(*args, **kwargs):
         return {"error": "invalid_audio", "text": ""}
 
     orch = RecordingOrch()
-    handler = SentinelLoopWhatsAppHandler(
+    handler = SentinelLoopTelegramHandler(
         orchestrator=orch,
-        transport=WhatsAppCloudTransport(client=Client(), media_client=media_client),
+        transport=TelegramTransport(client=client),
         skip_kernel_init=True,
         transcribe_fn=transcribe,
     )
-    run(
-        handler.handle_incoming_webhook(
-            {
-                "id": "wamid.voice-bad",
-                "from": "9477",
-                "type": "audio",
-                "audio": {"id": "AUDIO-BAD", "mime_type": "audio/ogg"},
-            },
-            {},
-        )
-    )
+    run(handler.handle_incoming_update(_voice_update(file_id="AUDIO-BAD")))
     assert orch.messages == []
-    assert client_payloads
-    body = client_payloads[0]["text"]["body"]
-    assert "voice" in body.lower() or "text" in body.lower()
+    texts = [
+        payload["text"] for method, payload in client.calls if method == "sendMessage" and isinstance(payload, dict)
+    ]
+    assert texts
+    assert "voice" in texts[0].lower() or "text" in texts[0].lower()
 
 
-def test_whatsapp_budget_exceeded_safe_fallback():
-    client_payloads: list[dict] = []
-
-    class Client:
-        async def __call__(self, payload):
-            client_payloads.append(payload)
-            return {"messages": [{"id": "wamid.out"}]}
-
-    async def media_client(op, media_id):
-        return {"content": AUDIO_BYTES, "mime_type": "audio/ogg"}
+def test_telegram_budget_exceeded_safe_fallback():
+    client = VoiceClient()
 
     def transcribe(*args, **kwargs):
         return {"blocked": True, "reason": BUDGET_BLOCK_REASON}
 
     orch = RecordingOrch()
-    handler = SentinelLoopWhatsAppHandler(
+    handler = SentinelLoopTelegramHandler(
         orchestrator=orch,
-        transport=WhatsAppCloudTransport(client=Client(), media_client=media_client),
+        transport=TelegramTransport(client=client),
         skip_kernel_init=True,
         transcribe_fn=transcribe,
     )
-    run(
-        handler.handle_incoming_webhook(
-            {
-                "id": "wamid.voice-budget",
-                "from": "9477",
-                "type": "audio",
-                "audio": {"id": "AUDIO-BUDGET", "mime_type": "audio/ogg"},
-            },
-            {},
-        )
-    )
+    run(handler.handle_incoming_update(_voice_update(file_id="AUDIO-BUDGET")))
     assert orch.messages == []
-    assert client_payloads
+    assert any(method == "sendMessage" for method, _payload in client.calls)
 
 
-def test_whatsapp_api_unavailable_incident_still_recoverable():
-    async def media_client(op, media_id):
-        return {"content": AUDIO_BYTES, "mime_type": "audio/ogg"}
-
+def test_telegram_api_unavailable_incident_still_recoverable():
     def transcribe(*args, **kwargs):
         raise RuntimeError("openrouter down")
 
     orch = RecordingOrch()
-    handler = SentinelLoopWhatsAppHandler(
+    handler = SentinelLoopTelegramHandler(
         orchestrator=orch,
-        transport=WhatsAppCloudTransport(media_client=media_client),
+        transport=TelegramTransport(client=VoiceClient()),
         skip_kernel_init=True,
         transcribe_fn=transcribe,
     )
-    result = run(
-        handler.handle_incoming_webhook(
-            {
-                "id": "wamid.voice-down",
-                "from": "9477",
-                "type": "audio",
-                "audio": {"id": "AUDIO-DOWN", "mime_type": "audio/ogg"},
-            },
-            {},
-        )
-    )
+    result = run(handler.handle_incoming_update(_voice_update(file_id="AUDIO-DOWN")))
     assert result is None
     assert orch.messages == []
 
@@ -375,7 +321,7 @@ def test_intake_agent_receives_raw_text_only(mock_model_router):
     )
     result = run(
         process_intake(
-            "94771234567",
+            "telegram:48291033",
             "Wire is damaged near machine four",
             call_model_fn=mock_model_router,
         )
@@ -386,28 +332,15 @@ def test_intake_agent_receives_raw_text_only(mock_model_router):
 
 
 def test_low_confidence_does_not_continue():
-    async def media_client(op, media_id):
-        return {"content": AUDIO_BYTES, "mime_type": "audio/ogg"}
-
     def transcribe(*args, **kwargs):
         return {"text": "mmm unclear", "confidence": 0.2, "detected_language": "en", "cost_usd": 0.001}
 
     orch = RecordingOrch()
-    handler = SentinelLoopWhatsAppHandler(
+    handler = SentinelLoopTelegramHandler(
         orchestrator=orch,
-        transport=WhatsAppCloudTransport(media_client=media_client),
+        transport=TelegramTransport(client=VoiceClient()),
         skip_kernel_init=True,
         transcribe_fn=transcribe,
     )
-    run(
-        handler.handle_incoming_webhook(
-            {
-                "id": "wamid.voice-low",
-                "from": "9477",
-                "type": "audio",
-                "audio": {"id": "AUDIO-LOW", "mime_type": "audio/ogg"},
-            },
-            {},
-        )
-    )
+    run(handler.handle_incoming_update(_voice_update(file_id="AUDIO-LOW")))
     assert orch.messages == []

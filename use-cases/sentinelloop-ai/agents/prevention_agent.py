@@ -280,7 +280,7 @@ async def recommend_prevention_json(pattern_json: str) -> str:
 
 
 def create_prevention_agent(*, model: Any = None, handoffs: list[Any] | None = None) -> Any:
-    """Optional SDK wrapper. Not part of the WhatsApp six-agent handoff chain."""
+    """Optional SDK wrapper. Not part of the Telegram six-agent handoff chain."""
     from agentkernel.openai import OpenAIToolBuilder
 
     from ak_bootstrap import pin_openai_agents_sdk

@@ -51,7 +51,7 @@ AI judgement and rule validation are separate objects on purpose. The model may 
 
 - API keys, tokens, environment variables, system prompts
 - Unmasked phone numbers (reporter ids are masked; message text is phone-redacted)
-- Live Graph/WhatsApp media URLs
+- Live Graph/Telegram media URLs
 
 ## Integrity and versioning
 

@@ -1,4 +1,4 @@
-"""QR catalog and poster generation. No live WhatsApp or model calls."""
+"""QR catalog and poster generation. No live Telegram or model calls."""
 
 from __future__ import annotations
 
@@ -141,7 +141,7 @@ locations:
     result = generate_location_qrs(
         config_path=config,
         output_dir=output,
-        whatsapp_number="94770000000",
+        bot_username="SentinelLoopBot",
     )
     assert result["count"] == 2
     assert (output / "SNT-LAB-B-M4-001.png").is_file()
@@ -156,14 +156,12 @@ locations:
     dumped = json.dumps(registry)
     assert "sk-" not in dumped
     assert "OPENROUTER" not in dumped
-    url = deep_link("94770000000", item["encoded_message"])
-    assert url.startswith("https://wa.me/94770000000?text=")
-    assert unquote(url.split("text=", 1)[1]) == "[LOC:Lab B|Machine 4]"
-    assert quote("[LOC:Lab B|Machine 4]") in url
+    url = deep_link("SentinelLoopBot", item["qr_id"])
+    assert url == "https://t.me/SentinelLoopBot?start=SNT-LAB-B-M4-001"
 
 
 def test_cli_invalid_yaml_returns_one(tmp_path, capsys):
     config = _write_yaml(tmp_path / "locations.yaml", "locations: [\n")
-    code = main(["--config", str(config), "--output", str(tmp_path / "out"), "--whatsapp-number", "94770000000"])
+    code = main(["--config", str(config), "--output", str(tmp_path / "out"), "--bot-username", "SentinelLoopBot"])
     assert code == 1
     assert "QR generation failed" in capsys.readouterr().err

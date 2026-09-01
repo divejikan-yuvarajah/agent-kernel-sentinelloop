@@ -99,12 +99,12 @@ function toSummary(row: DemoIncident): IncidentSummary {
     reporter_name: row.reporter_name === "anonymous" ? "Anonymous" : row.reporter_name,
     duplicate_count: row.duplicate_count,
     loop_stage: row.loop_stage || loopStageFor(row.status),
-    source: row.qr ? "QR_TAGGED" : row.input_channel || "whatsapp",
+    source: row.qr ? "QR_TAGGED" : row.input_channel || "telegram",
     location_verified: row.qr,
     qr_equipment: row.equipment,
     safety_status: row.risk_level === "CRITICAL" || row.risk_level === "HIGH" ? "Human Review Required" : "Validated",
     is_anonymous: row.reporter_name === "anonymous",
-    input_channel: row.input_channel || (row.reporter_id.startsWith("telegram:") ? "telegram" : "whatsapp"),
+    input_channel: row.input_channel || (row.reporter_id.startsWith("telegram:") ? "telegram" : "telegram"),
     language: row.language,
     message_type: row.message_type || "text",
   };
@@ -189,7 +189,7 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
         { timestamp: "10:32:01", title: "Emergency keyword detected", detail: row.emergency_trigger || "🔥", actor: "emergency_bypass" },
         { timestamp: "10:32:02", title: "Critical incident created", detail: row.incident_id, actor: "repository" },
         { timestamp: "10:32:03", title: "Slack alert sent", detail: "Emergency Response Channel", actor: "slack" },
-        { timestamp: "10:32:04", title: "Worker notified", detail: "Fixed safety reply", actor: "whatsapp" },
+        { timestamp: "10:32:04", title: "Worker notified", detail: "Fixed safety reply", actor: "telegram" },
         { timestamp: "10:34:20", title: "AI enrichment completed", detail: row.category, actor: "intake_agent" },
       ]
     : [
@@ -235,7 +235,7 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
     location: row.location,
     reporter: {
       reporter_id: row.reporter_name === "anonymous" ? "anonymous" : row.reporter_id,
-      source_channel: row.input_channel || (row.reporter_id.startsWith("telegram:") ? "telegram" : "whatsapp"),
+      source_channel: row.input_channel || (row.reporter_id.startsWith("telegram:") ? "telegram" : "telegram"),
       language: row.language,
     },
     created_at: row.created_at,
@@ -275,12 +275,12 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
       })),
       duplicate_similarity_score: row.duplicate_count > 1 ? 0.86 : null,
     },
-    source: row.qr ? "QR_TAGGED" : row.input_channel || (row.reporter_id.startsWith("telegram:") ? "telegram" : "whatsapp"),
+    source: row.qr ? "QR_TAGGED" : row.input_channel || (row.reporter_id.startsWith("telegram:") ? "telegram" : "telegram"),
     location_verified: row.qr,
     qr_equipment: row.equipment,
     location_confidence: row.qr ? 1 : null,
     is_anonymous: row.reporter_name === "anonymous",
-    input_channel: row.input_channel || (row.reporter_id.startsWith("telegram:") ? "telegram" : "whatsapp"),
+    input_channel: row.input_channel || (row.reporter_id.startsWith("telegram:") ? "telegram" : "telegram"),
     voice_report:
       row.message_type === "voice" || row.incident_id === "INC-2026-00422"
         ? {
@@ -297,7 +297,7 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
             processing_status: "Completed",
             playback_url: null,
             uploaded_by: "Worker",
-            source: row.input_channel === "telegram" ? "Telegram" : "WhatsApp",
+            source: row.input_channel === "telegram" ? "Telegram" : "Telegram",
           }
         : null,
     input_method: row.message_type === "voice" ? "voice" : "text",
@@ -428,7 +428,7 @@ export function fetchAnalyticsSummary(): Promise<AnalyticsSummary> {
     duplicate_detection_stats: { groups_checked: 41, duplicates_merged: 12, escalations: 3 },
     reports_by_channel: [
       { channel: "telegram", count: 104, percentage: 42 },
-      { channel: "whatsapp", count: 119, percentage: 48 },
+      { channel: "telegram", count: 119, percentage: 48 },
       { channel: "other", count: 24, percentage: 10 },
     ],
     telegram_message_types: { Text: 60, Image: 25, Voice: 15 },
@@ -677,11 +677,11 @@ export function fetchAuditExport(id: string): Promise<AuditExport> {
       duplicate_count: row.duplicate_count,
     },
     original_report: {
-      source: row.qr ? "QR_TAGGED" : row.input_channel || "whatsapp",
+      source: row.qr ? "QR_TAGGED" : row.input_channel || "telegram",
       message: row.original_text,
       received_at: row.created_at,
       worker_identifier: row.reporter_name === "anonymous" ? "anonymous" : "worker",
-      communication_channel: row.input_channel === "telegram" ? "Telegram" : "WhatsApp",
+      communication_channel: row.input_channel === "telegram" ? "Telegram" : "Telegram",
       input_method: row.message_type === "voice" ? "Voice" : "Text",
     },
     language_processing: {
@@ -913,7 +913,7 @@ export function fetchEmergencies(): Promise<EmergencyCommandCenter> {
             time: "10:32 AM",
             response: "Team Notified",
             lifecycle: "Critical Review",
-            channel: featured.input_channel || "whatsapp",
+            channel: featured.input_channel || "telegram",
             trigger: featured.emergency_trigger || "🔥",
           },
         ]
@@ -928,7 +928,7 @@ export function fetchEmergencies(): Promise<EmergencyCommandCenter> {
     history: emergencyRows.slice(0, 8).map((row) => ({
       incident_id: row.incident_id,
       trigger: row.emergency_trigger || (row.emergency ? "SOS" : "🔥"),
-      channel: row.input_channel || "whatsapp",
+      channel: row.input_channel || "telegram",
       detection_time: row.created_at,
       response_time: "1.4 seconds",
       resolution: row.status === "CLOSED" || row.status === "RESOLVED" ? "Resolved" : "Critical Review",

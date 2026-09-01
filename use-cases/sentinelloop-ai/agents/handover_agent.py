@@ -4,7 +4,7 @@ Collects previous-shift incident facts, calls ``role_fast`` once to phrase them,
 persists the briefing, and posts it to the Slack Safety Channel. The model may
 only rewrite structured counts — it must not invent incidents, risks, or facts.
 
-Not part of the WhatsApp six-agent pipeline.
+Not part of the Telegram six-agent pipeline.
 """
 
 from __future__ import annotations

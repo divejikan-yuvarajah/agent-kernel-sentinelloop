@@ -133,7 +133,7 @@ class DashboardHandler(RESTRequestHandler):
             ),
             source_channel: str | None = Query(
                 default=None,
-                description="Inbound channel filter: telegram, whatsapp, slack, email.",
+                description="Inbound channel filter: telegram, telegram, slack, email.",
             ),
             language: str | None = Query(
                 default=None,

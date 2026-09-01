@@ -82,7 +82,7 @@ def test_pipeline_checkpoints():
     assert guidance["approved"] is False
     fallback_ok = validate_guidance_output(kb, kb)
     assert fallback_ok["approved"] is True
-    close = validate_closure_request(risk_level="Critical", source="whatsapp")
+    close = validate_closure_request(risk_level="Critical", source="telegram")
     assert close["approved"] is False
     slack = validate_closure_request(
         risk_level="Critical",

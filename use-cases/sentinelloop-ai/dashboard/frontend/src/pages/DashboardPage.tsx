@@ -16,7 +16,7 @@ import {
 } from "@ds/index";
 import type { AnalyticsSummary, IncidentSummary, LoopStage, RecurringHazard, RouterStatus, PredictionItem, PredictionsResponse } from "@ds/types";
 
-import { fetchAnalyticsSummary, fetchIncidents, fetchLatestHandover, fetchPredictions, fetchRecurring, fetchRouterStatus, generateHandover, requestInspection, type HandoverRecord } from "../api/client";
+import { fetchAnalyticsSummary, fetchIncidents, fetchLatestHandover, fetchPredictions, fetchRecurring, fetchRouterStatus, fetchTelegramHealth, generateHandover, requestInspection, type HandoverRecord, type TelegramBotStatus } from "../api/client";
 import { organization } from "../data/demoData";
 import { incidentThumbnail, recentEvidenceFeed, locationRiskDemo } from "../data/demoImages";
 import { EvidenceImage } from "../components/EvidenceImage";
@@ -56,6 +56,7 @@ export function DashboardPage() {
   const [handover, setHandover] = useState<HandoverRecord | null>(null);
   const [generatingHandover, setGeneratingHandover] = useState(false);
   const [handoverNote, setHandoverNote] = useState<string | null>(null);
+  const [telegramHealth, setTelegramHealth] = useState<TelegramBotStatus | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,8 +68,9 @@ export function DashboardPage() {
       fetchRouterStatus(),
       fetchPredictions(),
       fetchLatestHandover(),
+      fetchTelegramHealth(),
     ])
-      .then(([list, analytics, repeats, routerStatus, forecast, latestHandover]) => {
+      .then(([list, analytics, repeats, routerStatus, forecast, latestHandover, botHealth]) => {
         if (cancelled) return;
         setIncidents(list.items);
         setSummary(analytics);
@@ -76,6 +78,7 @@ export function DashboardPage() {
         setRouter(routerStatus);
         setPredictions(forecast);
         setHandover(latestHandover);
+        setTelegramHealth(botHealth);
         setError(null);
       })
       .catch((err: Error) => {
@@ -189,6 +192,28 @@ export function DashboardPage() {
           </Card>
         ))}
       </div>
+      <Panel title="Telegram Activity" style={{ marginBottom: 24 }}>
+        <p className="ds-mono">Today</p>
+        <div className="ds-grid ds-grid--metrics-3" style={{ marginTop: 12 }}>
+          <Card variant="analytics-card">
+            <p className="ds-metric__label">Messages</p>
+            <p className="ds-metric__value">{telegramHealth?.messages_today ?? (demo ? 142 : 0)}</p>
+          </Card>
+          <Card variant="analytics-card">
+            <p className="ds-metric__label">Voice</p>
+            <p className="ds-metric__value">{telegramHealth?.voice_reports ?? (demo ? 38 : 0)}</p>
+          </Card>
+          <Card variant="analytics-card">
+            <p className="ds-metric__label">Images</p>
+            <p className="ds-metric__value">{telegramHealth?.image_reports ?? (demo ? 21 : 0)}</p>
+          </Card>
+        </div>
+        <p className="ds-mono" style={{ marginTop: 12 }}>
+          Telegram Bot Status: {telegramHealth?.connected ? "Connected ✓" : "Offline"} · Polling{" "}
+          {telegramHealth?.polling_active ? "Active ✓" : "Idle"} · Last message {telegramHealth?.last_message ?? "—"} ·
+          Errors {telegramHealth?.errors ?? 0}
+        </p>
+      </Panel>
       <div className="ds-grid ds-grid--metrics-3" style={{ marginBottom: 24 }}>
         {emergencyKpis.map((item) => (
           <Card key={item.label} className="ds-emergency-card" variant="analytics-card" loading={loading}>
@@ -280,7 +305,7 @@ export function DashboardPage() {
               <span>
                 <strong>{item.title}</strong>
                 <span className="ds-mono" style={{ display: "block", fontSize: "var(--font-size-xs)" }}>
-                  {item.channel === "telegram" ? "📱 Telegram Image" : "💬 WhatsApp Image"} · {item.location}
+                  {item.channel === "telegram" ? "📱 Telegram Image" : item.channel} · {item.location}
                 </span>
                 <span className="ds-mono" style={{ fontSize: "var(--font-size-xs)", color: "var(--chalk-muted)" }}>
                   {item.when}

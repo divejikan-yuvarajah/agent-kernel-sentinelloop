@@ -1,9 +1,9 @@
 # SentinelLoop workplace QR locations.
 # Generate posters with: uv run python scripts/generate_location_qr.py
 #
-# Each entry becomes a WhatsApp deep link whose prefilled text is:
-#   [LOC:<location>|<equipment>]
-# Workers only type the hazard after that prefix.
+# Each entry becomes a Telegram deep link:
+#   https://t.me/<BOT_USERNAME>?start=<qr_id>
+# /start <qr_id> maps onto [LOC:<location>|<equipment>] for intake.
 
 locations:
   - location: "Lab B"

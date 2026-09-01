@@ -11,9 +11,12 @@ api:
   host: 0.0.0.0
   port: 8000
 
-whatsapp:
+telegram:
+  enabled: true
+  mode: polling
+  bot_username: ""
+  token_env: TELEGRAM_BOT_TOKEN
   agent: intake_agent
-  api_version: v24.0
 
 slack:
   agent: coordination_agent
@@ -79,7 +82,7 @@ risk:
     exposure_bump_levels: 1
 
 features:
-  whatsapp: true
+  telegram: true
   slack: true
   multimodal_images: true
   voice_reports: true

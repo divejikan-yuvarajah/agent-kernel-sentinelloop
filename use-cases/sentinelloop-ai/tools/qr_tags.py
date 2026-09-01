@@ -6,8 +6,8 @@ agents or mutate incidents.
 Two worker prefixes exist:
 
 - ``SLQR ...`` — original structured tag (unchanged; parsed by intake).
-- ``[LOC:location|equipment]`` — WhatsApp deep-link tag generated from
-  ``locations.yaml``.
+- ``[LOC:location|equipment]`` — intake prefix mapped from a Telegram
+  ``/start <qr_id>`` deep link generated from ``locations.yaml``.
 """
 
 from __future__ import annotations
@@ -101,7 +101,7 @@ def parse_loc_tag(text: str, *, field_max: int = MAX_FIELD_LENGTH) -> LocTagPars
 
 
 def extract_qr_origin(original_message: str | None) -> dict[str, str | bool | None]:
-    """Dashboard helper: detect a stored WhatsApp body that began as a QR report."""
+    """Dashboard helper: detect a stored Telegram body that began as a QR report."""
     parsed = parse_loc_tag(original_message or "")
     if parsed.valid:
         return {

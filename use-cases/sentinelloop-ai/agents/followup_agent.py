@@ -16,23 +16,20 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from integrations.inbound import (
+    ACTION_STILL_EXISTS,
+    ACTION_UNSURE,
+    ACTION_YES,
+    encode_action,
+    parse_action_id,
+)
 from integrations.slack_handler import (
     IMAGE_CONTENT_TYPES,
     SlackHandler,
     SlackPostError,
     extract_slack_file,
 )
-from integrations.telegram_handler import SESSION_PREFIX, TelegramSendError
-from integrations.whatsapp import (
-    ACTION_STILL_EXISTS,
-    ACTION_UNSURE,
-    ACTION_YES,
-    WhatsAppHandler,
-    WhatsAppSendError,
-    encode_action,
-    extract_interactive_reply,
-    parse_action_id,
-)
+from integrations.telegram_handler import SESSION_PREFIX, TelegramSendError, TelegramTransport
 from tools.lifecycle import (
     LIFECYCLE,
     STATUS_AWAITING_VERIFICATION,
@@ -157,7 +154,7 @@ class FollowupRecord(BaseModel):
 
     incident_id: str
     uuid: str | None = None
-    worker_phone: str | None = None
+    worker_chat_id: str | None = None
     worker_language: str | None = None
     status: str = STATUS_RESOLVED
     verification_status: str = VERIFICATION_PENDING
@@ -179,21 +176,21 @@ class FollowupRecord(BaseModel):
 class MemoryFollowupStore:
     def __init__(self) -> None:
         self.records: dict[str, FollowupRecord] = {}
-        self.by_phone: dict[str, list[str]] = {}
+        self.by_chat: dict[str, list[str]] = {}
 
     def get(self, incident_id: str) -> FollowupRecord | None:
         return self.records.get(incident_id)
 
     def put(self, record: FollowupRecord) -> FollowupRecord:
         self.records[record.incident_id] = record
-        if record.worker_phone:
-            bucket = self.by_phone.setdefault(record.worker_phone, [])
+        if record.worker_chat_id:
+            bucket = self.by_chat.setdefault(record.worker_chat_id, [])
             if record.incident_id not in bucket:
                 bucket.append(record.incident_id)
         return record
 
     def pending_for_worker(self, phone: str) -> list[FollowupRecord]:
-        ids = self.by_phone.get(phone) or []
+        ids = self.by_chat.get(phone) or []
         return [
             self.records[i]
             for i in ids
@@ -285,8 +282,8 @@ def _incident_key(mapping: dict[str, Any]) -> str | None:
     return None
 
 
-def _worker_phone(mapping: dict[str, Any]) -> str | None:
-    for key in ("worker_phone", "reporter_id", "from", "phone"):
+def _worker_identity(mapping: dict[str, Any]) -> str | None:
+    for key in ("worker_chat_id", "telegram_chat_id", "reporter_id", "from", "chat_id"):
         value = mapping.get(key)
         if value:
             return str(value)
@@ -313,14 +310,12 @@ class FollowupService:
     def __init__(
         self,
         *,
-        whatsapp: WhatsAppHandler | None = None,
         telegram: Any | None = None,
         slack: SlackHandler | None = None,
         repository: Any | None = None,
         store: MemoryFollowupStore | None = None,
     ) -> None:
-        self.whatsapp = whatsapp or WhatsAppHandler()
-        self.telegram = telegram
+        self.telegram = telegram or TelegramTransport()
         self.slack = slack or SlackHandler()
         self.repository = repository
         self.store = store or MemoryFollowupStore()
@@ -405,7 +400,7 @@ class FollowupService:
                 update_type=event_type,
                 previous_status=previous_status,
                 new_status=record.status,
-                actor_type="worker" if source == "whatsapp" else "safety_officer",
+                actor_type="worker" if source == "telegram" else "safety_officer",
                 actor_reference=actor,
                 metadata={
                     "source": source,
@@ -432,7 +427,7 @@ class FollowupService:
         record = existing if existing is not None else FollowupRecord(incident_id=incident_id)
         if mapping.get("id"):
             record.uuid = str(mapping["id"])
-        record.worker_phone = _worker_phone(mapping) or record.worker_phone
+        record.worker_chat_id = _worker_identity(mapping) or record.worker_chat_id
         record.worker_language = mapping.get("detected_language") or mapping.get("language") or record.worker_language
         record.assigned_team = mapping.get("assigned_team") or record.assigned_team
         record.slack_channel_id = mapping.get("slack_channel_id") or record.slack_channel_id
@@ -456,7 +451,7 @@ class FollowupService:
         already_pending = (
             existing is not None
             and existing.verification_status in {VERIFICATION_PENDING, VERIFICATION_UNSURE}
-            and existing.worker_phone == record.worker_phone
+            and existing.worker_chat_id == record.worker_chat_id
         )
         if existing is not None and existing.verification_status == VERIFICATION_STILL_EXISTS:
             record.verification_cycle = existing.verification_cycle + 1
@@ -475,7 +470,7 @@ class FollowupService:
                 worker_notified=False,
                 error=ERROR_DUPLICATE,
             )
-        if not record.worker_phone:
+        if not record.worker_chat_id:
             log.warning("worker_verification_delivery_failed reason=missing_identity")
             return FollowupResult(
                 incident_id=incident_id,
@@ -506,14 +501,8 @@ class FollowupService:
             },
         ]
         try:
-            if self._is_telegram_worker(record.worker_phone):
-                await self._telegram_transport().send_verification_prompt(record.worker_phone, body, buttons)
-            elif self.whatsapp.interactive_actions_supported:
-                await self.whatsapp.send_verification_prompt(record.worker_phone, body, buttons)
-            else:
-                fallback = body + "\n\n" + (CLARIFICATION_PROMPT.get(lang) or CLARIFICATION_PROMPT["en"])
-                await self.whatsapp.send_worker_text(record.worker_phone, fallback)
-        except (WhatsAppSendError, TelegramSendError):
+            await self._telegram_transport().send_verification_prompt(record.worker_chat_id, body, buttons)
+        except TelegramSendError:
             log.warning("worker_verification_delivery_failed incident=%s", incident_id)
             return FollowupResult(
                 incident_id=incident_id,
@@ -552,7 +541,7 @@ class FollowupService:
         *,
         text: str | None = None,
         action_id: str | None = None,
-        worker_phone: str | None = None,
+        worker_chat_id: str | None = None,
         incident_id: str | None = None,
         event_id: str | None = None,
         message: dict[str, Any] | None = None,
@@ -579,8 +568,8 @@ class FollowupService:
                 ACTION_UNSURE: VERIFICATION_UNSURE,
             }.get(parsed_action.get("action") or "")
         record = self.store.get(incident_id) if incident_id else None
-        if record is None and worker_phone:
-            pending = self.store.pending_for_worker(worker_phone)
+        if record is None and worker_chat_id:
+            pending = self.store.pending_for_worker(worker_chat_id)
             if len(pending) == 1:
                 record = pending[0]
             elif len(pending) > 1:
@@ -600,14 +589,11 @@ class FollowupService:
         if choice is None:
             log.info("worker_verification_ambiguous incident=%s", record.incident_id)
             lang = _language(record.worker_language)
-            if record.worker_phone:
+            if record.worker_chat_id:
                 prompt = CLARIFICATION_PROMPT.get(lang) or CLARIFICATION_PROMPT["en"]
                 try:
-                    if self._is_telegram_worker(record.worker_phone):
-                        await self._telegram_transport().send_worker_text(record.worker_phone, prompt)
-                    else:
-                        await self.whatsapp.send_worker_text(record.worker_phone, prompt)
-                except (WhatsAppSendError, TelegramSendError):
+                    await self._telegram_transport().send_worker_text(record.worker_chat_id, prompt)
+                except TelegramSendError:
                     pass
             return FollowupResult(
                 incident_id=record.incident_id,
@@ -627,11 +613,11 @@ class FollowupService:
                 error=stale,
             )
         if choice == VERIFICATION_CONFIRMED:
-            result = await self.confirm_safe_and_close(record.incident_id, actor=worker_phone)
+            result = await self.confirm_safe_and_close(record.incident_id, actor=worker_chat_id)
         elif choice == VERIFICATION_STILL_EXISTS:
-            result = await self.reopen_incident(record.incident_id, actor=worker_phone)
+            result = await self.reopen_incident(record.incident_id, actor=worker_chat_id)
         else:
-            result = await self.handle_unsure_response(record.incident_id, actor=worker_phone)
+            result = await self.handle_unsure_response(record.incident_id, actor=worker_chat_id)
         if result.error != ERROR_REPO:
             self._mark_event(record, event_id)
         return result
@@ -641,7 +627,7 @@ class FollowupService:
         incident_id: str,
         *,
         actor: str | None = None,
-        source: str = "whatsapp",
+        source: str = "telegram",
         slack_closure: dict[str, Any] | None = None,
     ) -> FollowupResult:
         record = self._reload_status(self._record(incident_id))
@@ -777,7 +763,7 @@ class FollowupService:
                 event_type="incident_reopened",
                 previous_status=previous,
                 actor=actor,
-                source="whatsapp",
+                source="telegram",
                 extra={
                     "event": "worker_reports_still_exists",
                     "reopened": True,
@@ -814,7 +800,7 @@ class FollowupService:
                 event_type="worker_unsure",
                 previous_status=previous,
                 actor=actor,
-                source="whatsapp",
+                source="telegram",
             )
         except Exception:
             log.exception("repository_update_failed during unsure")
@@ -1049,12 +1035,12 @@ async def handle_worker_verification_reply(reply_json: str) -> str:
                 payload["text"] = str(reply_json)
         except json.JSONDecodeError:
             payload["text"] = str(reply_json)
-    if not payload.get("incident_id") and not payload.get("worker_phone"):
+    if not payload.get("incident_id") and not payload.get("worker_chat_id"):
         return FollowupResult(error=ERROR_STALE).model_dump_json()
     result = await handle_worker_verification_response(
         text=payload.get("text") or payload.get("body"),
         action_id=payload.get("action_id") or payload.get("id"),
-        worker_phone=payload.get("worker_phone") or payload.get("from"),
+        worker_chat_id=payload.get("worker_chat_id") or payload.get("from"),
         incident_id=payload.get("incident_id"),
         event_id=payload.get("event_id") or payload.get("message_id"),
         message=payload.get("message") if isinstance(payload.get("message"), dict) else payload,

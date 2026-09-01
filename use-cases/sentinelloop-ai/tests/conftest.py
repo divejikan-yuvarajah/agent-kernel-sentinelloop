@@ -1,6 +1,6 @@
 """Shared offline fixtures for the SentinelLoop safety test suite.
 
-No live WhatsApp, Slack, OpenRouter, Supabase, or Agent Kernel cloud calls.
+No live Telegram, Slack, OpenRouter, Supabase, or Agent Kernel cloud calls.
 """
 
 from __future__ import annotations
@@ -182,16 +182,19 @@ class FakeRepository:
         return None
 
 
-class MockWhatsAppClient:
+class MockTelegramClient:
     def __init__(self) -> None:
         self.sent: list[dict] = []
         self.fail = False
 
-    async def __call__(self, payload: dict) -> dict:
+    async def __call__(self, method, payload=None):
+        if payload is None:
+            payload = method
         if self.fail:
-            raise RuntimeError("whatsapp down")
-        self.sent.append(payload)
-        return {"ok": True, "id": f"wamid.{len(self.sent)}", "messages": [{"id": f"wamid.out.{len(self.sent)}"}]}
+            raise RuntimeError("telegram down")
+        item = payload if isinstance(payload, dict) else {"payload": payload, "method": method}
+        self.sent.append(item)
+        return {"ok": True, "result": {"message_id": len(self.sent)}}
 
 
 class MockSlackClient:
@@ -246,8 +249,8 @@ def fake_repository() -> FakeRepository:
 
 
 @pytest.fixture
-def mock_whatsapp_client() -> MockWhatsAppClient:
-    return MockWhatsAppClient()
+def mock_telegram_client() -> MockTelegramClient:
+    return MockTelegramClient()
 
 
 @pytest.fixture

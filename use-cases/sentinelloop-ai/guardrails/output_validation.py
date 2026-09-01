@@ -41,7 +41,7 @@ _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+|\n+")
 _WORD_RE = re.compile(r"[a-z0-9]+", re.I)
 _PHONE_RE = re.compile(r"(?:\+|00)?(?:94|1)?[\s\-()]*(?:\d[\s\-()]*){9,15}")
 _EMAIL_RE = re.compile(r"\b[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}\b", re.I)
-_WA_ID_RE = re.compile(r"\b(?:whatsapp[:\s+]*|wa\.me/)\+?\d{8,15}\b", re.I)
+_TELEGRAM_ID_RE = re.compile(r"\b(?:telegram:|t\.me/)\S+\b", re.I)
 _API_KEY_RE = re.compile(r"\b(?:sk-|sk-or-|xoxb-|xoxp-|ghp_)[A-Za-z0-9_\-]{8,}\b")
 
 HUMAN_REVIEW_LEVELS = frozenset({"high", "critical"})
@@ -51,10 +51,11 @@ PRIVACY_KEYS = frozenset(
     {
         "phone",
         "phone_number",
-        "worker_phone",
+        "worker_chat_id",
         "reporter_id",
-        "whatsapp_id",
-        "wa_id",
+        "telegram_id",
+        "telegram_chat_id",
+        "telegram_user_id",
         "email",
         "email_address",
         "name",
@@ -379,7 +380,7 @@ def validate_closure_request(
         approved = False
         decision = "unknown_risk_block"
         violations = [f"unrecognized risk level {risk_level}"]
-    if origin in {"whatsapp", "worker", "auto"} and human_review and not slack_ok:
+    if origin in {"telegram", "worker", "auto"} and human_review and not slack_ok:
         approved = False
         decision = "human_review_required"
         violations = ["High/Critical incidents require explicit human Closed action in Slack"]
@@ -445,7 +446,7 @@ def validate_slack_closure(
 
 
 def detect_privacy_leaks(record: dict[str, Any] | None) -> list[str]:
-    """Scan analytics payloads for phone numbers, emails, and WhatsApp IDs.
+    """Scan analytics payloads for phone numbers, emails, and Telegram IDs.
 
     SPEC.md Rule: Collect only information necessary for incident management.
     """
@@ -455,8 +456,8 @@ def detect_privacy_leaks(record: dict[str, Any] | None) -> list[str]:
         hits.append("phone_number")
     if _EMAIL_RE.search(blob):
         hits.append("email")
-    if _WA_ID_RE.search(blob):
-        hits.append("whatsapp_id")
+    if _TELEGRAM_ID_RE.search(blob):
+        hits.append("telegram_id")
     return hits
 
 
@@ -478,7 +479,7 @@ def sanitize_analytics_record(record: dict[str, Any] | None, *, is_anonymous: bo
     removed: list[str] = []
     if anonymous:
         for key in list(data.keys()):
-            if key.lower() in PRIVACY_KEYS or "phone" in key.lower() or "whatsapp" in key.lower():
+            if key.lower() in PRIVACY_KEYS or "phone" in key.lower():
                 data.pop(key, None)
                 removed.append(key)
         data["anonymous"] = True
@@ -488,10 +489,12 @@ def sanitize_analytics_record(record: dict[str, Any] | None, *, is_anonymous: bo
         if leaks:
             for key in list(data.keys()):
                 raw = data.get(key)
-                if isinstance(raw, str) and (_PHONE_RE.search(raw) or _EMAIL_RE.search(raw) or _WA_ID_RE.search(raw)):
+                if isinstance(raw, str) and (
+                    _PHONE_RE.search(raw) or _EMAIL_RE.search(raw) or _TELEGRAM_ID_RE.search(raw)
+                ):
                     data[key] = "[redacted]"
                     removed.append(key)
-            for leak_key in ("phone", "phone_number", "email", "whatsapp_id", "worker_phone", "wa_id"):
+            for leak_key in ("phone", "phone_number", "email", "telegram_id", "telegram_chat_id", "worker_chat_id"):
                 if leak_key in data:
                     data.pop(leak_key, None)
                     removed.append(leak_key)

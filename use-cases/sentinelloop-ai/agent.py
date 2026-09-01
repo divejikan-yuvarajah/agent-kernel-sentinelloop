@@ -1,6 +1,6 @@
 """SentinelLoop agent registration for local CLI and REST.
 
-Full incident persistence, risk arithmetic, retrieval, and Slack/WhatsApp
+Full incident persistence, risk arithmetic, retrieval, and Slack/Telegram
 workflows are still later phases. This module registers the six named SDK
 agents so Agent Kernel can boot against OpenRouter's chat-completions API.
 """
