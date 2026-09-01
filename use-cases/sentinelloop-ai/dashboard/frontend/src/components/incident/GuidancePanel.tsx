@@ -29,7 +29,7 @@ export function GuidancePanel({ guidance, knowledgeBase }: Props) {
       <p className="ii-guidance__source ds-mono">
         Source:{" "}
         {knowledgeBase
-          ? `${knowledgeBase.replace(/_/g, " ").replace(/\.md$/i, "")} Knowledge Base`
+          ? `${knowledgeBase.replace(/_/g, " ").replace(/\.(md|pdf)$/i, "")} Knowledge Base`
           : "Safety Knowledge Base"}
       </p>
     </Panel>

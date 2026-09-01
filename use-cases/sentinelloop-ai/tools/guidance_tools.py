@@ -127,17 +127,36 @@ def load_guidance_document(category: str | None, *, kb_dir: Path | None = None) 
 
 
 def parse_guidance_lines(content: str, filename: str) -> list[GuidanceLine]:
+    """Load immediate worker actions for live guidance.
+
+    Extra ``##`` sections (site regulations, duties, prohibitions) stay in the
+    knowledge-base files and PDFs. They are not sent as the worker action pack.
+    Files without section headings still treat every bullet as an action.
+    """
     prefix = SOURCE_PREFIX.get(filename, "general")
     actions: list[str] = []
     footer: str | None = None
+    collecting = True
+    seen_section = False
     for raw in content.splitlines():
         line = raw.strip()
-        if not line or line.startswith("#"):
+        if not line:
+            continue
+        if line.startswith("## "):
+            if not seen_section:
+                seen_section = True
+                heading = line[3:].strip().lower()
+                collecting = heading.startswith("immediate") or heading in {"rules", "actions"}
+            else:
+                collecting = False
+            continue
+        if line.startswith("#"):
             continue
         if line.startswith(("- ", "* ")):
-            actions.append(line[2:].strip())
-        else:
-            footer = line
+            if collecting:
+                actions.append(line[2:].strip())
+            continue
+        footer = line
     records: list[GuidanceLine] = []
     for index, text in enumerate(actions, start=1):
         records.append(GuidanceLine(id=f"{prefix}_{index}", text=text, is_footer=False))

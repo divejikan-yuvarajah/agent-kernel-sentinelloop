@@ -742,3 +742,55 @@
 .ds-notify-info {
   border-left: 3px solid var(--verified-teal);
 }
+
+.kb-guide-grid {
+  margin-bottom: var(--space-5);
+}
+
+.kb-guide-card--active {
+  outline: 2px solid var(--maroon);
+}
+
+.kb-guide-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.kb-guide-card__actions a.ds-btn,
+.kb-reader__links a.ds-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  color: var(--on-brand);
+  background: var(--maroon);
+}
+
+.kb-reader {
+  margin-top: var(--space-2);
+}
+
+.kb-reader__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.kb-reader__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.kb-reader__frame {
+  width: 100%;
+  min-height: 72vh;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-raised);
+}
