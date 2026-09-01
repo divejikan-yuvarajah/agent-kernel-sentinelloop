@@ -14,7 +14,17 @@ export function NotificationsPage() {
       {demo ? (
         <div className="ds-grid">
           {notifications.map((item) => (
-            <Card key={item.id} variant="activity-card">
+            <Card
+              key={item.id}
+              variant="activity-card"
+              className={
+                item.severity === "CRITICAL"
+                  ? "ds-notify-critical"
+                  : item.severity === "HIGH"
+                    ? "ds-notify-warning"
+                    : "ds-notify-info"
+              }
+            >
               <div className="ds-meta-row">
                 <RiskIndicator level={normalizeRisk(item.severity)} score={item.severity === "CRITICAL" ? 25 : 12} />
                 <span className="ds-mono">{item.time}</span>

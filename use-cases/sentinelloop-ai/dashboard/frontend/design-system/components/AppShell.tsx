@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 
 import { useDemoMode } from "@/demo/useDemoMode";
 import { notifications, organization } from "@/data/demoData";
+import { CommandCenterControls } from "@/components/CommandCenterControls";
 
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
@@ -95,7 +96,10 @@ export function AppShell({
         navOpen={navOpen}
         onMenuClick={() => setNavOpen((open) => !open)}
       />
-      <main className="ds-main">{children}</main>
+      <main className="ds-main">
+        <CommandCenterControls />
+        {children}
+      </main>
     </div>
   );
 }

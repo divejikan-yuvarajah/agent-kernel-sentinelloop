@@ -326,8 +326,28 @@ export function IncidentDetailPage() {
                 Export audit trail
               </Button>
             </div>
-            <h3 style={{ marginTop: 8 }}>AI decision timeline</h3>
+            <h3 style={{ marginTop: 8 }}>Incident Journey</h3>
             <IncidentTimeline events={events} />
+            <details className="ds-panel" style={{ marginTop: 24 }}>
+              <summary style={{ cursor: "pointer", fontWeight: 700 }}>AI Processing Details</summary>
+              <ul className="ds-pipeline">
+                {(detail.pipeline_stages?.length
+                  ? detail.pipeline_stages
+                  : [
+                      { name: "Translation", completed: true },
+                      { name: "Hazard Extraction", completed: Boolean(detail.category) },
+                      { name: "Risk Calculation", completed: Boolean(detail.risk.risk_level), detail: detail.risk.risk_level },
+                      { name: "Guidance Selection", completed: events.some((event) => /guidance/i.test(event.title)) },
+                      { name: "Team Assignment", completed: Boolean(detail.assigned_officer || detail.assigned_team) },
+                    ]
+                ).map((stage) => (
+                  <li key={stage.name}>
+                    {stage.completed ? "✓" : "○"} {stage.name}
+                    {stage.detail ? ` · ${stage.detail}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </details>
             {detail.duplicates.linked_incidents.length > 0 ? (
               <p style={{ marginTop: 24, fontSize: "var(--font-size-sm)", color: "var(--chalk-muted)" }}>
                 Linked:{" "}

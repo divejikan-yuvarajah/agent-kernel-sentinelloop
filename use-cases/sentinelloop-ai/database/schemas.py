@@ -59,6 +59,10 @@ class IncidentCreate(_InputModel):
     telegram_chat_id: str | None = None
     telegram_user_id: str | None = None
     telegram_message_id: str | None = None
+    input_method: str | None = None
+    created_by: str | None = None
+    source_metadata: dict[str, Any] | None = None
+    pipeline_version: str | None = None
 
     @field_validator("injury_occurred", "hazard_currently_active", mode="before")
     @classmethod

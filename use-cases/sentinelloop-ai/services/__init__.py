@@ -1,0 +1,1 @@
+"""Shared SentinelLoop application services."""

@@ -616,3 +616,129 @@
     height: auto;
   }
 }
+
+.ds-live-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-raised);
+}
+
+.ds-live-status__title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ds-live-status__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ds-live-status__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-size-sm);
+}
+
+.ds-live-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hazard-red);
+}
+
+.ds-live-status__item--ok .ds-live-status__dot {
+  background: var(--verified-teal);
+}
+
+.ds-live-status__item--warn .ds-live-status__dot {
+  background: var(--signal-amber);
+}
+
+.ds-live-status__item--down .ds-live-status__dot {
+  background: var(--hazard-red);
+}
+
+.ds-command-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+}
+
+.ds-pipeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ds-pipeline li {
+  padding: 4px 0;
+}
+
+.ds-card--pulse {
+  animation: ds-card-pulse 1.2s ease-out 2;
+}
+
+.ds-card--pulse-LOW {
+  --pulse-color: var(--verified-teal);
+}
+
+.ds-card--pulse-MEDIUM {
+  --pulse-color: var(--signal-amber);
+}
+
+.ds-card--pulse-HIGH {
+  --pulse-color: var(--ember-orange);
+}
+
+.ds-card--pulse-CRITICAL {
+  --pulse-color: var(--hazard-red);
+}
+
+@keyframes ds-card-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--pulse-color) 70%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-card--pulse {
+    animation: none;
+    box-shadow: inset 0 0 0 2px var(--pulse-color);
+  }
+}
+
+.ds-modal--hazard {
+  max-width: 560px;
+}
+
+.ds-notify-critical {
+  border-left: 3px solid var(--hazard-red);
+}
+
+.ds-notify-warning {
+  border-left: 3px solid var(--signal-amber);
+}
+
+.ds-notify-info {
+  border-left: 3px solid var(--verified-teal);
+}

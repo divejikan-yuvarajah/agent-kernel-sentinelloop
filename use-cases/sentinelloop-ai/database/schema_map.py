@@ -52,6 +52,10 @@ def normalize_incident_row(row: dict) -> dict:
         "original_message_text": description,
         "site_id": row.get("equipment_involved"),
         "is_anonymous": bool(row.get("is_anonymous") or False),
+        "input_method": row.get("input_method"),
+        "created_by": row.get("created_by"),
+        "source_metadata": row.get("source_metadata"),
+        "pipeline_version": row.get("pipeline_version"),
     }
 
 

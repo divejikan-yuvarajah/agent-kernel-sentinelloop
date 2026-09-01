@@ -1,8 +1,8 @@
-"""Read-only SentinelLoop operations dashboard API.
+"""SentinelLoop operations dashboard API.
 
-Mounted on the existing Agent Kernel REST server. Incident, evidence, and
-AI-decision records are never mutated here. GET views are cached reads.
-POST /analytics/predictions/inspect only posts a Slack inspection note.
+GET views remain cached reads. Incident creation goes through the shared
+intake pipeline via POST /incidents/manual. POST /analytics/predictions/inspect
+and POST /handover/generate are the other authorized writes.
 """
 
 from __future__ import annotations
@@ -34,10 +34,13 @@ from dashboard.schemas import (
     IncidentListResponse,
     InspectionRequestIn,
     InspectionRequestOut,
+    ManualIncidentRequest,
+    ManualIncidentResponse,
     PredictionsResponse,
     RecurringResponse,
     ReviewQueueResponse,
     RouterStatus,
+    SystemHealth,
     TelegramBotStatus,
     VoiceAnalytics,
 )
@@ -62,12 +65,14 @@ class DashboardHandler(RESTRequestHandler):
         ledger_path: Any | None = None,
         call_model_fn: Any | None = None,
         coordination_service: Any | None = None,
+        orchestrator: Any | None = None,
     ) -> None:
         self._repository = repository
         self._service = service
         self._ledger_path = ledger_path
         self._call_model_fn = call_model_fn
         self._coordination_service = coordination_service
+        self._orchestrator = orchestrator
         self._slack = None
         self._cache: dict[str, tuple[float, Any]] = {}
 
@@ -164,6 +169,39 @@ class DashboardHandler(RESTRequestHandler):
                 raise
             except Exception:
                 log.exception("dashboard list_incidents failed")
+                raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+
+        @router.post(
+            "/incidents/manual",
+            response_model=ManualIncidentResponse,
+            summary="Log a hazard from the dashboard",
+            description="Runs the same intake → incident → risk → guidance → coordination pipeline as Telegram.",
+        )
+        async def create_manual_incident(body: ManualIncidentRequest) -> ManualIncidentResponse:
+            return await self._create_manual_incident(body)
+
+        @router.post(
+            "/incidents/simulate",
+            response_model=ManualIncidentResponse,
+            summary="Simulate an emergency report",
+            description="Demo/judge helper. Same pipeline as a worker report, without Telegram credentials.",
+        )
+        async def simulate_incident(body: ManualIncidentRequest | None = None) -> ManualIncidentResponse:
+            payload = body or ManualIncidentRequest()
+            payload.simulate = True
+            return await self._create_manual_incident(payload)
+
+        @router.get(
+            "/system-health",
+            response_model=SystemHealth,
+            summary="Live command-center health",
+            description="Telegram, Slack, database, and AI availability plus last incident timestamp.",
+        )
+        async def system_health() -> SystemHealth:
+            try:
+                return await asyncio.to_thread(self._reader().system_health)
+            except Exception:
+                log.exception("dashboard system_health failed")
                 raise HTTPException(status_code=500, detail="internal dashboard failure") from None
 
         @router.get(
@@ -664,6 +702,7 @@ class DashboardHandler(RESTRequestHandler):
             "/handover/analytics",
             "/handover/compare",
             "/telegram/health",
+            "/system-health",
             "/router/status",
             "/ai-usage",
             "/analytics/voice",
@@ -681,3 +720,121 @@ class DashboardHandler(RESTRequestHandler):
             )
 
         return router
+
+    async def _create_manual_incident(self, body: ManualIncidentRequest) -> ManualIncidentResponse:
+        from services.demo_mode import demo_mode_enabled
+        from services.demo_pipeline import build_demo_orchestrator
+        from services.incident_intake_service import (
+            compose_manual_report_text,
+            decode_photo,
+            process_incident_input,
+            validate_manual_incident,
+        )
+
+        scenarios = {
+            "electrical": {
+                "description": "Electrical panel sparking near the isolator. Three workers nearby.",
+                "category": "Electrical",
+                "location": "Electrical Room",
+                "people_exposed": 3,
+                "is_active": True,
+                "injury_reported": False,
+            },
+            "chemical": {
+                "description": "Chemical smell and a small leak at the storage cabinet.",
+                "category": "Chemical",
+                "location": "Chemical Storage",
+                "people_exposed": 2,
+                "is_active": True,
+                "injury_reported": False,
+            },
+            "machine": {
+                "description": "Guard missing on machine 4. Belt is still running.",
+                "category": "Machine",
+                "location": "CNC Area",
+                "people_exposed": 4,
+                "is_active": True,
+                "injury_reported": False,
+            },
+            "smoke": {
+                "description": "There is smoke coming from machine 4. Three workers are nearby.",
+                "category": "Fire/Smoke",
+                "location": "Machine 4",
+                "people_exposed": 3,
+                "is_active": True,
+                "injury_reported": False,
+            },
+        }
+        data = body
+        if body.simulate:
+            sample = scenarios.get((body.scenario or "smoke").strip().lower(), scenarios["smoke"])
+            data = ManualIncidentRequest.model_validate({**sample, "created_by": body.created_by or "demo_officer"})
+
+        error = validate_manual_incident(
+            description=data.description,
+            category=data.category,
+            location=data.location,
+            people_exposed=data.people_exposed,
+            photo_filename=data.photo_filename,
+            photo_content_type=data.photo_content_type,
+        )
+        if error:
+            raise HTTPException(status_code=400, detail=error)
+
+        people = int(data.people_exposed or 0)
+        raw_text = compose_manual_report_text(
+            data.description,
+            category=data.category,
+            location=data.location,
+            people_exposed=people,
+            is_active=bool(data.is_active),
+            injury_reported=bool(data.injury_reported),
+        )
+        photo = decode_photo(
+            data.photo_base64,
+            filename=data.photo_filename,
+            content_type=data.photo_content_type,
+        )
+        orch = self._orchestrator
+        if orch is None and (demo_mode_enabled() or body.simulate):
+            orch = build_demo_orchestrator(
+                repository=self._repository or self._reader()._repo,
+                raw_text=raw_text,
+                category=data.category,
+                location=data.location,
+                people_exposed=people,
+                is_active=bool(data.is_active),
+                already_injured=bool(data.injury_reported),
+            )
+        try:
+            result = await process_incident_input(
+                source="manual",
+                raw_text=raw_text,
+                metadata={
+                    "created_by": data.created_by or "dashboard_officer",
+                    "category": data.category,
+                    "location": data.location,
+                    "people_exposed": people,
+                    "is_active": data.is_active,
+                    "injury_reported": data.injury_reported,
+                    "photo": photo,
+                },
+                orchestrator=orch,
+            )
+        except HTTPException:
+            raise
+        except Exception:
+            log.exception("dashboard manual incident failed")
+            raise HTTPException(status_code=500, detail="internal dashboard failure") from None
+        self._cache.clear()
+        return ManualIncidentResponse(
+            incident_id=result.incident_id or result.canonical_incident_id,
+            status=result.status,
+            risk_level=result.risk_level,
+            risk_score=result.risk_score,
+            pipeline=list(result.pipeline_trace or []),
+            slack_alert_sent=bool(result.slack_alert_sent or result.coordination_completed),
+            input_channel="manual",
+            input_method="dashboard",
+            error=result.error,
+        )

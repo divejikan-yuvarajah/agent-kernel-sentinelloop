@@ -139,6 +139,9 @@ export type IncidentDetail = {
     generated_at: string | null;
     critical_open_count?: number;
   }[];
+  created_by?: string | null;
+  pipeline_version?: string | null;
+  pipeline_stages?: { name: string; completed: boolean; detail?: string | null }[];
 };
 
 async function getJson<T>(path: string): Promise<T> {
@@ -471,6 +474,56 @@ export type TelegramBotStatus = {
 export function fetchTelegramHealth() {
   if (isDemoMode()) return demo.fetchTelegramHealth();
   return getJson<TelegramBotStatus>("/telegram/health");
+}
+
+export type SystemHealth = {
+  telegram: string;
+  slack: string;
+  database: string;
+  ai_services: string;
+  last_incident: string | null;
+  last_incident_label?: string | null;
+  demo_mode?: boolean;
+};
+
+export function fetchSystemHealth() {
+  if (isDemoMode()) return demo.fetchSystemHealth();
+  return getJson<SystemHealth>("/system-health");
+}
+
+export type ManualIncidentPayload = {
+  description: string;
+  category: string;
+  location: string;
+  people_exposed: number;
+  is_active: boolean;
+  injury_reported: boolean;
+  photo_base64?: string;
+  photo_filename?: string;
+  photo_content_type?: string;
+  created_by?: string;
+};
+
+export type ManualIncidentResponse = {
+  incident_id: string | null;
+  status: string | null;
+  risk_level: string | null;
+  risk_score: number | null;
+  pipeline: string[];
+  slack_alert_sent: boolean;
+  input_channel: string;
+  input_method: string;
+  error: string | null;
+};
+
+export function createManualIncident(payload: ManualIncidentPayload) {
+  if (isDemoMode()) return demo.createManualIncident(payload);
+  return postJson<ManualIncidentResponse>("/incidents/manual", payload);
+}
+
+export function simulateEmergencyReport(scenario = "smoke") {
+  if (isDemoMode()) return demo.simulateEmergencyReport(scenario);
+  return postJson<ManualIncidentResponse>("/incidents/simulate", { simulate: true, scenario });
 }
 
 export type HandoverRisk = {

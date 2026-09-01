@@ -275,6 +275,13 @@ def test_create_incident_inserts_real_columns(repo: IncidentRepository, backend:
         "original_message_id",
         "original_message_text",
         "site_id",
+        "telegram_chat_id",
+        "telegram_user_id",
+        "telegram_message_id",
+        "input_method",
+        "created_by",
+        "source_metadata",
+        "pipeline_version",
     }
 
 

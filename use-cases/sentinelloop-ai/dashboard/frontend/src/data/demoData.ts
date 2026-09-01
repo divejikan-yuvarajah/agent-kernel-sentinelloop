@@ -107,7 +107,7 @@ export type DemoIncident = {
   guidance: string;
   knowledge_base: string;
   guidance_status: "approved" | "blocked";
-  input_channel?: "telegram" | "telegram" | "slack" | "email";
+  input_channel?: "telegram" | "manual" | "qr" | "slack" | "email";
   message_type?: "text" | "image" | "voice";
   voice_duration_seconds?: number;
   emergency?: boolean;
@@ -1080,11 +1080,11 @@ export const knowledgeBase = [
 ];
 
 export const notifications = [
-  { id: "N-1", title: "Critical incident detected", body: "INC-2026-00421 requires attention in the CNC Area.", time: "5 min ago", severity: "CRITICAL" },
+  { id: "N-1", title: "Emergency response required", body: "INC-2026-00421 requires attention in the CNC Area.", time: "5 min ago", severity: "CRITICAL" },
   { id: "N-handover", title: "Critical handover items", body: "🚨 Critical items require attention before shift start.", time: "8 min ago", severity: "CRITICAL" },
-  { id: "N-2", title: "Verification pending", body: "INC-2026-00420 worker confirmation required for the chemical leak.", time: "32 min ago", severity: "HIGH" },
+  { id: "N-2", title: "Inspection overdue", body: "INC-2026-00420 worker confirmation required for the chemical leak.", time: "32 min ago", severity: "HIGH" },
   { id: "N-3", title: "Duplicate hazard detected", body: "3 electrical reports found at CNC Area. Escalation triggered.", time: "1 hr ago", severity: "HIGH" },
-  { id: "N-4", title: "Guidance blocked", body: "Invented instruction stopped for INC-2026-00415.", time: "2 hr ago", severity: "MEDIUM" },
+  { id: "N-4", title: "New evidence uploaded", body: "Resolution photo uploaded for INC-2026-00415.", time: "2 hr ago", severity: "MEDIUM" },
 ];
 
 export const slackThread = {

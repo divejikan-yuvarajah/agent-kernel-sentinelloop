@@ -4,10 +4,15 @@ const CHANNELS: Record<string, { emoji: string; label: string }> = {
   telegram: { emoji: "💬", label: "Telegram" },
   slack: { emoji: "💬", label: "Slack" },
   email: { emoji: "📧", label: "Email" },
+  manual: { emoji: "🖥", label: "Manual Entry" },
+  dashboard: { emoji: "🖥", label: "Manual Entry" },
+  qr: { emoji: "📍", label: "QR Report" },
+  qr_tagged: { emoji: "📍", label: "QR Report" },
 };
 
 export function channelLabel(channel?: string | null) {
   const key = (channel || "").trim().toLowerCase();
+  if (key === "qr_tagged") return CHANNELS.qr_tagged;
   return CHANNELS[key] ?? { emoji: "💬", label: channel || "Channel" };
 }
 

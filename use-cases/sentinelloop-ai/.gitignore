@@ -26,3 +26,6 @@ spend_ledger.json
 assets/qr/*.png
 assets/qr/posters/
 assets/qr/location_registry.json
+
+# Generated smoke-test artifacts
+logs/*.json

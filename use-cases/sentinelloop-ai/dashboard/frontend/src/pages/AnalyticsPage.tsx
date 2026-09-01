@@ -190,12 +190,21 @@ export function AnalyticsPage() {
       </div>
       <Panel title="Reports by Channel" style={{ marginTop: 24 }}>
         <div className="ds-share">
-          {(summary?.reports_by_channel ?? [
-            { channel: "telegram", count: 0, percentage: 90 },
-            { channel: "other", count: 0, percentage: 10 },
-          ]).map((row) => (
-            <div key={row.channel} className="ds-share__row">
-              <span>{row.channel === "telegram" ? "Telegram Reports" : "Other"}</span>
+              {(summary?.reports_by_channel ?? [
+                { channel: "telegram", count: 0, percentage: 55 },
+                { channel: "manual", count: 0, percentage: 30 },
+                { channel: "qr", count: 0, percentage: 15 },
+              ]).map((row) => (
+                <div key={row.channel} className="ds-share__row">
+                  <span>
+                    {row.channel === "telegram"
+                      ? "Telegram"
+                      : row.channel === "manual"
+                        ? "Manual"
+                        : row.channel === "qr"
+                          ? "QR Reports"
+                          : row.channel}
+                  </span>
               <span className="ds-share__track">
                 <span className="ds-share__fill" style={{ width: `${Math.round(row.percentage)}%` }} />
               </span>

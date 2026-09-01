@@ -156,12 +156,66 @@ class IncidentDetail(_Out):
     voice_report: VoiceReport | None = None
     vision: VisionInsight | None = None
     included_in_handovers: list["HandoverMention"] = Field(default_factory=list)
+    created_by: str | None = None
+    pipeline_version: str | None = None
+    pipeline_stages: list["PipelineStage"] = Field(default_factory=list)
+    people_exposed: int | None = None
+    hazard_active: bool | None = None
+    injury: bool | None = None
+    equipment: str | None = None
+    original_text: str | None = None
+    translated_text: str | None = None
+    language: str | None = None
+    assigned_team: str | None = None
 
 
 class ChannelShare(_Out):
     channel: str
     count: int
     percentage: float
+
+
+class PipelineStage(_Out):
+    name: str
+    completed: bool = False
+    detail: str | None = None
+
+
+class ManualIncidentRequest(_Out):
+    description: str = ""
+    category: str = ""
+    location: str = ""
+    people_exposed: int | None = None
+    is_active: bool = True
+    injury_reported: bool = False
+    photo_base64: str | None = None
+    photo_filename: str | None = None
+    photo_content_type: str | None = None
+    created_by: str | None = None
+    simulate: bool = False
+    scenario: str | None = None
+
+
+class ManualIncidentResponse(_Out):
+    incident_id: str | None = None
+    status: str | None = None
+    risk_level: str | None = None
+    risk_score: int | None = None
+    pipeline: list[str] = Field(default_factory=list)
+    slack_alert_sent: bool = False
+    input_channel: str = "manual"
+    input_method: str = "dashboard"
+    error: str | None = None
+
+
+class SystemHealth(_Out):
+    telegram: str = "disconnected"
+    slack: str = "disconnected"
+    database: str = "disconnected"
+    ai_services: str = "unavailable"
+    last_incident: datetime | None = None
+    last_incident_label: str | None = None
+    demo_mode: bool = False
 
 
 class TelegramBotStatus(_Out):

@@ -52,6 +52,10 @@ class Incident(_RowModel):
     duplicate_of: UUID | None = None
     reopen_count: int | None = None
     is_anonymous: bool = False
+    input_method: str | None = None
+    created_by: str | None = None
+    source_metadata: dict[str, Any] | None = None
+    pipeline_version: str | None = None
 
     @field_validator("injury_occurred", "hazard_currently_active", mode="before")
     @classmethod

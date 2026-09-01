@@ -7,12 +7,14 @@ import type { GuardrailConfigView } from "@ds/types";
 import { fetchGuardrailConfig } from "../api/client";
 import { organization } from "../data/demoData";
 import { demoImages } from "../data/demoImages";
+import { readOperatorRole, setOperatorRole, type OperatorRole } from "../demo/operatorRole";
 import { useDemoMode } from "../demo/useDemoMode";
 
 export function SettingsPage() {
   const [demo, setDemo] = useDemoMode();
   const [open, setOpen] = useState(false);
   const [config, setConfig] = useState<GuardrailConfigView | null>(null);
+  const [role, setRole] = useState<OperatorRole>(readOperatorRole);
 
   useEffect(() => {
     fetchGuardrailConfig()
@@ -37,6 +39,23 @@ export function SettingsPage() {
             ? `Load ${organization.name} sample data across dashboards, tables, and detail views.`
             : "Use real API and database data. Production workflows stay unchanged."}
         </p>
+      </Panel>
+      <Panel title="Operator role" style={{ marginTop: 24 }}>
+        <SelectDropdown
+          label="Dashboard role"
+          name="role"
+          value={role}
+          onChange={(event) => {
+            const next = event.target.value as OperatorRole;
+            setRole(next);
+            setOperatorRole(next);
+          }}
+          options={[
+            { value: "officer", label: "Safety Officer — create, assign, verify" },
+            { value: "supervisor", label: "Supervisor — review risks, approve closure" },
+            { value: "admin", label: "Admin — manage system and analytics" },
+          ]}
+        />
       </Panel>
       <Panel title="Operator preferences" style={{ marginTop: 24 }}>
         <div className="ds-grid" style={{ maxWidth: 420 }}>

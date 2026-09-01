@@ -33,6 +33,7 @@ from dashboard.schemas import (
     LinkedIncident,
     LoopStageCount,
     ModelCallRecord,
+    PipelineStage,
     QrLocationStat,
     RecurringHazard,
     RecurringResponse,
@@ -41,6 +42,7 @@ from dashboard.schemas import (
     RiskIntelligence,
     RouterBudget,
     RouterStatus,
+    SystemHealth,
     TelegramBotStatus,
     TimelineEvent,
     VisionAnalytics,
@@ -95,12 +97,12 @@ _ROLE_AGENT = {
 _TIMELINE_TITLES = {
     "incident_draft_started": "Report received",
     "incident_created": "Report received",
-    "intake_completed": "AI classified the report",
-    "risk_assessed": "Risk assessment generated",
+    "intake_completed": "AI extraction completed",
+    "risk_assessed": "Risk calculated",
     "evidence_added": "Evidence attached",
     "evidence_uploaded": "Evidence attached",
     "status_transition": "Status updated",
-    "slack_coordination_completed": "Officer assigned",
+    "slack_coordination_completed": "Slack alert sent",
     "incident_assigned": "Officer assigned",
     "incident_accepted": "Officer accepted",
     "escalation_sent": "Incident escalated",
@@ -163,6 +165,26 @@ _ACTIVITY_KINDS = {
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _relative_incident_label(value: datetime | None) -> str:
+    if value is None:
+        return "no incidents yet"
+    stamp = _aware(value)
+    if stamp is None:
+        return "no incidents yet"
+    delta = _utcnow() - stamp
+    seconds = max(0, int(delta.total_seconds()))
+    if seconds < 60:
+        return "just now"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes} min ago" if minutes != 1 else "1 min ago"
+    hours = minutes // 60
+    if hours < 48:
+        return f"{hours} hr ago" if hours != 1 else "1 hr ago"
+    days = hours // 24
+    return f"{days} days ago"
 
 
 def _aware(value: datetime | None) -> datetime | None:
@@ -565,7 +587,7 @@ class DashboardReadService:
             incidents = [item for item in incidents if (item.status or "").upper() in stage_statuses]
         if source_channel:
             wanted = source_channel.strip().lower()
-            incidents = [item for item in incidents if (item.source_channel or "").strip().lower() == wanted]
+            incidents = [item for item in incidents if _display_channel(item) == wanted]
         if language:
             wanted_lang = language.strip().lower()
             incidents = [
@@ -673,8 +695,8 @@ class DashboardReadService:
             location_confidence=1.0 if origin["location_verified"] else None,
             is_anonymous=bool(getattr(incident, "is_anonymous", False)),
             safety_status=status_label,
-            input_channel=incident.source_channel,
-            input_method="voice" if voice_report else "text",
+            input_channel=_display_channel(incident, origin),
+            input_method=_input_method_for(incident, voice_report),
             voice_report=voice_report,
             vision=_vision_from_updates(updates, incident),
             safety=build_safety_panel(
@@ -686,6 +708,16 @@ class DashboardReadService:
                 guidance=guidance_from_updates(updates),
             ),
             included_in_handovers=_handover_mentions(self._repo, incident.incident_ref),
+            created_by=getattr(incident, "created_by", None),
+            pipeline_version=getattr(incident, "pipeline_version", None),
+            pipeline_stages=_pipeline_stages(incident, assignment, assessment, updates),
+            people_exposed=incident.people_exposed,
+            hazard_active=incident.hazard_currently_active,
+            injury=incident.injury_occurred,
+            original_text=redact_text(incident.original_message_text),
+            translated_text=redact_text(incident.hazard_description),
+            language=incident.detected_language,
+            assigned_team=getattr(assignment, "team", None) if assignment is not None else None,
         )
 
     def export_audit(self, incident_id: str):
@@ -835,6 +867,58 @@ class DashboardReadService:
                 "Image": round(100 * health.image_reports / total_types, 1),
                 "Voice": round(100 * health.voice_reports / total_types, 1),
             },
+        )
+
+    def system_health(self) -> SystemHealth:
+        from services.demo_mode import demo_mode_enabled
+
+        demo = demo_mode_enabled()
+        telegram = "disconnected"
+        try:
+            from integrations.telegram_handler import telegram_health
+
+            health = telegram_health()
+            if health.connected or health.polling_active:
+                telegram = "connected"
+            elif demo:
+                telegram = "warning"
+        except Exception:
+            telegram = "warning" if demo else "disconnected"
+
+        slack_token = os.environ.get("SLACK_BOT_TOKEN", "").strip()
+        if slack_token:
+            slack = "connected"
+        elif demo:
+            slack = "warning"
+        else:
+            slack = "disconnected"
+
+        database = "disconnected"
+        last_incident = None
+        try:
+            rows = self._repo.list_incidents(IncidentFilters(limit=1, offset=0))
+            database = "connected"
+            if rows:
+                last_incident = rows[0].created_at
+        except Exception:
+            database = "warning" if demo else "disconnected"
+
+        ai_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+        if ai_key:
+            ai_services = "available"
+        elif demo:
+            ai_services = "warning"
+        else:
+            ai_services = "unavailable"
+
+        return SystemHealth(
+            telegram=telegram,
+            slack=slack,
+            database=database,
+            ai_services=ai_services,
+            last_incident=last_incident,
+            last_incident_label=_relative_incident_label(last_incident),
+            demo_mode=demo,
         )
 
     def emergency_command_center(self) -> EmergencyCommandCenter:
@@ -1159,7 +1243,8 @@ class DashboardReadService:
             qr_equipment=origin["qr_equipment"],
             safety_status=safety_status_for_incident(risk_level=incident.current_risk_level, status=incident.status),
             is_anonymous=bool(getattr(incident, "is_anonymous", False)),
-            input_channel=incident.source_channel,
+            input_channel=_display_channel(incident, origin),
+            assigned_team=getattr(assignment, "team", None) if assignment is not None else None,
         )
 
     def _risk_intelligence(self, incident: Incident, assessment: RiskAssessment | None) -> RiskIntelligence:
@@ -1227,8 +1312,8 @@ class DashboardReadService:
                 TimelineEvent(
                     timestamp=incident.created_at,
                     title="Report received",
-                    detail=incident.source_channel,
-                    actor="worker",
+                    detail=_display_channel(incident, extract_qr_origin(incident.original_message_text)),
+                    actor="officer" if (incident.source_channel or "").lower() == "manual" else "worker",
                 )
             )
         if assessment is not None:
@@ -1491,17 +1576,63 @@ def _language_alias(value: str) -> str:
 
 
 def _channel_share(incidents: list[Incident]) -> list[ChannelShare]:
-    counts: dict[str, int] = {}
+    counts: dict[str, int] = {"telegram": 0, "manual": 0, "qr": 0, "other": 0}
     for incident in incidents:
-        key = (incident.source_channel or "other").strip().lower() or "other"
-        if key not in {"telegram", "slack"}:
+        origin = extract_qr_origin(incident.original_message_text)
+        key = _display_channel(incident, origin)
+        if key not in counts:
             key = "other"
         counts[key] = counts.get(key, 0) + 1
     total = len(incidents) or 1
-    order = ("telegram", "slack", "other")
+    order = ("telegram", "manual", "qr", "other")
     return [
         ChannelShare(channel=name, count=counts.get(name, 0), percentage=round(100 * counts.get(name, 0) / total, 1))
         for name in order
+        if counts.get(name, 0) or name in {"telegram", "manual", "qr"}
+    ]
+
+
+def _display_channel(incident: Incident, origin: dict[str, Any] | None = None) -> str:
+    origin = origin if origin is not None else extract_qr_origin(incident.original_message_text)
+    if origin.get("location_verified") or origin.get("source") == SOURCE_QR_TAGGED:
+        return "qr"
+    channel = (incident.source_channel or "").strip().lower()
+    if channel in {"manual", "dashboard"}:
+        return "manual"
+    if channel == "telegram":
+        return "telegram"
+    return channel or "telegram"
+
+
+def _input_method_for(incident: Incident, voice_report: VoiceReport | None) -> str:
+    stored = getattr(incident, "input_method", None)
+    if stored:
+        return str(stored)
+    if voice_report:
+        return "voice"
+    if (incident.source_channel or "").strip().lower() in {"manual", "dashboard"}:
+        return "dashboard"
+    return "text"
+
+
+def _pipeline_stages(
+    incident: Incident,
+    assignment: Assignment | None,
+    assessment: RiskAssessment | None,
+    updates: list[IncidentUpdate],
+) -> list[PipelineStage]:
+    kinds = {(update.update_type or "").lower() for update in updates}
+    received = incident.created_at is not None
+    extracted = bool(incident.hazard_category or incident.location) or "intake_completed" in kinds
+    risked = assessment is not None or bool(incident.current_risk_level) or "risk_assessed" in kinds
+    guided = any(kind.startswith("guidance") for kind in kinds)
+    assigned = assignment is not None or "slack_coordination_completed" in kinds or "incident_assigned" in kinds
+    return [
+        PipelineStage(name="Translation", completed=received or extracted),
+        PipelineStage(name="Hazard Extraction", completed=extracted),
+        PipelineStage(name="Risk Calculation", completed=risked, detail=incident.current_risk_level),
+        PipelineStage(name="Guidance Selection", completed=guided),
+        PipelineStage(name="Team Assignment", completed=assigned),
     ]
 
 

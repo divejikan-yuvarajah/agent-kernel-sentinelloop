@@ -20,6 +20,7 @@ import {
   incidents,
   kpis,
   monthlyTrend,
+  notifications,
   organization,
   riskCounts,
   type DemoIncident,
@@ -132,7 +133,12 @@ export function fetchIncidents(params: Record<string, string | number | undefine
   }
   const channel = String(params.source_channel || params.channel || "").toLowerCase();
   if (channel && channel !== "all") {
-    items = items.filter((row) => (row.input_channel || "").toLowerCase() === channel);
+    items = items.filter((row) => {
+      const source = (row.source || "").toLowerCase();
+      const input = (row.input_channel || "").toLowerCase();
+      if (channel === "qr") return source === "qr_tagged" || input === "qr";
+      return input === channel;
+    });
   }
   const language = String(params.language || "").toLowerCase();
   if (language && language !== "all") {
@@ -300,7 +306,15 @@ export function fetchIncident(id: string): Promise<IncidentDetail> {
             source: row.input_channel === "telegram" ? "Telegram" : "Telegram",
           }
         : null,
-    input_method: row.message_type === "voice" ? "voice" : "text",
+    input_method: row.message_type === "voice" ? "voice" : row.input_channel === "manual" ? "dashboard" : "text",
+    created_by: row.input_channel === "manual" ? row.reporter_name : null,
+    pipeline_stages: [
+      { name: "Translation", completed: true },
+      { name: "Hazard Extraction", completed: true },
+      { name: "Risk Calculation", completed: true, detail: row.risk_level },
+      { name: "Guidance Selection", completed: true },
+      { name: "Team Assignment", completed: Boolean(row.assigned_team) },
+    ],
     safety_status:
       row.guidance_status === "blocked"
         ? "Guardrail Blocked"
@@ -427,9 +441,9 @@ export function fetchAnalyticsSummary(): Promise<AnalyticsSummary> {
     repeated_hazard_locations: [{ label: "CNC Area", location: "CNC Area", count: 3, insight: null }],
     duplicate_detection_stats: { groups_checked: 41, duplicates_merged: 12, escalations: 3 },
     reports_by_channel: [
-      { channel: "telegram", count: 104, percentage: 42 },
-      { channel: "telegram", count: 119, percentage: 48 },
-      { channel: "other", count: 24, percentage: 10 },
+      { channel: "telegram", count: 136, percentage: 55 },
+      { channel: "manual", count: 74, percentage: 30 },
+      { channel: "qr", count: 37, percentage: 15 },
     ],
     telegram_message_types: { Text: 60, Image: 25, Voice: 15 },
     telegram_languages: { Sinhala: 45, Tamil: 35, English: 20 },
@@ -952,6 +966,142 @@ export function fetchTelegramHealth() {
     message_types: { Text: 60, Image: 25, Voice: 15 },
     language_distribution: { Sinhala: 45, Tamil: 35, English: 20 },
   });
+}
+
+export function fetchSystemHealth() {
+  const newest = incidents[0]?.created_at || null;
+  return wait({
+    telegram: "connected",
+    slack: "connected",
+    database: "connected",
+    ai_services: "available",
+    last_incident: newest,
+    last_incident_label: newest ? "2 min ago" : "no incidents yet",
+    demo_mode: true,
+  });
+}
+
+export type ManualIncidentPayload = {
+  description: string;
+  category: string;
+  location: string;
+  people_exposed: number;
+  is_active: boolean;
+  injury_reported: boolean;
+  created_by?: string;
+  simulate?: boolean;
+  scenario?: string;
+};
+
+function nextDemoId() {
+  return `INC-${String(430 + incidents.length).padStart(5, "0")}`;
+}
+
+function pushDemoIncident(row: DemoIncident) {
+  incidents.unshift(row);
+  activity.unshift({
+    timestamp: new Date().toISOString(),
+    kind: "New report",
+    summary: `${row.risk_level} incident received · ${row.location}`,
+    incident_id: row.incident_id,
+  });
+  notifications.unshift({
+    id: `N-${row.incident_id}`,
+    title: row.risk_level === "CRITICAL" ? "Emergency response required" : "New hazard logged",
+    body: `${row.incident_id} · ${row.location}`,
+    time: "just now",
+    severity: row.risk_level === "CRITICAL" ? "CRITICAL" : row.risk_level === "HIGH" ? "HIGH" : "MEDIUM",
+  });
+}
+
+export function createManualIncident(payload: ManualIncidentPayload) {
+  if (!payload.description.trim()) return Promise.reject(new Error("Description is required before creating incident"));
+  if (!payload.location.trim()) return Promise.reject(new Error("Location is required before creating incident"));
+  if (!payload.category.trim()) return Promise.reject(new Error("Category is required before creating incident"));
+  if (!Number.isFinite(payload.people_exposed)) return Promise.reject(new Error("People exposed must be a number"));
+  const id = nextDemoId();
+  const now = new Date().toISOString();
+  pushDemoIncident({
+    incident_id: id,
+    title: payload.description.slice(0, 72),
+    category: payload.category,
+    location: payload.location,
+    status: "ASSIGNED",
+    risk_level: payload.is_active ? "CRITICAL" : "HIGH",
+    risk_score: payload.is_active ? 20 : 12,
+    created_at: now,
+    assigned_officer: "A. Perera",
+    assigned_team: "Electrical Maintenance",
+    reporter_id: `dashboard:${payload.created_by || "officer"}`,
+    reporter_name: payload.created_by || "Duty officer",
+    language: "English",
+    original_text: payload.description,
+    translated_text: payload.description,
+    equipment: null,
+    people_exposed: payload.people_exposed,
+    active: payload.is_active,
+    injury: payload.injury_reported,
+    duplicate_count: 0,
+    qr: false,
+    loop_stage: "alert",
+    severity: 5,
+    likelihood: 4,
+    risk_explanation: "Deterministic risk matrix (severity × likelihood, with active-hazard policy).",
+    guidance: "Move away from the hazard and notify a supervisor.",
+    knowledge_base: "fire_safety.md",
+    guidance_status: "approved",
+    input_channel: "manual",
+    message_type: "text",
+  });
+  return wait({
+    incident_id: id,
+    status: "Assigned",
+    risk_level: payload.is_active ? "CRITICAL" : "HIGH",
+    risk_score: payload.is_active ? 20 : 12,
+    pipeline: ["intake_agent", "incident_agent", "risk_agent", "guidance_agent", "coordination_agent", "repository"],
+    slack_alert_sent: true,
+    input_channel: "manual",
+    input_method: "dashboard",
+    error: null,
+  });
+}
+
+export function simulateEmergencyReport(scenario = "smoke") {
+  const samples: Record<string, ManualIncidentPayload> = {
+    electrical: {
+      description: "Electrical panel sparking near the isolator. Three workers nearby.",
+      category: "Electrical",
+      location: "Electrical Room",
+      people_exposed: 3,
+      is_active: true,
+      injury_reported: false,
+    },
+    chemical: {
+      description: "Chemical smell and a small leak at the storage cabinet.",
+      category: "Chemical",
+      location: "Chemical Storage",
+      people_exposed: 2,
+      is_active: true,
+      injury_reported: false,
+    },
+    machine: {
+      description: "Guard missing on machine 4. Belt is still running.",
+      category: "Machine",
+      location: "CNC Area",
+      people_exposed: 4,
+      is_active: true,
+      injury_reported: false,
+    },
+    smoke: {
+      description: "There is smoke coming from machine 4. Three workers are nearby.",
+      category: "Fire/Smoke",
+      location: "Machine 4",
+      people_exposed: 3,
+      is_active: true,
+      injury_reported: false,
+    },
+  };
+  return createManualIncident(samples[scenario] || samples.smoke);
 }
 
 const DEMO_HANDOVERS: Array<{

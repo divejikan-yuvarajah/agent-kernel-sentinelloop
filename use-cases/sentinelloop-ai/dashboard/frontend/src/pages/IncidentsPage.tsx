@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -18,6 +18,7 @@ import { fetchIncidents } from "../api/client";
 import { incidentThumbnail } from "../data/demoImages";
 import { EvidenceImage } from "../components/EvidenceImage";
 import { useDemoMode } from "../demo/useDemoMode";
+import { useIncidentPolling } from "../hooks/useIncidentPolling";
 
 function formatDate(value: string | null) {
   if (!value) return "—";
@@ -65,6 +66,20 @@ export function IncidentsPage() {
       cancelled = true;
     };
   }, [risk, channel, messageType, language, demo]);
+
+  const loadIncidents = useCallback(
+    () =>
+      fetchIncidents({
+        limit: 50,
+        sort_by: "newest",
+        risk_level: risk === "ALL" ? undefined : risk,
+        source_channel: channel === "ALL" ? undefined : channel,
+        language: language === "ALL" ? undefined : language,
+        message_type: messageType === "ALL" ? undefined : messageType,
+      }).then((payload) => payload.items),
+    [risk, channel, messageType, language, demo],
+  );
+  const pulseIds = useIncidentPolling(loadIncidents, rows, setRows, !loading);
 
   const visible = rows.filter((item) => {
     const haystack = [
@@ -119,8 +134,8 @@ export function IncidentsPage() {
           options={[
             { value: "ALL", label: "All channels" },
             { value: "telegram", label: "Telegram" },
-            { value: "slack", label: "Slack" },
-            { value: "email", label: "Email" },
+            { value: "manual", label: "Manual Entry" },
+            { value: "qr", label: "QR Report" },
           ]}
         />
         <SelectDropdown
@@ -218,7 +233,7 @@ export function IncidentsPage() {
                       incident.category ?? "—",
                       incident.location ?? "—",
                       incident.reporter_name || (incident.is_anonymous ? "Anonymous" : "Worker"),
-                      <ChannelBadge key="channel" channel={incident.input_channel} elapsed={incident.elapsed_time} />,
+                      <ChannelBadge key="channel" channel={incident.source === "QR_TAGGED" ? "qr" : incident.input_channel} elapsed={incident.elapsed_time} />,
                       <RiskIndicator
                         key="risk"
                         level={normalizeRisk(incident.risk_level ?? "MEDIUM")}
@@ -238,6 +253,7 @@ export function IncidentsPage() {
               <IncidentOverviewCard
                 key={`${incident.incident_id}-card`}
                 incident={incident}
+                pulse={pulseIds.includes(incident.incident_id)}
                 imageSrc={incidentThumbnail(incident.incident_id, incident.category, incident.location)}
                 onOpen={(id) => navigate(`/incidents/${id}`)}
               />

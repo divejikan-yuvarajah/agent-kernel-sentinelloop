@@ -166,6 +166,34 @@ class OrchestrationResult(BaseModel):
     error: str | None = None
     idempotent_replay: bool = False
     unsupported: bool = False
+    pipeline_trace: list[str] = []
+    slack_alert_sent: bool = False
+    risk_level: str | None = None
+    risk_score: int | None = None
+
+
+class _SilentOutbound:
+    """No-op worker transport for dashboard and future non-Telegram sources."""
+
+    async def send_text_message(self, *args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        return None
+
+    async def send_guidance(self, *args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        return None
+
+    async def send_clarification(self, *args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        return None
+
+    async def send_verification_prompt(self, *args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        return None
+
+    async def send_worker_text(self, *args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        return None
 
 
 class IncidentOrchestrator:
@@ -231,12 +259,15 @@ class IncidentOrchestrator:
         return (getattr(message, "input_channel", None) or "telegram").strip().lower() or "telegram"
 
     def _outbound(self, message: NormalizedInboundMessage) -> Any:
-        del message
+        if self._channel(message) != "telegram":
+            return _SilentOutbound()
         if self.telegram is None:
             self.telegram = TelegramTransport()
         return self.telegram
 
     async def _ack(self, message: NormalizedInboundMessage, text: str) -> dict[str, Any] | None:
+        if self._channel(message) != "telegram":
+            return None
         try:
             return await self._outbound(message).send_text_message(message.sender_id, text)
         except TelegramSendError:
@@ -290,7 +321,17 @@ class IncidentOrchestrator:
         return loaded, store
 
     def _result(self, message: NormalizedInboundMessage, **kwargs: Any) -> OrchestrationResult:
+        kwargs.setdefault("pipeline_trace", list(self.pipeline_trace))
         return OrchestrationResult(provider_message_id=message.provider_message_id, **kwargs)
+
+    async def process_inbound_message(
+        self,
+        message: NormalizedInboundMessage | dict[str, Any],
+        *,
+        session: Any | None = None,
+    ) -> OrchestrationResult:
+        """Channel-neutral entry. Telegram, dashboard, and future sources share this path."""
+        return await self.process_incoming_telegram_message(message, session=session)
 
     async def process_incoming_telegram_message(
         self,
@@ -304,7 +345,10 @@ class IncidentOrchestrator:
             message.input_channel = "telegram"
         self.pipeline_trace = []
         channel = self._channel(message)
-        self._note("incoming_telegram_reports")
+        if channel == "telegram":
+            self._note("incoming_telegram_reports")
+        else:
+            self._note(f"incoming_{channel}_reports")
         key = event_key(channel, message.provider_message_id)
         cached = self.idempotency.get(key)
         if cached is not None:
@@ -1022,47 +1066,39 @@ class IncidentOrchestrator:
 
         if guidance is not None:
             worker_text = guidance.worker_text() if hasattr(guidance, "worker_text") else ""
-            if worker_text:
+            if worker_text and self._channel(message) == "telegram":
                 body = f"{worker_text}\n\n{ACK_LINE}"
                 reply_markup = None
-                if self._channel(message) == "telegram":
-                    card = format_status_card(
-                        category=merged.get("hazard_category"),
-                        risk=merged.get("current_risk_level") or _as_dict(merged.get("risk")).get("level"),
-                        location=merged.get("location") or merged.get("qr_location"),
-                        team=merged.get("assigned_team"),
-                        status=to_display_status(merged.get("status")) or "Received",
-                        language=merged.get("language") or _cache_get(session, NV_LANGUAGE),
-                    )
-                    body = f"{card}\n\n{worker_text}"
-                    reply_markup = inline_keyboard(merged.get("incident_id"))
+                card = format_status_card(
+                    category=merged.get("hazard_category"),
+                    risk=merged.get("current_risk_level") or _as_dict(merged.get("risk")).get("level"),
+                    location=merged.get("location") or merged.get("qr_location"),
+                    team=merged.get("assigned_team"),
+                    status=to_display_status(merged.get("status")) or "Received",
+                    language=merged.get("language") or _cache_get(session, NV_LANGUAGE),
+                )
+                body = f"{card}\n\n{worker_text}"
+                reply_markup = inline_keyboard(merged.get("incident_id"))
                 try:
                     outbound = self._outbound(message)
-                    if reply_markup is not None:
-                        await outbound.send_text_message(
-                            message.sender_id,
-                            body,
-                            reply_to_message_id=message.provider_message_id,
-                            reply_markup=reply_markup,
-                        )
-                    else:
-                        await outbound.send_guidance(
-                            message.sender_id,
-                            body,
-                            reply_to_message_id=message.provider_message_id,
-                        )
+                    await outbound.send_text_message(
+                        message.sender_id,
+                        body,
+                        reply_to_message_id=message.provider_message_id,
+                        reply_markup=reply_markup,
+                    )
                     self._trace("telegram_guidance")
                     log.info("guidance_sent")
-                    if self._channel(message) == "telegram":
-                        log.info("telegram_guidance_sent")
+                    log.info("telegram_guidance_sent")
                     guidance_sent = True
                     self._note("guidance_delivery_success")
                 except TelegramSendError:
                     log.warning("guidance_send_failed")
-                    if self._channel(message) == "telegram":
-                        log.warning("telegram_delivery_failed")
+                    log.warning("telegram_delivery_failed")
                     self._note("guidance_delivery_failure")
                     await self._audit(merged, "guidance_send_failed", message="worker channel delivery failed")
+            elif worker_text:
+                guidance_sent = True
 
         coordination_completed = False
         if merged.get("incident_id") or merged.get("id"):
@@ -1392,9 +1428,15 @@ class IncidentOrchestrator:
                     status=to_repository_status(STATUS_NEW),
                     original_message_id=message.provider_message_id,
                     original_message_text=merged.get("raw_text"),
-                    telegram_chat_id=message.chat_id or message.sender_id,
-                    telegram_user_id=message.telegram_user_id,
-                    telegram_message_id=message.provider_message_id,
+                    telegram_chat_id=(
+                        message.chat_id or message.sender_id if self._channel(message) == "telegram" else None
+                    ),
+                    telegram_user_id=message.telegram_user_id if self._channel(message) == "telegram" else None,
+                    telegram_message_id=message.provider_message_id if self._channel(message) == "telegram" else None,
+                    input_method=getattr(message, "input_method", None),
+                    created_by=getattr(message, "created_by", None),
+                    source_metadata=_source_metadata(message, merged),
+                    pipeline_version=getattr(message, "pipeline_version", None),
                 )
             )
             mapping = _as_dict(created)
@@ -1667,6 +1709,7 @@ class IncidentOrchestrator:
         coordination_completed: bool,
         error: str | None,
     ) -> OrchestrationResult:
+        risk = merged.get("risk") if isinstance(merged.get("risk"), dict) else {}
         return self._result(
             message,
             session_id=getattr(session, "id", None) or merged.get("session_id"),
@@ -1681,6 +1724,9 @@ class IncidentOrchestrator:
             evidence_attached=evidence_attached,
             status=to_display_status(merged.get("status")),
             error=error,
+            slack_alert_sent=coordination_completed,
+            risk_level=merged.get("current_risk_level") or risk.get("level"),
+            risk_score=risk.get("score"),
         )
 
 
@@ -1752,3 +1798,31 @@ async def process_incoming_telegram_message(
 ) -> OrchestrationResult:
     orch = orchestrator or (IncidentOrchestrator(**kwargs) if kwargs else get_incident_orchestrator())
     return await orch.process_incoming_telegram_message(message)
+
+
+async def process_inbound_message(
+    message: NormalizedInboundMessage | dict[str, Any],
+    *,
+    orchestrator: IncidentOrchestrator | None = None,
+    **kwargs: Any,
+) -> OrchestrationResult:
+    orch = orchestrator or (IncidentOrchestrator(**kwargs) if kwargs else get_incident_orchestrator())
+    return await orch.process_inbound_message(message)
+
+
+def _source_metadata(message: NormalizedInboundMessage, merged: dict[str, Any]) -> dict[str, Any] | None:
+    extra = getattr(message, "source_metadata", None)
+    payload: dict[str, Any] = {}
+    if isinstance(extra, dict):
+        payload.update(extra)
+    channel = (getattr(message, "input_channel", None) or "telegram").strip().lower()
+    payload.setdefault("input_channel", channel)
+    if getattr(message, "input_method", None):
+        payload.setdefault("input_method", message.input_method)
+    if getattr(message, "created_by", None):
+        payload.setdefault("created_by", message.created_by)
+    if getattr(message, "pipeline_version", None):
+        payload.setdefault("pipeline_version", message.pipeline_version)
+    if merged.get("hazard_category"):
+        payload.setdefault("hazard_category", merged.get("hazard_category"))
+    return payload or None

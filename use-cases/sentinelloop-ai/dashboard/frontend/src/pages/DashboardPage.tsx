@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -22,6 +22,7 @@ import { incidentThumbnail, recentEvidenceFeed, locationRiskDemo } from "../data
 import { EvidenceImage } from "../components/EvidenceImage";
 import { HandoverPanel } from "../components/HandoverPanel";
 import { useDemoMode } from "../demo/useDemoMode";
+import { useIncidentPolling } from "../hooks/useIncidentPolling";
 
 const FALLBACK_STAGES: LoopStage[] = [
   { stage: "report", label: "Report", count: 0, percentage: 0 },
@@ -91,6 +92,12 @@ export function DashboardPage() {
       cancelled = true;
     };
   }, [stage, demo]);
+
+  const loadIncidents = useCallback(
+    () => fetchIncidents({ limit: 8, sort_by: "newest", stage: stage ?? undefined }).then((list) => list.items),
+    [stage, demo],
+  );
+  const pulseIds = useIncidentPolling(loadIncidents, incidents, setIncidents, !loading);
 
   const openCount = summary?.open_incidents ?? 0;
   const operationalStatus = summary?.critical_incidents ? "OPEN" : openCount ? "INVESTIGATING" : "RESOLVED";
@@ -363,7 +370,7 @@ export function DashboardPage() {
             )}
           </div>
         </Panel>
-        <Panel title="Live incident feed">
+        <Panel title="Live Safety Activity">
           <ActivityFeed events={activity.slice(0, 6)} loading={loading} />
         </Panel>
       </div>
@@ -441,6 +448,7 @@ export function DashboardPage() {
                 <IncidentOverviewCard
                   key={incident.incident_id}
                   incident={incident}
+                  pulse={pulseIds.includes(incident.incident_id)}
                   imageSrc={incidentThumbnail(incident.incident_id, incident.category, incident.location)}
                   onOpen={(id) => navigate(`/incidents/${id}`)}
                 />

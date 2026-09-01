@@ -52,6 +52,8 @@ export { RiskAssessmentPanel } from "./components/RiskAssessmentPanel";
 export { RiskDistributionWidget } from "./components/RiskDistributionWidget";
 export { RiskIndicator } from "./components/RiskIndicator";
 export { RouterStatusStrip } from "./components/RouterStatusStrip";
+export { SystemHealthStrip } from "./components/SystemHealthStrip";
+export type { SystemHealth } from "./components/SystemHealthStrip";
 export { SelectDropdown } from "./components/SelectDropdown";
 export { Sidebar } from "./components/Sidebar";
 export { SafetyStatusBadge } from "./components/SafetyStatusBadge";

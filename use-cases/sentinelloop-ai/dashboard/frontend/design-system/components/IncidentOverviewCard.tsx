@@ -2,6 +2,7 @@ import { normalizeRisk } from "../colors";
 import type { IncidentSummary } from "../types";
 import { Badge } from "./Badge";
 import { Card } from "./Card";
+import { ChannelBadge } from "./ChannelBadge";
 import { RiskIndicator } from "./RiskIndicator";
 import { StatusIndicator } from "./StatusIndicator";
 
@@ -10,6 +11,7 @@ type Props = {
   onOpen?: (id: string) => void;
   loading?: boolean;
   imageSrc?: string | null;
+  pulse?: boolean;
 };
 
 function cardState(incident: IncidentSummary) {
@@ -19,18 +21,19 @@ function cardState(incident: IncidentSummary) {
   return "active";
 }
 
-export function IncidentOverviewCard({ incident, onOpen, loading = false, imageSrc = null }: Props) {
+export function IncidentOverviewCard({ incident, onOpen, loading = false, imageSrc = null, pulse = false }: Props) {
   if (loading) {
     return <Card variant="incident-card" loading aria-hidden="true" />;
   }
   const state = cardState(incident);
+  const risk = normalizeRisk(incident.risk_level ?? "MEDIUM");
   const showDuplicate = incident.duplicate_count > 1;
   return (
     <Card
       variant="incident-card"
       riskLevel={incident.risk_level ?? "MEDIUM"}
       role="button"
-      className={`ds-card--incident-${state}`}
+      className={`ds-card--incident-${state}${pulse ? ` ds-card--pulse ds-card--pulse-${risk}` : ""}`}
       onClick={() => onOpen?.(incident.incident_id)}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -60,15 +63,7 @@ export function IncidentOverviewCard({ incident, onOpen, loading = false, imageS
             <Badge title="Location verified by QR scan">QR Tagged</Badge>
           ) : null}
           {incident.input_channel ? (
-            <Badge title={`Reported via ${incident.input_channel}`}>
-              {incident.input_channel === "telegram"
-                ? "💬 Telegram"
-                : incident.input_channel === "slack"
-                  ? "💬 Slack"
-                  : incident.input_channel === "email"
-                    ? "📧 Email"
-                    : incident.input_channel}
-            </Badge>
+            <ChannelBadge channel={incident.source === "QR_TAGGED" ? "qr" : incident.input_channel} />
           ) : null}
           {incident.safety_status ? (
             <Badge title="Responsible AI safety status">{incident.safety_status}</Badge>

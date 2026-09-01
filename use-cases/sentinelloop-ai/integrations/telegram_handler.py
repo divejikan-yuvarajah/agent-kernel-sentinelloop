@@ -664,8 +664,15 @@ class SentinelLoopTelegramHandler(_KernelTelegramHandler):  # type: ignore[misc]
             from integrations.incident_orchestrator import get_incident_orchestrator
 
             orchestrator = get_incident_orchestrator()
+        from services.incident_intake_service import process_incident_input
+
         try:
-            return await orchestrator.process_incoming_telegram_message(normalized)
+            return await process_incident_input(
+                source="telegram",
+                raw_text=normalized.text or normalized.caption or "",
+                message=normalized,
+                orchestrator=orchestrator,
+            )
         except Exception:
             log.exception("telegram_pipeline_failed")
             try:

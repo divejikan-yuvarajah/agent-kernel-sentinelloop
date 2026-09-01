@@ -64,6 +64,9 @@ class NormalizedInboundMessage(BaseModel):
     voice_duration_seconds: float | None = None
     audio_used: bool = False
     input_method: str | None = None
+    created_by: str | None = None
+    pipeline_version: str | None = None
+    source_metadata: dict[str, Any] | None = None
     detected_language: str | None = None
     transcription_cost: float | None = None
     transcription_confidence: float | None = None
