@@ -81,14 +81,21 @@ export function SettingsPage() {
   const [open, setOpen] = useState(false);
   const [savedLabel, setSavedLabel] = useState("Profile queued");
   const [config, setConfig] = useState<GuardrailConfigView | null>(null);
+  const [configError, setConfigError] = useState<string | null>(null);
   const [role, setRole] = useState<OperatorRole>(readOperatorRole);
   const [nameDraft, setNameDraft] = useState(prefs.displayName);
   const [siteDraft, setSiteDraft] = useState(prefs.defaultSite);
 
   useEffect(() => {
     fetchGuardrailConfig()
-      .then(setConfig)
-      .catch(() => setConfig(null));
+      .then((payload) => {
+        setConfig(payload);
+        setConfigError(null);
+      })
+      .catch((err: Error) => {
+        setConfig(null);
+        setConfigError(err.message);
+      });
   }, [demo]);
 
   useEffect(() => {
@@ -433,6 +440,11 @@ export function SettingsPage() {
 
           <Panel title="AI Safety policies" id="policies">
             <p>Normal users cannot modify these rules. Changes require a configuration deployment.</p>
+            {configError ? (
+              <p className="ds-empty" role="alert">
+                Could not load guardrail policy: {configError}
+              </p>
+            ) : null}
             <dl className="sl-policy-grid">
               <div>
                 <dt>AI Budget Ceiling</dt>

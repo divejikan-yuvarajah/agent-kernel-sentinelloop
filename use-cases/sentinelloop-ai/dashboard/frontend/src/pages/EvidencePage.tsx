@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { AppShell, EvidenceViewer, IncidentOverviewCard, Panel } from "@ds/index";
@@ -28,8 +28,9 @@ export function EvidencePage() {
       .finally(() => setLoading(false));
   }, [demo]);
 
-  const gallery: EvidenceItem[] = demo
-    ? evidenceRecords.map((item) => {
+  const gallery: EvidenceItem[] = useMemo(() => {
+    if (demo) {
+      return evidenceRecords.map((item) => {
         const known = evidenceRecord(item.id);
         const pair = incidentPair(item.incident_id);
         return {
@@ -43,8 +44,39 @@ export function EvidencePage() {
           channel: "channel" in item ? String(item.channel || "") : item.source,
           uploaded_by: "uploaded_by" in item ? String(item.uploaded_by || "") : undefined,
         };
-      })
-    : [];
+      });
+    }
+
+    return rows.flatMap((incident) => {
+      const pair = incidentPair(incident.incident_id, incident.category);
+      const resolved = incident.status === "closed" || incident.status === "resolved";
+      const items: EvidenceItem[] = [
+        {
+          id: `${incident.incident_id}-before`,
+          label: incident.title || "Worker evidence",
+          source: "worker",
+          timestamp: incident.created_at || "",
+          kind: "image",
+          stage: "intake",
+          imageSrc: pair.before,
+          channel: incident.source || "telegram",
+        },
+      ];
+      if (resolved) {
+        items.push({
+          id: `${incident.incident_id}-after`,
+          label: "Resolution evidence",
+          source: "officer",
+          timestamp: incident.updated_at || incident.created_at || "",
+          kind: "image",
+          stage: "verification",
+          imageSrc: pair.after,
+          channel: incident.source || "telegram",
+        });
+      }
+      return items;
+    });
+  }, [demo, rows]);
 
   return (
     <AppShell title="Evidence review" operationalStatus="INVESTIGATING">

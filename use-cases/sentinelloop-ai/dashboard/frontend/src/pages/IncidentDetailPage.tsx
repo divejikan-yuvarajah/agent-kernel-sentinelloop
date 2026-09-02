@@ -357,12 +357,17 @@ export function IncidentDetailPage() {
                     <article>
                       <p className="ds-metric__label">Before</p>
                       <EvidenceImage src={pair.before} alt="Hazard image" />
-                      <p>Risk: High</p>
+                      <p>Risk: {detail.risk.risk_level ?? detail.safety?.risk_level ?? "Unknown"}</p>
                     </article>
                     <article>
                       <p className="ds-metric__label">After</p>
                       <EvidenceImage src={pair.after} alt="Fixed image" />
-                      <p>Risk: Closed</p>
+                      <p>
+                        Risk:{" "}
+                        {detail.status === "closed" || detail.status === "resolved"
+                          ? "Closed"
+                          : detail.risk.risk_level ?? detail.safety?.risk_level ?? "Monitoring"}
+                      </p>
                     </article>
                   </div>
                 </Panel>
@@ -488,8 +493,8 @@ export function IncidentDetailPage() {
                   }
                 />
                 <GuidancePanel
-                  guidance={detail.safety?.guidance || detail.safety?.guidance_verification.generated_guidance}
-                  knowledgeBase={detail.safety?.guidance_verification.knowledge_base_file}
+                  guidance={detail.safety?.guidance || detail.safety?.guidance_verification?.generated_guidance}
+                  knowledgeBase={detail.safety?.guidance_verification?.knowledge_base_file}
                 />
               </div>
 
@@ -508,9 +513,9 @@ export function IncidentDetailPage() {
                     </Button>
                   </div>
                   <h3 style={{ marginTop: 16 }}>Generated Guidance</h3>
-                  <p>Matched Knowledge Base: {detail.safety.guidance_verification.knowledge_base_file ?? "—"}</p>
-                  <p>Supported Lines: {detail.safety.guidance_verification.supported_lines ?? "—"}</p>
-                  <p>Hallucination Check: {detail.safety.guidance_verification.hallucination_check ?? "—"}</p>
+                  <p>Matched Knowledge Base: {detail.safety.guidance_verification?.knowledge_base_file ?? "—"}</p>
+                  <p>Supported Lines: {detail.safety.guidance_verification?.supported_lines ?? "—"}</p>
+                  <p>Hallucination Check: {detail.safety.guidance_verification?.hallucination_check ?? "—"}</p>
                   <h3 style={{ marginTop: 16 }}>Guardrail Timeline</h3>
                   {detail.safety.timeline.map((event, index) => (
                     <p key={`${event.title}-${index}`} className="ds-mono">

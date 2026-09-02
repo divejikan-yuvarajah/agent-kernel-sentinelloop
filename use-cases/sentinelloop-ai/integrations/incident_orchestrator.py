@@ -2021,7 +2021,13 @@ _default_orchestrator: IncidentOrchestrator | None = None
 def get_incident_orchestrator() -> IncidentOrchestrator:
     global _default_orchestrator
     if _default_orchestrator is None:
-        _default_orchestrator = IncidentOrchestrator()
+        try:
+            from database.repository import IncidentRepository
+
+            _default_orchestrator = IncidentOrchestrator(repository=IncidentRepository())
+        except Exception:
+            log.exception("IncidentRepository unavailable; orchestrator running without persistence")
+            _default_orchestrator = IncidentOrchestrator()
     return _default_orchestrator
 
 

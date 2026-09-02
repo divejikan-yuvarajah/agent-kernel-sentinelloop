@@ -60,7 +60,6 @@ log = logging.getLogger("sentinelloop.dashboard.audit")
 _CHANNEL_LABEL = {
     "telegram": "Telegram",
     "slack": "Slack",
-    "telegram": "Telegram",
 }
 _LANGUAGE_NAME = {
     "si": "Sinhala",
@@ -633,6 +632,9 @@ def _voice_reply_meta(updates: list) -> dict[str, Any]:
         }:
             return meta
     return {}
+
+
+def build_audit_export(
     *,
     incident: Incident,
     assignments: list[Assignment],

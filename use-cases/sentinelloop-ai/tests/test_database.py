@@ -282,6 +282,7 @@ def test_create_incident_inserts_real_columns(repo: IncidentRepository, backend:
         "created_by",
         "source_metadata",
         "pipeline_version",
+        "is_sandbox",
     }
 
 

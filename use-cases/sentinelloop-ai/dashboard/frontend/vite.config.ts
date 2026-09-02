@@ -22,8 +22,36 @@ const apiProxy = {
   },
 };
 
+const SPA_HTML_ROUTES = new Set(["/sandbox", "/sandbox/", "/report", "/report/", "/try", "/try/"]);
+
+function spaHtmlRoutes() {
+  return {
+    name: "spa-html-routes",
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        const raw = req.url || "";
+        const path = raw.split("?")[0];
+        if (SPA_HTML_ROUTES.has(path)) {
+          req.url = "/index.html";
+        }
+        next();
+      });
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        const raw = req.url || "";
+        const path = raw.split("?")[0];
+        if (SPA_HTML_ROUTES.has(path)) {
+          req.url = "/index.html";
+        }
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), spaHtmlRoutes()],
   resolve: {
     alias: {
       "@ds": fileURLToPath(new URL("./design-system", import.meta.url)),

@@ -300,3 +300,6 @@ def test_public_landing_page_is_separate_from_dashboard_route():
     assert "Dashboard" in navbar
     loop = (FRONTEND / "design-system" / "components" / "LoopRing.tsx").read_text(encoding="utf-8")
     assert 'mode?: "filter" | "showcase"' in loop
+    vite = (FRONTEND / "vite.config.ts").read_text(encoding="utf-8")
+    assert "spa-html-routes" in vite
+    assert '"/sandbox"' in vite
