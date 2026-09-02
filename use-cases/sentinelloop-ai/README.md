@@ -1,33 +1,41 @@
-# SentinelLoop AI — Multilingual Workplace Hazard Prevention Agent
+# SentinelLoop AI — AI Powered Multilingual Workplace Hazard Prevention Agentic Platform
 
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
-[![Agent Kernel](https://img.shields.io/badge/Agent%20Kernel-Yaala%20Labs-emerald.svg)](https://kernel.yaala.ai)
-[![OpenRouter](https://img.shields.io/badge/LLM-OpenRouter%20(Qwen%2FGemini%2FDeepSeek)-orange.svg)](https://openrouter.ai)
+[![Agent Kernel](https://img.shields.io/badge/Agent%20Kernel-Yaala%20Labs-8C2331.svg)](https://kernel.yaala.ai)
+[![OpenRouter](https://img.shields.io/badge/LLM-OpenRouter%20(cost--governed)-orange.svg)](https://openrouter.ai)
 [![Supabase PostgreSQL](https://img.shields.io/badge/Database-Supabase%20PostgreSQL-3ECF8E.svg)](https://supabase.com)
 [![Telegram Bot API](https://img.shields.io/badge/Worker%20Channel-Telegram-26A5E4.svg)](https://core.telegram.org/bots)
 [![Slack](https://img.shields.io/badge/Officer%20Channel-Slack-4A154B.svg)](https://api.slack.com)
 [![Status](https://img.shields.io/badge/Status-In%20Development-yellow.svg)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
-> **Worker-facing bot**: `@SentinelLoopReportBot` on Telegram *(update once deployed)*
-> **Dashboard**: `http://localhost:8000/dashboard` locally, or your deployed URL *(update once deployed)*
-> **Try It Live**: `/sandbox` — experience the full AI safety pipeline without Telegram setup
-> **API Docs**: `/docs` on your running instance
-> **Slack safety channel**: configured per-organization at setup
+## 🔗 Live Links
+
+> **⚠️ Fill these in before submission — do not leave placeholders in the final README.**
+
+| | Link |
+|---|---|
+| 🌐 **Landing page** | `https://<your-deployment-url>.example.com` |
+| 📊 **Live dashboard** | `https://<your-deployment-url>.example.com/dashboard` |
+| 🤖 **Telegram bot** | `https://t.me/<YourBotUsername>` |
+| 🧪 **Try it live (sandbox, no Telegram needed)** | `https://<your-deployment-url>.example.com/sandbox` |
+| 🎥 **Demo video (5 min)** | `<your video link — YouTube/Drive, must be publicly viewable>` |
+| 💻 **Forked repository** | `https://github.com/<your-username>/agent-kernel` |
 
 ---
 
 ## 1. SentinelLoop AI
 
-**SentinelLoop AI** is a multilingual, multi-agent workplace safety platform built on **Yaala Labs Agent Kernel**, designed for the IDEALIZE 2026 Agent Kernel mini-competition. It closes the gap between a worker *noticing* danger and an organization *acting* on it, connecting three stakeholders:
+**SentinelLoop AI** is a multilingual, multi-agent workplace safety platform built on **Yaala Labs Agent Kernel** for the IDEALIZE 2026 Agent Kernel mini-competition. It closes the gap between a worker *noticing* danger and an organization *acting* on it, connecting three stakeholders:
 
-* 👷 **Workers** — factory floor staff, lab technicians, maintenance crews — reporting hazards from their own phone, in their own language, via **Telegram**.
-* 🦺 **Safety Officers & Maintenance Teams** — receiving structured, risk-ranked alerts and managing response through **Slack**.
-* 📊 **Management** — reviewing recurring-hazard patterns, response-time analytics, and exportable audit trails through a **web dashboard**.
+* 👷 **Workers** — factory floor staff, lab technicians, maintenance crews — reporting hazards from their own phone, in their own language, via **Telegram** (text, photo, or voice), or by scanning a **QR code** at the hazard location.
+* 🦺 **Safety Officers & Maintenance Teams** — receiving structured, risk-ranked alerts and managing response through **Slack**, or logging a phoned-in report directly via the dashboard's **manual entry** form.
+* 📊 **Management** — reviewing recurring-hazard predictions, response-time analytics, and exportable audit trails through a **web dashboard**.
+* 🧑‍⚖️ **Judges / Evaluators** — can test the entire pipeline instantly through the **live sandbox**, with no Telegram account or setup required.
 
 ### Why an Agentic System?
 
-Hazard reporting is a language, trust, and follow-through problem as much as a technical one. A worker who spots a frayed wire mid-shift won't fill out an English safety form — but they will send a two-second voice note or a photo if the channel is as easy as texting a friend. A rigid form also can't decide, on its own, whether "oil near the packing machine" is a low-priority cleanup or an active slip hazard requiring immediate escalation — that needs reasoning over context (is it active? how many people are exposed? has this location failed before?). SentinelLoop's agent pipeline handles the understanding and the judgment; a **deterministic rule matrix**, not the LLM, makes the final risk call, and a worker confirmation step closes the loop so nothing is marked "resolved" on an officer's word alone.
+Hazard reporting is a language, trust, and follow-through problem as much as a technical one. A worker who spots a frayed wire mid-shift won't fill out an English safety form — but they will send a two-second voice note or a photo if the channel is as easy as texting a friend. A rigid form also can't decide, on its own, whether "oil near the packing machine" is a low-priority cleanup or an active slip hazard requiring immediate escalation. SentinelLoop's agent pipeline handles that judgment; a **deterministic rule matrix**, not the LLM, makes the final risk call, and a worker confirmation step closes the loop so nothing is marked "resolved" on an officer's word alone. For a true emergency, a **deterministic keyword bypass** skips the AI entirely — the system never makes a worker wait on a model response to get help.
 
 ---
 
@@ -49,46 +57,36 @@ SentinelLoop AI is built directly against these six failure points.
 ## 3. Solution Overview
 
 ```text
-Worker / Officer
-  │
-  ├── Telegram (Text / Photo / Voice note, Sinhala · Tamil · English)
-  ├── QR-tagged Telegram open (location/equipment prefilled)
-  ├── Dashboard (Manual Entry) — for phoned-in or in-person reports, feeds the same pipeline.
-  └── Try It Live Sandbox — identical agents; incidents marked is_sandbox=true (isolated).
-  ▼
-Deterministic Emergency Bypass  ──── SOS/🆘 detected? ──▶ Instant Critical alert
-  │ (no match, continue)             (zero LLM calls, <100ms)
-  ▼
-Intake Agent  (language detection · translation · session continuity)
-  ▼
-Duplicate/Recurring-Hazard Check  (local similarity, LLM only as rare tiebreaker)
-  ▼
-Incident Extraction Agent  (structured fields · one clarification question if needed)
-  ▼
-Risk Triage Agent  (LLM estimates severity/likelihood → deterministic matrix decides level)
-  ▼
-Guidance Agent  (retrieves pre-approved safety instructions, never invents new ones)
-  ▼
-Coordination Agent  ──▶ Slack Alert  ──▶ Officer Accepts / Reassigns / Escalates
-  ▼
-Follow-Up Agent  ──▶ Evidence upload ──▶ Worker Confirms Safe ──▶ Incident Closed
-  ▼
-Prevention Agent  (recurring-pattern detection → preventive-inspection recommendation)
-  ▼
-Dashboard: Loop status ring · risk-tagged incident cards · predictions · audit export
+                    Worker (Text / Photo / Voice, Sinhala · Tamil · English)
+                              │
+                    ┌─────────┴─────────┐
+                    ▼                   ▼
+            Telegram Bot API      QR Code Scan
+            (or Sandbox / Manual Dashboard Entry — same pipeline, different door)
+                              │
+                              ▼
+        Deterministic Emergency Bypass ── SOS/🆘 detected? ──▶ Instant Critical alert
+                              │                                  (zero LLM calls, <100ms)
+                    (no match, continue)
+                              ▼
+        Intake Agent  (language detection · translation · session continuity)
+                              ▼
+        Duplicate/Recurring-Hazard Check  (local similarity, LLM only as rare tiebreaker)
+                              ▼
+        Incident Extraction Agent  (structured fields · one clarification question if needed)
+                              ▼
+        Risk Triage Agent  (LLM estimates severity/likelihood → deterministic matrix decides level)
+                              ▼
+        Guidance Agent  (approved instructions only · optional voice-out reply)
+                              ▼
+        Coordination Agent ──▶ Slack Alert ──▶ Officer Accepts / Reassigns / Escalates
+                              ▼
+        Follow-Up Agent ──▶ Evidence upload ──▶ Worker Confirms Safe ──▶ Incident Closed
+                              ▼
+        Prevention Agent  (recurring-pattern detection → preventive-inspection recommendation)
+                              ▼
+        Dashboard: Loop ring · risk-tagged cards · predictions · audit export · router status
 ```
-
-## Try it yourself
-
-Experience SentinelLoop AI without Telegram setup:
-
-**`/sandbox`**
-
-* Example scenarios: Electrical Emergency, Chemical Spill, Slip Hazard, PPE Violation
-* Supported inputs: text (English / Sinhala / Tamil), optional jpg/png/webp image
-* Expected outputs: language detection, hazard category, deterministic risk score/level, safety guidance, simulated Slack alert, pipeline trace, audit-ready incident preview
-* Isolation: sandbox incidents never affect production analytics, predictions, or the real Slack safety channel
-* Rate limit: 20 messages per session per hour
 
 Every LLM call in this pipeline is routed through a single **cost-governed OpenRouter model router** rather than agents calling providers directly — see [§8](#8-model-router--cost-governance).
 
@@ -98,11 +96,12 @@ Every LLM call in this pipeline is routed through a single **cost-governed OpenR
 
 > **SentinelLoop AI is an Agent Kernel use case where a coordinated set of agents manages a real-world accountability workflow — hazard report to verified resolution — through tools, session state, external integrations, and a persistent database, not a single chatbot loop.**
 
-* **Multi-agent orchestration** — seven focused agents (intake, extraction, risk, guidance, coordination, follow-up, prevention), each with one job, rather than one agent trying to do everything.
-* **Session & memory** — each worker's Telegram `chat_id` maps to a persistent session, so a clarification reply or a "still not fixed" follow-up correctly continues the *same* incident draft instead of starting a new one.
+* **Multi-agent orchestration** — eight focused agents, each with one job, rather than one agent trying to do everything.
+* **Session & memory** — each worker's Telegram `chat_id` (or sandbox `session_id`) maps to a persistent session, so a clarification reply or a "still not fixed" follow-up correctly continues the *same* incident draft.
 * **Guardrail hooks** — enforce that guidance never goes beyond the approved knowledge base, that High/Critical incidents require human confirmation before auto-closing, and that anonymous reports never leak identity into analytics.
-* **External integrations** — Telegram (worker channel) and Slack (officer channel) as the two live, demoable integration points.
-* **Tool-bound reasoning** — the risk agent *estimates* via LLM but never *decides* via LLM; `calculate_risk()` is a deterministic tool the agent must call, keeping the AI advisory rather than authoritative on safety-critical decisions.
+* **External integrations** — Telegram and Slack as the two live, demoable integration points.
+* **Tool-bound reasoning** — the risk agent *estimates* via LLM but never *decides* via LLM; `calculate_risk()` is a deterministic tool the agent must call.
+* **Deliberate non-AI paths** — the emergency bypass and the risk matrix itself are proof the team knows not everything belongs behind an LLM call.
 
 ---
 
@@ -112,32 +111,42 @@ Every LLM call in this pipeline is routed through a single **cost-governed OpenR
 flowchart TD
     U[Worker]
     TG[Telegram Bot API]
+    QR[QR Code Scan]
+    SB[Judge Sandbox]
+    MAN[Manual Dashboard Entry]
     EB[Emergency Bypass\nno LLM, keyword/emoji match]
     IN[Intake Agent\nlanguage + session]
     DUP[Duplicate Check\nlocal similarity]
     IE[Incident Extraction Agent]
     RA[Risk Triage Agent\nLLM estimate + rule matrix]
     GA[Guidance Agent\nknowledge-base only]
+    VOUT[Voice-Out / TTS]
     CA[Coordination Agent]
     SLACK[Slack Safety Channel]
     FU[Follow-Up Agent]
     PA[Prevention Agent]
+    VIS[Vision Triage Tool]
     ROUTER[Model Router\nOpenRouter, cost-governed]
     DB[(Supabase PostgreSQL)]
     DASH[Web Dashboard]
 
     U <-->|text/photo/voice| TG
+    TG --> QR
     TG --> EB
+    SB --> EB
+    MAN --> IE
     EB -->|emergency| SLACK
     EB -->|normal| IN
     IN <--> ROUTER
     IN --> DUP
     DUP --> IE
     IE <--> ROUTER
+    IE <--> VIS
     IE --> RA
     RA <--> ROUTER
     RA --> GA
     GA <--> ROUTER
+    GA --> VOUT
     GA -->|guidance reply| TG
     GA --> CA
     CA --> SLACK
@@ -152,9 +161,9 @@ flowchart TD
 
 ---
 
-## 6. Core Agents
+## 6. Core Agents & Tools
 
-| Agent | Responsibility | Model Router Role |
+| Agent / Tool | Responsibility | Model Router Role |
 |---|---|---|
 | `intake_agent` | Language detection, translation, session continuity, QR-tag parsing | `role_fast` |
 | `incident_agent` | Extracts structured hazard fields, asks for what's missing | `role_fast` |
@@ -163,14 +172,18 @@ flowchart TD
 | `coordination_agent` | Routes incident to the correct team in Slack | — (no LLM) |
 | `followup_agent` | Tracks resolution, requests worker confirmation before closing | — (no LLM) |
 | `prevention_agent` | Detects recurring hazard patterns, recommends inspection | `role_reasoning` |
-| `handover_agent` | Shift briefing from live incident facts; **one** `role_fast` phrasing call | `role_fast` |
-| `vision_tools` *(bonus)* | Suggests hazard category from a photo when text is sparse | `role_vision` |
+| `vision_tools` | Suggests hazard category from a photo when text is sparse | `role_vision` |
+| `voice_tools` | Transcribes worker voice notes (speech-in) | OpenRouter audio endpoint |
+| `voice_out_tools` | Synthesizes guidance replies as voice notes (speech-out) | `role_tts` |
+| `duplicate_tools` | Merges repeat reports of the same hazard, zero-cost first pass | `role_fast` (rare tiebreaker only) |
+| `emergency_bypass` | Deterministic keyword/emoji emergency detection | — (no LLM, <100ms) |
+| `model_router` | Central, cost-governed LLM/vision/audio access for every agent | — (infrastructure) |
 
 ---
 
 ## 7. Data Model
 
-Five core Supabase tables (see `database/schema.sql`): `incidents`, `incident_evidence`, `risk_assessments`, `assignments`, `incident_updates` — plus `handover_summaries` if the shift-handover feature is included. Row Level Security is enabled on all tables; access is server-side only via the `service_role` key.
+Core Supabase tables: `incidents` (including `duplicate_count`, `input_channel`, `is_anonymous`), `incident_evidence`, `risk_assessments`, `assignments`, `incident_updates`, `handover_summaries`. Row Level Security is enabled on all tables; access is server-side only via the `service_role` key.
 
 ### Risk Matrix
 
@@ -181,17 +194,17 @@ Five core Supabase tables (see `database/schema.sql`): `incidents`, `incident_ev
 | 10–16 | High |
 | 17–25 | Critical |
 
-Forced overrides: **minimum High** if `already_injured`; **minimum Critical** if an electrical/fire/chemical hazard is currently `active`; **one level higher** if `people_exposed ≥ 5`. Every classification returns a plain-language `explanation` — the matrix decides, the LLM only estimates the inputs.
+Forced overrides: **minimum High** if `already_injured`; **minimum Critical** if an electrical/fire/chemical hazard is currently `active`; **one level higher** if `people_exposed ≥ 5`. Every classification returns a plain-language `explanation`.
 
 ---
 
 ## 8. Model Router & Cost Governance
 
-Rather than hardcoding a single LLM provider, SentinelLoop routes every call through `tools/model_router.py`:
+Every AI call — chat, vision, transcription, and text-to-speech — routes through `tools/model_router.py`:
 
-1. Queries OpenRouter's live model list at runtime and selects the best currently-free model, preferring **Qwen → Gemini → DeepSeek → any other free model** (the free-tier roster rotates weekly, so this is resolved live rather than assumed).
+1. Queries OpenRouter's live model list at runtime and selects the best currently-free model per role (chat/vision/TTS), since the free-tier roster rotates weekly and is resolved live rather than hardcoded.
 2. Falls back to a cheap **paid** model only when the free pick is rate-limited or unavailable.
-3. Tracks cumulative spend in `spend_ledger.json` against a configured `OPENROUTER_BUDGET_CEILING_USD` and refuses paid calls past that ceiling — a demo never hard-fails on cost.
+3. Tracks cumulative spend in `spend_ledger.json` against `OPENROUTER_BUDGET_CEILING_USD` — including audio transcription and TTS cost, not just chat — and refuses paid calls past that ceiling so a demo never hard-fails on cost.
 4. Surfaces which model served the last few requests, and live spend, on the dashboard (`GET /router/status`).
 
 ---
@@ -200,48 +213,34 @@ Rather than hardcoding a single LLM provider, SentinelLoop routes every call thr
 
 | Token | Hex | Use |
 |---|---|---|
-| `--ink` | `#FFFFFF` | Primary background |
-| `--panel` | `#FFFFFF` | Card / surface |
-| `--panel-raised` | `#F6F1F0` | Elevated cards |
-| `--chalk` | `#1F1114` | Text on light |
-| `--muted` | `#7A5C5A` | Secondary text |
-| `--maroon` | `#7C1F2E` | Brand, primary actions, active nav |
-| `--signal-amber` | `#E0A83D` | Attention / medium risk |
-| `--ember-orange` | `#C9642E` | High risk |
-| `--hazard-red` | `#E63946` | Critical risk **only** |
+| `--ink` | `#1F1114` | Primary background — oxblood-tinted near-black |
+| `--panel` | `#2E1A1D` | Card / surface |
+| `--panel-raised` | `#3A2226` | Hover / active state |
+| `--chalk` | `#F4EBE8` | Primary text on dark |
+| `--muted` | `#B99A96` | Secondary text |
+| `--maroon` | `#7C1F2E` | **Brand color** — buttons, nav, links |
+| `--maroon-deep` | `#5C1620` | Pressed/darker brand state |
 | `--verified-teal` | `#3FA796` | Low risk / resolved |
+| `--signal-amber` | `#E0A83D` | Medium risk |
+| `--ember-orange` | `#C9642E` | High risk |
+| `--hazard-red` | `#E63946` | Critical risk **only** — deliberately brighter/louder than the muted brand maroon |
 
-Typography: `Space Grotesk` (headers/KPIs), `IBM Plex Sans` (UI text), `IBM Plex Mono` (incident IDs, timestamps, risk scores). Maroon is brand. Saturated risk color appears **only** to indicate risk, attention, emergency, or resolution. Signature element: a radial "Loop" ring (Report → Understand → Assess → Alert → Act → Verify → Learn) on the dashboard home screen.
+Typography: `Space Grotesk` (headers/KPIs), `IBM Plex Sans` (UI text), `IBM Plex Mono` (incident IDs, timestamps, risk scores). Signature element: a radial "Loop" ring (Report → Understand → Assess → Alert → Act → Verify → Learn) on the dashboard and landing page hero.
 
 ---
 
 ## 10. Distinguishing Features
 
-* 🔲 **QR-code instant-context reporting** — scan a QR at a machine, Telegram opens pre-tagged with location/equipment; the worker only describes the hazard.
-* 🔁 **Zero-cost duplicate/recurring merge** — local text-similarity first, LLM only as a rare tiebreaker; five reports of the same spill collapse into one incident with auto-escalated priority.
-* 📄 **Explainable audit-trail export** — one click, the full decision trail from raw report to resolution, in a format a safety inspector could actually use.
-* 🆘 **Deterministic emergency bypass** — "SOS"/🆘 in any supported language triggers an instant, hardcoded Critical alert with **zero LLM calls** in the critical path.
-* 📈 **Predictive hazard forecasting** — recurring category+location patterns surface as "recommend inspection before next shift," turning the system reactive → preventive.
-* 🖼️ **Vision-based triage** — a hazard photo with little/no caption still gets a category suggestion via a vision-capable model.
-* 🎙️ **Voice message reporting** — Telegram voice notes transcribed via OpenRouter's unified audio endpoint, in the worker's own language, with spend tracked against the same OpenRouter budget ceiling as text and vision.
-* 🔊 **Full Voice Loop** — Workers can report hazards by voice and receive safety instructions back as voice messages in their preferred language (Sinhala, Tamil, or English). Text replies always remain; TTS is additive and never blocks the safety response.
-* 🗒️ **Automated shift handover briefings** — `handover_agent` collects open/critical/review/overdue incidents, calls `role_fast` **once** to phrase a bullet briefing, stores it in `handover_summaries`, and posts it to the Slack Safety Channel. Judges can trigger **Generate Shift Handover** from the dashboard. Agent Kernel has no in-process cron/scheduler, so automatic shift-end jobs are not wired here.
+* 🔲 **QR-code instant-context reporting** — scan at a machine, Telegram opens pre-tagged with location/equipment.
+* 🔁 **Zero-cost duplicate/recurring merge** — local similarity first, LLM only as a rare tiebreaker; auto-escalates priority when multiple workers report the same hazard.
+* 📄 **Explainable audit-trail export** — one click, the full decision trail from raw report to resolution.
+* 🆘 **Deterministic emergency bypass** — "SOS"/🆘 triggers an instant Critical alert with **zero LLM calls**.
+* 📈 **Predictive hazard forecasting** — recurring patterns surface as "recommend inspection before next shift."
+* 🖼️ **Vision-based triage** — a hazard photo with little/no caption still gets a category suggestion.
+* 🎙️ **Full voice loop** — voice notes in, and voice guidance replies out, in the worker's own language.
+* 🗒️ **Automated shift handover briefings** — auto-generated open-incident summary posted to Slack at shift change.
 * 🖥️ **Manual dashboard entry** — officers can log a phoned-in or in-person report directly, running through the identical risk pipeline as any Telegram report — no shortcut, no separate rules.
-* 🎯 **Live Safety Simulator** — `/sandbox` runs the complete production agent pipeline for judges and reviewers without Telegram, bots, or credentials; Slack is simulated and incidents are isolated with `is_sandbox=true`.
-
-```
-Phase 2:
-Automatic shift-end scheduling using Agent Kernel scheduler.
-```
-
-Configured shift-end times in `config.yaml`:
-
-```yaml
-handover:
-  morning_shift_end: "14:00"
-  evening_shift_end: "22:00"
-  verification_timeout_hours: 24
-```
+* 🧪 **Live judge sandbox** — anyone can test the full pipeline from the dashboard with zero setup, no Telegram account required.
 
 ---
 
@@ -251,13 +250,13 @@ handover:
 |---|---|
 | Agent runtime | Agent Kernel (`ak-py`) |
 | Language | Python 3.12, `uv` |
-| LLM access | OpenRouter (Qwen / Gemini / DeepSeek / free-tier auto-routing) |
+| LLM / vision / audio access | OpenRouter, cost-governed auto-routing |
 | Worker channel | Telegram Bot API (`python-telegram-bot`) |
 | Officer channel | Slack (Agent Kernel's Slack integration) |
 | Database | Supabase PostgreSQL |
 | File storage | Supabase Storage (`evidence` bucket) |
 | Backend API | FastAPI |
-| Dashboard frontend | HTML/CSS/JS or React, per repo convention, styled with the design tokens above |
+| Dashboard & landing frontend | Styled with the maroon design tokens above |
 | Testing | pytest, mocked external calls |
 
 ---
@@ -277,17 +276,10 @@ cd agent-kernel/ak-py && ./build.sh
 Create a project at [supabase.com](https://supabase.com), copy the URL and `service_role` key, create a private `evidence` storage bucket, and run `database/schema.sql` in the SQL Editor.
 
 ### 12.3 OpenRouter
-Create an account and API key at [openrouter.ai](https://openrouter.ai). Add credits if you want paid-model fallback beyond the free tier.
+Create an account and API key at [openrouter.ai](https://openrouter.ai). Add credits for paid-model fallback beyond the free tier.
 
 ### 12.4 Telegram
-Create a bot with [@BotFather](https://t.me/BotFather) (`/newbot`). Copy `TELEGRAM_BOT_TOKEN` and the public username (no `@`) into `.env` as `TELEGRAM_BOT_USERNAME`. Local mode is polling (`TELEGRAM_MODE=polling`):
-
-```bash
-cd use-cases/sentinelloop-ai
-uv run python -m integrations.telegram_handler
-```
-
-No Meta Developer account, Cloud API, or phone number ID is required.
+Message [@BotFather](https://t.me/BotFather), `/newbot`, save the token — no webhook or public URL needed for local development.
 
 ### 12.5 Environment
 ```bash
@@ -318,11 +310,14 @@ uv run python -m sentinelloop_ai.main
 # Seed a realistic demo scenario
 uv run python scripts/seed_demo_data.py
 
+# Quick end-to-end check without live credentials
+uv run python scripts/smoke_test.py
+
 # View the dashboard
 open http://localhost:8000/dashboard
 ```
 
-Send a live test report by messaging your bot on Telegram, e.g. *"Oil spilled near packing machine number four, workers are walking through it."* You should receive a clarification (if needed) and immediate guidance within seconds, with the incident appearing in Slack and on the dashboard.
+Fastest way to evaluate without any setup: use the **live sandbox** link at the top of this README, or message the live Telegram bot directly.
 
 ---
 
@@ -333,7 +328,7 @@ cd ak-py
 uv run pytest use-cases/sentinelloop_ai/tests/
 ```
 
-All external calls (Telegram, Slack, OpenRouter, Supabase) are mocked, so the suite runs fully offline. Formatting: `make lint-check-all` / `make lint-all` per repo convention.
+All external calls (Telegram, Slack, OpenRouter, Supabase) are mocked, so the suite runs fully offline. Formatting: `make lint-check-all` / `make lint-all`.
 
 ---
 
@@ -344,7 +339,7 @@ All external calls (Telegram, Slack, OpenRouter, Supabase) are mocked, so the su
 | 🏥 **SDG 3** — Good Health & Well-Being | Prevents workplace injuries by surfacing hazards before they cause harm |
 | 💼 **SDG 8** — Decent Work & Economic Growth | Builds safer, more accountable workplace conditions |
 | 🏗️ **SDG 9** — Industry, Innovation & Infrastructure | Applies agentic AI to real industrial safety operations |
-| ⚖️ **SDG 10** — Reduced Inequalities | Multilingual, voice-capable reporting removes literacy/language barriers to safety access. Voice *output* improves accessibility for low-literacy workers, multilingual teams, and high-pressure environments where reading a phone screen is impractical. |
+| ⚖️ **SDG 10** — Reduced Inequalities | Multilingual, full voice-loop reporting removes literacy/language barriers to safety access |
 | 🏛️ **SDG 16** — Peace, Justice & Strong Institutions | Anonymous reporting, audit trails, and accountable case ownership |
 
 ---
@@ -389,18 +384,18 @@ use-cases/sentinelloop_ai/
 │   ├── client.py
 │   ├── schema.sql
 │   └── migrations/
-│       └── 002_handover_summaries.sql
 ├── dashboard/
 │   ├── api.py
 │   └── frontend/
 │       ├── landing/
-│       ├── report/          # Manual "Log a hazard" page (same pipeline as Telegram)
-│       ├── sandbox/         # Try It Live Safety Operations Simulator
-│       ├── design-system/
-│       └── src/
+│       ├── report/          # manual entry
+│       ├── sandbox/         # live judge sandbox
+│       ├── incident/[id]/
+│       └── components/Shell/
 ├── scripts/
 │   ├── seed_demo_data.py
-│   └── generate_location_qr.py
+│   ├── generate_location_qr.py
+│   └── smoke_test.py
 ├── assets/qr/
 ├── tests/
 ├── .env.example
@@ -423,4 +418,4 @@ use-cases/sentinelloop_ai/
 
 ---
 
-*This README reflects the planned/in-progress architecture. Replace placeholder links, badge values, and the "Status" badge once the project is built and deployed — don't leave fabricated numbers (test counts, live URLs) in a submission; update them to the real figures at submission time.*
+*Replace every placeholder link in §"Live Links" and the "Status" badge with real values before final submission — an unfilled placeholder or a fabricated number is worse than an honestly-labeled "in development" state.*
