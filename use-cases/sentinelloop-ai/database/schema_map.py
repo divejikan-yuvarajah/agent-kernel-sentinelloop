@@ -9,7 +9,12 @@ the SPEC column names.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any
 from uuid import NAMESPACE_URL, UUID, uuid5
+
+if TYPE_CHECKING:
+    from database.schemas import IncidentCreate
 
 _LIVE_INCIDENT_MARKERS = frozenset({"reported_date", "incident_id", "risk_level", "category"})
 
@@ -56,6 +61,31 @@ def normalize_incident_row(row: dict) -> dict:
         "created_by": row.get("created_by"),
         "source_metadata": row.get("source_metadata"),
         "pipeline_version": row.get("pipeline_version"),
+    }
+
+
+def incident_create_to_live_row(data: IncidentCreate) -> dict[str, Any]:
+    """Map SPEC insert payloads onto the deployed hackathon incidents table."""
+    title = (data.hazard_description or data.original_message_text or data.incident_ref or "").strip()
+    description = (data.original_message_text or data.hazard_description or title).strip()
+    return {
+        key: value
+        for key, value in {
+            "incident_id": data.incident_ref,
+            "title": title[:240] or data.incident_ref,
+            "description": description,
+            "category": data.hazard_category,
+            "location": data.location,
+            "equipment_involved": data.site_id,
+            "risk_level": data.current_risk_level,
+            "status": data.status or "REPORTED",
+            "reported_date": datetime.now(timezone.utc).isoformat(),
+            "reporter_id": data.reporter_id,
+            "reporter_language": data.detected_language,
+            "is_anonymous": False,
+            "duplicate_count": 1,
+        }.items()
+        if value is not None
     }
 
 

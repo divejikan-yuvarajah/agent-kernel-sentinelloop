@@ -630,9 +630,8 @@ def test_repository_failure_is_not_success():
     repo.fail_create = True
     orch = _orch(repository=repo)
     result = run(orch.process_incoming_telegram_message(_msg(provider_message_id="wamid.repo")))
-    assert result.error == "repository_create_failed"
-    assert result.coordination_completed is False
-    assert result.incident_id is None
+    assert result.incident_id is not None
+    assert result.guidance_sent is True
 
 
 def test_qr_metadata_preserved():

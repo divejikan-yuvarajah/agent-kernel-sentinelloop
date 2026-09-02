@@ -145,6 +145,10 @@ class IntakeResult(BaseModel):
     location_confidence: float | None = None
 
 
+ModelIntakePayload.model_rebuild()
+IntakeResult.model_rebuild()
+
+
 CallModelFn = Callable[..., Awaitable[ModelCallResult]]
 
 
@@ -357,6 +361,24 @@ def _normalize_language(value: str) -> LanguageCode:
         "unknown": "unknown",
     }
     return mapping.get(raw, "unknown")  # type: ignore[return-value]
+
+
+def _normalize_confidence(value: Any) -> Confidence | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        score = float(value)
+        if score > 1.0:
+            score = score / 100.0 if score <= 100.0 else 1.0
+        if score >= 0.8:
+            return "high"
+        if score >= 0.5:
+            return "medium"
+        return "low"
+    raw = str(value).strip().lower()
+    if raw in ("low", "medium", "high"):
+        return raw  # type: ignore[return-value]
+    return None
 
 
 async def process_intake(
@@ -578,6 +600,10 @@ async def _classify_with_router(
         try:
             data = _parse_model_json(routed.content)
             data["language"] = _normalize_language(str(data.get("language") or "unknown"))
+            if "language_confidence" in data:
+                data["language_confidence"] = _normalize_confidence(data.get("language_confidence"))
+            if "hazard_confidence" in data:
+                data["hazard_confidence"] = _normalize_confidence(data.get("hazard_confidence"))
             return ModelIntakePayload.model_validate(data)
         except Exception as exc:
             last_error = exc

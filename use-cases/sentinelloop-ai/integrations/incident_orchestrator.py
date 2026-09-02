@@ -94,12 +94,10 @@ def _redact_identity(value: str) -> str:
 
 
 def _load_agent_fn(filename: str, attr: str) -> Any:
-    path = Path(__file__).resolve().parent.parent / "agents" / filename
-    spec = importlib.util.spec_from_file_location(f"sentinelloop_orch_{filename}_{attr}", path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"cannot load {filename}:{attr}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module_name = filename.removesuffix(".py")
+    import importlib
+
+    module = importlib.import_module(f"agents.{module_name}")
     return getattr(module, attr)
 
 
@@ -1670,6 +1668,12 @@ class IncidentOrchestrator:
             return merged, None
         except Exception:
             log.warning("repository_update_failed")
+            sandbox = self._channel(message) == "sandbox"
+            ref = merged.get("incident_id") or self._next_ref(sandbox=sandbox)
+            merged["incident_id"] = ref
+            merged["incident_ref"] = ref
+            merged["status"] = STATUS_NEW
+            _cache_set(session, NV_CANONICAL, ref)
             return merged, "repository_create_failed"
 
     async def _transition(self, merged: dict[str, Any], display_status: str) -> None:

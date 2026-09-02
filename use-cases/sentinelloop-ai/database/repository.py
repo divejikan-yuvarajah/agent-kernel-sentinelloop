@@ -29,6 +29,7 @@ from database.exceptions import (
 )
 from database.models import Assignment, HandoverSummary, Incident, IncidentEvidence, IncidentUpdate, RiskAssessment
 from database.schema_map import (
+    incident_create_to_live_row,
     normalize_assignment_row,
     normalize_evidence_row,
     normalize_incident_row,
@@ -186,7 +187,7 @@ class IncidentRepository:
         return incident.incident_ref if self.is_live_schema() else str(incident.id)
 
     def create_incident(self, data: IncidentCreate) -> Incident:
-        payload = _dump(data)
+        payload = incident_create_to_live_row(data) if self.is_live_schema() else _dump(data)
         log.info("create_incident table=incidents incident_ref=%s", data.incident_ref)
         response = _execute(self._client.table("incidents").insert(payload), "create_incident")
         return _incident(_first_row(response.data, "create_incident"))
