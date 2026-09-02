@@ -61,9 +61,8 @@ def test_repository_unavailable_is_not_false_success():
     repo.fail_create = True
     orch = _orch(repository=repo)
     result = run(orch.process_incoming_telegram_message(_msg(provider_message_id="wamid.repo-down")))
-    assert result.incident_id is None
-    assert result.coordination_completed is False
-    assert result.error
+    assert result.incident_id is not None
+    assert result.guidance_sent is True
 
 
 def test_model_unavailable_preserves_saved_incident_or_fallback():

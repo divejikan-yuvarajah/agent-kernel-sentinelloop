@@ -239,6 +239,8 @@ Typography: `Space Grotesk` (headers/KPIs), `IBM Plex Sans` (UI text), `IBM Plex
 * 🖼️ **Vision-based triage** — a hazard photo with little/no caption still gets a category suggestion.
 * 🎙️ **Full voice loop** — voice notes in, and voice guidance replies out, in the worker's own language.
 * 🗒️ **Automated shift handover briefings** — auto-generated open-incident summary posted to Slack at shift change.
+
+**Shift handover phases:** Phase 1 is manual generation from the dashboard Handover panel (`/handover/history`). Phase 2: Automatic shift-end scheduling using Agent Kernel scheduler. Configure `morning_shift_end` and `evening_shift_end` in `config.yaml` when cron is available; otherwise generate from the dashboard.
 * 🖥️ **Manual dashboard entry** — officers can log a phoned-in or in-person report directly, running through the identical risk pipeline as any Telegram report — no shortcut, no separate rules.
 * 🧪 **Live judge sandbox** — anyone can test the full pipeline from the dashboard with zero setup, no Telegram account required.
 
