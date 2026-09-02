@@ -204,7 +204,7 @@
 
 .sl-hero__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.92fr);
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
   gap: var(--space-7);
   align-items: center;
 }
@@ -709,8 +709,17 @@
     width: min(100% - var(--space-4), 100%);
   }
 
+  .sl-hero__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .sl-hero__actions .ds-btn {
     width: 100%;
+  }
+
+  .sl-hero__stats {
+    grid-template-columns: 1fr;
   }
 
   .sl-features,
@@ -720,7 +729,7 @@
   }
 
   .sl-loop-hero .ds-loop__controls {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 
   .sl-mobile-nav__link,

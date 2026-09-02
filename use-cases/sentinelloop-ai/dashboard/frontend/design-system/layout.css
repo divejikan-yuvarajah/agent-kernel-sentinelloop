@@ -662,6 +662,10 @@
   .ds-main {
     padding: var(--space-4);
   }
+
+  .ds-header__brand-block {
+    max-width: min(42vw, 11rem);
+  }
 }
 
 .ds-photo {

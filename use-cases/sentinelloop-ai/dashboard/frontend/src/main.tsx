@@ -10,6 +10,7 @@ import "./styles/base.css";
 import "./styles/command-center.css";
 import "./styles/incident-intel.css";
 import "./styles/shell.css";
+import "./styles/mobile.css";
 import { App } from "./App";
 import { applyOperatorPrefs } from "./demo/operatorPrefs";
 
