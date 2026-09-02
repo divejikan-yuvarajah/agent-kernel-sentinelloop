@@ -288,9 +288,15 @@ def test_public_landing_page_is_separate_from_dashboard_route():
     constants = (FRONTEND / "landing" / "constants.ts").read_text(encoding="utf-8")
     assert "zero AI in this path" in constants
     assert "Language barriers" in constants
+    assert "How it works" in constants
+    assert "Team Zatroz" in constants
     footer = (FRONTEND / "landing" / "components" / "Footer.tsx").read_text(encoding="utf-8")
     assert "Built for IDEALIZE 2026 — Agent Kernel Mini-Competition" in footer
+    assert "Team Zatroz" in footer
     assert "Powered by" in footer
     assert "Agent Kernel" in footer
+    navbar = (FRONTEND / "landing" / "components" / "NavBar.tsx").read_text(encoding="utf-8")
+    assert "Try it live" in navbar
+    assert "Dashboard" in navbar
     loop = (FRONTEND / "design-system" / "components" / "LoopRing.tsx").read_text(encoding="utf-8")
     assert 'mode?: "filter" | "showcase"' in loop

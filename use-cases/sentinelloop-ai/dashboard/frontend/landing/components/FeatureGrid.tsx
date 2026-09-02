@@ -6,13 +6,17 @@ export function FeatureGrid() {
   return (
     <section className="sl-section" id="features" aria-labelledby="features-title">
       <div className="sl-wrap">
-        <p className="sl-kicker">Distinguishing features</p>
-        <h2 id="features-title">Built for the floor, not the demo reel</h2>
-        <p className="sl-section__lede">
+        <p className="sl-kicker" data-reveal>
+          Distinguishing features
+        </p>
+        <h2 id="features-title" data-reveal>
+          Built for the floor, not the demo reel
+        </h2>
+        <p className="sl-section__lede" data-reveal>
           QR context, duplicate merge, audit export, emergency bypass, prediction, vision, voice, shift handover,
           and manual dashboard entry — each one removes a reporting or accountability failure.
         </p>
-        <ul className="sl-features">
+        <ul className="sl-features" data-reveal>
           {FEATURES.map((feature) => (
             <li key={feature.title}>
               <article className="sl-feature">

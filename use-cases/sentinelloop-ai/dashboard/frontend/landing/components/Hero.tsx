@@ -1,19 +1,21 @@
 import { Link } from "react-router-dom";
 
-import { DASHBOARD_PATH, SANDBOX_PATH, TELEGRAM_BOT_HANDLE, TELEGRAM_BOT_URL } from "../constants";
+import {
+  DASHBOARD_PATH,
+  HERO_STATS,
+  SANDBOX_PATH,
+  TELEGRAM_BOT_HANDLE,
+  TELEGRAM_BOT_URL,
+} from "../constants";
 import { LoopHero } from "./LoopHero";
 
 export function Hero() {
   return (
     <header className="sl-hero">
-      <div className="sl-wrap sl-hero__bar">
-        <a className="sl-brand" href="#top">
-          <img src="/images/sentinelloop-logo.png" alt="" width={36} height={36} />
-          <span>SentinelLoop AI</span>
-        </a>
-      </div>
+      <div className="sl-hero__orb" aria-hidden="true" />
       <div className="sl-wrap sl-hero__grid">
         <div className="sl-hero__copy">
+          <p className="sl-hero__kicker sl-kicker">Workplace safety · Sinhala · Tamil · English</p>
           <h1 className="sl-hero__headline">
             Report danger in seconds.
             <br />
@@ -35,6 +37,14 @@ export function Hero() {
             </Link>
           </div>
           <p className="sl-hero__bot ds-mono">{TELEGRAM_BOT_HANDLE}</p>
+          <ul className="sl-hero__stats" aria-label="Product facts">
+            {HERO_STATS.map((stat) => (
+              <li key={stat.label}>
+                <strong>{stat.value}</strong>
+                <span>{stat.label}</span>
+              </li>
+            ))}
+          </ul>
         </div>
         <LoopHero />
       </div>

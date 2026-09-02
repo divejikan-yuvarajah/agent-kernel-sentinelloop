@@ -12,6 +12,24 @@ export const LANDING_TITLE = "SentinelLoop AI — Report danger in seconds";
 export const LANDING_DESCRIPTION =
   "SentinelLoop AI turns a two-second Telegram message into a tracked, accountable safety response — in Sinhala, Tamil, or English.";
 
+export const NAV_LINKS = [
+  { href: "#why", label: "Why" },
+  { href: "#how", label: "How it works" },
+  { href: "#features", label: "Features" },
+  { href: "#trust", label: "Trust" },
+] as const;
+
+export const TEAM_ZATROZ = {
+  name: "Team Zatroz",
+  members: ["Yuvarajah Divejikan", "Abdul Basith", "Prabhath Nishantha"],
+};
+
+export const HERO_STATS = [
+  { value: "3", label: "Languages on the floor" },
+  { value: "7", label: "Stages in the safety loop" },
+  { value: "0", label: "AI calls on SOS path" },
+];
+
 export const LOOP_STAGES: LoopStage[] = [
   { stage: "report", label: "Report", count: 1, percentage: 14 },
   { stage: "understand", label: "Understand", count: 1, percentage: 14 },

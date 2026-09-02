@@ -1,15 +1,20 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { FeatureGrid } from "./components/FeatureGrid";
 import { Footer } from "./components/Footer";
 import { Hero } from "./components/Hero";
+import { NavBar } from "./components/NavBar";
 import { PipelineSection } from "./components/PipelineSection";
 import { ProblemSection } from "./components/ProblemSection";
 import { TrustSection } from "./components/TrustSection";
 import { LANDING_DESCRIPTION, LANDING_TITLE } from "./constants";
+import { useLandingMotion } from "./useLandingMotion";
 import "./landing.css";
 
 export function LandingPage() {
+  const rootRef = useRef<HTMLDivElement>(null);
+  useLandingMotion(rootRef);
+
   useEffect(() => {
     const previousTitle = document.title;
     const meta = document.querySelector('meta[name="description"]');
@@ -23,10 +28,11 @@ export function LandingPage() {
   }, []);
 
   return (
-    <div className="sl-landing" id="top">
+    <div className="sl-landing" id="top" ref={rootRef}>
       <a className="sl-skip" href="#main">
         Skip to content
       </a>
+      <NavBar />
       <Hero />
       <main id="main">
         <ProblemSection />
