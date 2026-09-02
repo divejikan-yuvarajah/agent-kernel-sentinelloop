@@ -1,8 +1,10 @@
 import type { IconName } from "@ds/index";
 import type { LoopStage } from "@ds/types";
 
-export const TELEGRAM_BOT_HANDLE = "@SentinelLoopReportBot";
-export const TELEGRAM_BOT_URL = "https://t.me/SentinelLoopReportBot";
+const BOT_USERNAME = (import.meta.env.VITE_TELEGRAM_BOT_USERNAME || "SentinelLoop_ReportBot").replace(/^@/, "");
+
+export const TELEGRAM_BOT_HANDLE = `@${BOT_USERNAME}`;
+export const TELEGRAM_BOT_URL = `https://t.me/${BOT_USERNAME}`;
 export const GITHUB_REPO_URL = "https://github.com/divejikan-yuvarajah/agent-kernel-sentinelloop";
 export const AGENT_KERNEL_URL = "https://kernel.yaala.ai";
 export const DASHBOARD_PATH = "/dashboard";

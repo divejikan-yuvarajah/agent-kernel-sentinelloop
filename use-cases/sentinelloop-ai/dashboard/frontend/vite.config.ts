@@ -1,7 +1,11 @@
 import { fileURLToPath, URL } from "node:url";
+import path from "node:path";
 
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+
+const frontendRoot = fileURLToPath(new URL(".", import.meta.url));
+const useCaseRoot = path.resolve(frontendRoot, "../..");
 
 const apiProxy = {
   "/api": {
@@ -51,6 +55,7 @@ function spaHtmlRoutes() {
 }
 
 export default defineConfig({
+  envDir: useCaseRoot,
   plugins: [react(), spaHtmlRoutes()],
   resolve: {
     alias: {
