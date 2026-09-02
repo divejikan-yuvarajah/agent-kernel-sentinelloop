@@ -15,12 +15,11 @@
 
 | | Link |
 |---|---|
-| 🌐 **Landing page** | `https://<your-deployment-url>.example.com` |
-| 📊 **Live dashboard** | `https://<your-deployment-url>.example.com/dashboard` |
-| 🤖 **Telegram bot** | `https://t.me/<YourBotUsername>` |
-| 🧪 **Try it live (sandbox, no Telegram needed)** | `https://<your-deployment-url>.example.com/sandbox` |
-| 🎥 **Demo video (5 min)** | `<your video link — YouTube/Drive, must be publicly viewable>` |
-| 💻 **Forked repository** | `https://github.com/<your-username>/agent-kernel` |
+| 🌐 **Landing page** | `https://sentinelloop-dashboard.vercel.app/` |
+| 📊 **Live dashboard** | `https://sentinelloop-dashboard.vercel.app/dashboard` |
+| 🤖 **Telegram bot** | `https://t.me/SentinelLoop_ReportBot` |
+| 🎥 **Demo video (5 min)** | `https://drive.google.com/file/d/15wOfS3grI4YaW1J9tJfQg6SeJ4QEr4W4/view?usp=drive_link` |
+| 💻 **Forked repository** | `https://github.com/divejikan-yuvarajah/agent-kernel-sentinelloop/tree/develop` |
 
 ---
 
@@ -414,8 +413,8 @@ use-cases/sentinelloop_ai/
 * **Project**: SentinelLoop AI
 * **Competition**: IDEALIZE 2026 / Yaala Labs Agent Kernel Mini-Competition
 * **Core Framework**: [Yaala Labs Agent Kernel](https://kernel.yaala.ai)
-* **Team Lead**: Mister — Founder & CEO, Zatroz
-* **Team**: Abdul Basith, Abdul Rahman, Prabhath Nishantha, Yuvarajah Divejikan
+* **Team Lead**: Yuvarajah Divejikan (AI Software Engineer)
+* **Team**: Abdul Basith (AI Systems Architect & Backend Lead , Prabhath Nishantha (AI Software Engineer)
 * **License**: MIT
 
 ---
