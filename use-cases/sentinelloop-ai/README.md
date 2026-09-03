@@ -48,7 +48,7 @@
 * 👷 **Workers** — factory floor staff, lab technicians, maintenance crews — reporting hazards from their own phone, in their own language, via **Telegram** (text, photo, or voice), or by scanning a **QR code** at the hazard location.
 * 🦺 **Safety Officers & Maintenance Teams** — receiving structured, risk-ranked alerts and managing response through **Slack**, or logging a phoned-in report directly via the dashboard's **manual entry** form.
 * 📊 **Management** — reviewing recurring-hazard predictions, response-time analytics, and exportable audit trails through a **web dashboard**.
-* 🧑‍⚖️ **Judges / Evaluators** — can try the whole pipeline directly through the links above, or test it live via [@SentinelLoop_ReportBot](https://t.me/SentinelLoop_ReportBot) on Telegram.
+* 🧑‍⚖️ **Judges / Evaluators** — can test the entire pipeline instantly through the live sandbox, with no Telegram account or setup required.
 
 ### Why an Agentic System?
 
@@ -79,7 +79,7 @@ SentinelLoop AI is built directly against these six failure points.
                     ┌─────────┴─────────┐
                     ▼                   ▼
             Telegram Bot API      QR Code Scan
-            (or Manual Dashboard Entry — same pipeline, different door)
+            (or Sandbox / Manual Dashboard Entry — same pipeline, different door)
                               │
                               ▼
         Deterministic Emergency Bypass ── SOS/🆘 detected? ──▶ Instant Critical alert
@@ -129,6 +129,7 @@ flowchart TD
     U[Worker]
     TG[Telegram Bot API]
     QR[QR Code Scan]
+    SB[Judge Sandbox]
     MAN[Manual Dashboard Entry]
     EB[Emergency Bypass\nno LLM, keyword/emoji match]
     IN[Intake Agent\nlanguage + session]
@@ -149,6 +150,7 @@ flowchart TD
     U <-->|text/photo/voice| TG
     TG --> QR
     TG --> EB
+    SB --> EB
     MAN --> IE
     EB -->|emergency| SLACK
     EB -->|normal| IN
@@ -258,6 +260,7 @@ Typography: `Space Grotesk` (headers/KPIs), `IBM Plex Sans` (UI text), `IBM Plex
   * *Phase 1 (current):* manually triggered from the dashboard's Handover panel (`/handover/history`).
   * *Phase 2 (planned):* automatic shift-end scheduling via Agent Kernel's scheduler — configure `morning_shift_end` and `evening_shift_end` in `config.yaml` once cron support is confirmed available.
 * 🖥️ **Manual dashboard entry** — officers can log a phoned-in or in-person report directly, running through the identical risk pipeline as any Telegram report — no shortcut, no separate rules.
+* 🧪 **Live judge sandbox** — anyone can test the full pipeline from the dashboard with zero setup, no Telegram account required.
 
 ---
 
@@ -406,6 +409,7 @@ use-cases/sentinelloop-ai/
 │   └── frontend/
 │       ├── landing/
 │       ├── report/          # manual entry
+│       ├── sandbox/         # live judge sandbox
 │       ├── incident/[id]/
 │       └── components/Shell/
 ├── scripts/
