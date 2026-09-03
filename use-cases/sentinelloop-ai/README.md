@@ -4,22 +4,40 @@
 [![Agent Kernel](https://img.shields.io/badge/Agent%20Kernel-Yaala%20Labs-8C2331.svg)](https://kernel.yaala.ai)
 [![OpenRouter](https://img.shields.io/badge/LLM-OpenRouter%20(cost--governed)-orange.svg)](https://openrouter.ai)
 [![Supabase PostgreSQL](https://img.shields.io/badge/Database-Supabase%20PostgreSQL-3ECF8E.svg)](https://supabase.com)
-[![Telegram Bot API](https://img.shields.io/badge/Worker%20Channel-Telegram-26A5E4.svg)](https://core.telegram.org/bots)
+[![Telegram Bot API](https://img.shields.io/badge/Worker%20Channel-Telegram-26A5E4.svg)](https://t.me/SentinelLoop_ReportBot)
 [![Slack](https://img.shields.io/badge/Officer%20Channel-Slack-4A154B.svg)](https://api.slack.com)
-[![Status](https://img.shields.io/badge/Status-In%20Development-yellow.svg)](#)
+[![Status](https://img.shields.io/badge/Status-Live%20Demo%20Available-brightgreen.svg)](https://sentinelloop-dashboard.vercel.app/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
 ## 🔗 Live Links
 
-> **⚠️ Fill these in before submission — do not leave placeholders in the final README.**
-
 | | Link |
 |---|---|
-| 🌐 **Landing page** | `https://sentinelloop-dashboard.vercel.app/` |
-| 📊 **Live dashboard** | `https://sentinelloop-dashboard.vercel.app/dashboard` |
-| 🤖 **Telegram bot** | `https://t.me/SentinelLoop_ReportBot` |
-| 🎥 **Demo video (5 min)** | `https://drive.google.com/file/d/15wOfS3grI4YaW1J9tJfQg6SeJ4QEr4W4/view?usp=drive_link` |
-| 💻 **Forked repository** | `https://github.com/divejikan-yuvarajah/agent-kernel-sentinelloop/tree/develop` |
+| 🌐 **Landing page** | [sentinelloop-dashboard.vercel.app](https://sentinelloop-dashboard.vercel.app/) |
+| 📊 **Live dashboard** | [sentinelloop-dashboard.vercel.app/dashboard](https://sentinelloop-dashboard.vercel.app/dashboard) |
+| 🤖 **Telegram bot** | [@SentinelLoop_ReportBot](https://t.me/SentinelLoop_ReportBot) |
+| 🎥 **Demo video (5 min)** | [Watch on Google Drive](https://drive.google.com/file/d/15wOfS3grI4YaW1J9tJfQg6SeJ4QEr4W4/view?usp=drive_link) |
+| 💻 **Forked repository** | [agent-kernel-sentinelloop](https://github.com/divejikan-yuvarajah/agent-kernel-sentinelloop/tree/develop) |
+
+## 📑 Table of Contents
+
+1. [SentinelLoop AI](#1-sentinelloop-ai)
+2. [Problem Statement](#2-problem-statement)
+3. [Solution Overview](#3-solution-overview)
+4. [Why Agent Kernel?](#4-why-agent-kernel)
+5. [Agent Architecture](#5-agent-architecture)
+6. [Core Agents & Tools](#6-core-agents--tools)
+7. [Data Model](#7-data-model)
+8. [Model Router & Cost Governance](#8-model-router--cost-governance)
+9. [Design System](#9-design-system)
+10. [Distinguishing Features](#10-distinguishing-features)
+11. [Tech Stack](#11-tech-stack)
+12. [Setup Instructions](#12-setup-instructions)
+13. [How to Run](#13-how-to-run)
+14. [Testing](#14-testing)
+15. [SDG Alignment](#15-un-sustainable-development-goals-alignment)
+16. [Repository Structure](#16-repository-structure)
+17. [Team & Credits](#17-team--credits)
 
 ---
 
@@ -30,7 +48,7 @@
 * 👷 **Workers** — factory floor staff, lab technicians, maintenance crews — reporting hazards from their own phone, in their own language, via **Telegram** (text, photo, or voice), or by scanning a **QR code** at the hazard location.
 * 🦺 **Safety Officers & Maintenance Teams** — receiving structured, risk-ranked alerts and managing response through **Slack**, or logging a phoned-in report directly via the dashboard's **manual entry** form.
 * 📊 **Management** — reviewing recurring-hazard predictions, response-time analytics, and exportable audit trails through a **web dashboard**.
-* 🧑‍⚖️ **Judges / Evaluators** — can test the entire pipeline instantly through the **live sandbox**, with no Telegram account or setup required.
+* 🧑‍⚖️ **Judges / Evaluators** — can try the whole pipeline directly through the links above, or test it live via [@SentinelLoop_ReportBot](https://t.me/SentinelLoop_ReportBot) on Telegram.
 
 ### Why an Agentic System?
 
@@ -61,7 +79,7 @@ SentinelLoop AI is built directly against these six failure points.
                     ┌─────────┴─────────┐
                     ▼                   ▼
             Telegram Bot API      QR Code Scan
-            (or Sandbox / Manual Dashboard Entry — same pipeline, different door)
+            (or Manual Dashboard Entry — same pipeline, different door)
                               │
                               ▼
         Deterministic Emergency Bypass ── SOS/🆘 detected? ──▶ Instant Critical alert
@@ -96,7 +114,7 @@ Every LLM call in this pipeline is routed through a single **cost-governed OpenR
 > **SentinelLoop AI is an Agent Kernel use case where a coordinated set of agents manages a real-world accountability workflow — hazard report to verified resolution — through tools, session state, external integrations, and a persistent database, not a single chatbot loop.**
 
 * **Multi-agent orchestration** — eight focused agents, each with one job, rather than one agent trying to do everything.
-* **Session & memory** — each worker's Telegram `chat_id` (or sandbox `session_id`) maps to a persistent session, so a clarification reply or a "still not fixed" follow-up correctly continues the *same* incident draft.
+* **Session & memory** — each worker's Telegram `chat_id` maps to a persistent session, so a clarification reply or a "still not fixed" follow-up correctly continues the *same* incident draft.
 * **Guardrail hooks** — enforce that guidance never goes beyond the approved knowledge base, that High/Critical incidents require human confirmation before auto-closing, and that anonymous reports never leak identity into analytics.
 * **External integrations** — Telegram and Slack as the two live, demoable integration points.
 * **Tool-bound reasoning** — the risk agent *estimates* via LLM but never *decides* via LLM; `calculate_risk()` is a deterministic tool the agent must call.
@@ -111,7 +129,6 @@ flowchart TD
     U[Worker]
     TG[Telegram Bot API]
     QR[QR Code Scan]
-    SB[Judge Sandbox]
     MAN[Manual Dashboard Entry]
     EB[Emergency Bypass\nno LLM, keyword/emoji match]
     IN[Intake Agent\nlanguage + session]
@@ -132,7 +149,6 @@ flowchart TD
     U <-->|text/photo/voice| TG
     TG --> QR
     TG --> EB
-    SB --> EB
     MAN --> IE
     EB -->|emergency| SLACK
     EB -->|normal| IN
@@ -171,6 +187,7 @@ flowchart TD
 | `coordination_agent` | Routes incident to the correct team in Slack | — (no LLM) |
 | `followup_agent` | Tracks resolution, requests worker confirmation before closing | — (no LLM) |
 | `prevention_agent` | Detects recurring hazard patterns, recommends inspection | `role_reasoning` |
+| `handover_agent` | Generates shift-end summaries of open/pending incidents | `role_fast` |
 | `vision_tools` | Suggests hazard category from a photo when text is sparse | `role_vision` |
 | `voice_tools` | Transcribes worker voice notes (speech-in) | OpenRouter audio endpoint |
 | `voice_out_tools` | Synthesizes guidance replies as voice notes (speech-out) | `role_tts` |
@@ -238,10 +255,9 @@ Typography: `Space Grotesk` (headers/KPIs), `IBM Plex Sans` (UI text), `IBM Plex
 * 🖼️ **Vision-based triage** — a hazard photo with little/no caption still gets a category suggestion.
 * 🎙️ **Full voice loop** — voice notes in, and voice guidance replies out, in the worker's own language.
 * 🗒️ **Automated shift handover briefings** — auto-generated open-incident summary posted to Slack at shift change.
-
-**Shift handover phases:** Phase 1 is manual generation from the dashboard Handover panel (`/handover/history`). Phase 2: Automatic shift-end scheduling using Agent Kernel scheduler. Configure `morning_shift_end` and `evening_shift_end` in `config.yaml` when cron is available; otherwise generate from the dashboard.
+  * *Phase 1 (current):* manually triggered from the dashboard's Handover panel (`/handover/history`).
+  * *Phase 2 (planned):* automatic shift-end scheduling via Agent Kernel's scheduler — configure `morning_shift_end` and `evening_shift_end` in `config.yaml` once cron support is confirmed available.
 * 🖥️ **Manual dashboard entry** — officers can log a phoned-in or in-person report directly, running through the identical risk pipeline as any Telegram report — no shortcut, no separate rules.
-* 🧪 **Live judge sandbox** — anyone can test the full pipeline from the dashboard with zero setup, no Telegram account required.
 
 ---
 
@@ -257,7 +273,7 @@ Typography: `Space Grotesk` (headers/KPIs), `IBM Plex Sans` (UI text), `IBM Plex
 | Database | Supabase PostgreSQL |
 | File storage | Supabase Storage (`evidence` bucket) |
 | Backend API | FastAPI |
-| Dashboard & landing frontend | Styled with the maroon design tokens above |
+| Dashboard & landing frontend | Vercel, styled with the maroon design tokens above |
 | Testing | pytest, mocked external calls |
 
 ---
@@ -269,8 +285,8 @@ Python 3.12+, [uv](https://github.com/astral-sh/uv), Git, Make, a Supabase accou
 
 ### 12.1 Clone and install
 ```bash
-git clone https://github.com/<your-username>/agent-kernel.git
-cd agent-kernel/ak-py && ./build.sh
+git clone https://github.com/divejikan-yuvarajah/agent-kernel-sentinelloop.git
+cd agent-kernel-sentinelloop/ak-py && ./build.sh
 ```
 
 ### 12.2 Supabase
@@ -284,7 +300,7 @@ Message [@BotFather](https://t.me/BotFather), `/newbot`, save the token — no w
 
 ### 12.5 Environment
 ```bash
-cd use-cases/sentinelloop_ai
+cd use-cases/sentinelloop-ai
 cp .env.example .env
 ```
 ```
@@ -318,7 +334,7 @@ uv run python scripts/smoke_test.py
 open http://localhost:8000/dashboard
 ```
 
-Fastest way to evaluate without any setup: use the **live sandbox** link at the top of this README, or message the live Telegram bot directly.
+Fastest way to evaluate without any local setup: message [@SentinelLoop_ReportBot](https://t.me/SentinelLoop_ReportBot) directly, or open the [live dashboard](https://sentinelloop-dashboard.vercel.app/dashboard).
 
 ---
 
@@ -326,7 +342,7 @@ Fastest way to evaluate without any setup: use the **live sandbox** link at the 
 
 ```bash
 cd ak-py
-uv run pytest use-cases/sentinelloop_ai/tests/
+uv run pytest use-cases/sentinelloop-ai/tests/
 ```
 
 All external calls (Telegram, Slack, OpenRouter, Supabase) are mocked, so the suite runs fully offline. Formatting: `make lint-check-all` / `make lint-all`.
@@ -348,7 +364,7 @@ All external calls (Telegram, Slack, OpenRouter, Supabase) are mocked, so the su
 ## 16. Repository Structure
 
 ```text
-use-cases/sentinelloop_ai/
+use-cases/sentinelloop-ai/
 ├── agents/
 │   ├── intake_agent.py
 │   ├── incident_agent.py
@@ -390,7 +406,6 @@ use-cases/sentinelloop_ai/
 │   └── frontend/
 │       ├── landing/
 │       ├── report/          # manual entry
-│       ├── sandbox/         # live judge sandbox
 │       ├── incident/[id]/
 │       └── components/Shell/
 ├── scripts/
@@ -413,10 +428,8 @@ use-cases/sentinelloop_ai/
 * **Project**: SentinelLoop AI
 * **Competition**: IDEALIZE 2026 / Yaala Labs Agent Kernel Mini-Competition
 * **Core Framework**: [Yaala Labs Agent Kernel](https://kernel.yaala.ai)
-* **Team Lead**: Yuvarajah Divejikan (AI Software Engineer)
-* **Team**: Abdul Basith (AI Systems Architect & Backend Lead , Prabhath Nishantha (AI Software Engineer)
+* **Team Lead**: Yuvarajah Divejikan — AI Software Engineer
+* **Team**:
+  * Abdul Basith — AI Systems Architect & Backend Lead
+  * Prabhath Nishantha — AI Software Engineer
 * **License**: MIT
-
----
-
-*Replace every placeholder link in §"Live Links" and the "Status" badge with real values before final submission — an unfilled placeholder or a fabricated number is worse than an honestly-labeled "in development" state.*
