@@ -124,6 +124,15 @@ Every LLM call in this pipeline is routed through a single **cost-governed OpenR
 
 ## 5. Agent Architecture
 
+![SentinelLoop AI architecture overview](docs/SentinalLoop_Architecture_Diagram.png)
+
+*Full agent-level detail:*
+
+```mermaid
+flowchart TD
+    ...
+```
+
 ```mermaid
 flowchart TD
     U[Worker]
