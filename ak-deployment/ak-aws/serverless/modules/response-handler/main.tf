@@ -25,6 +25,7 @@ locals {
   
   # Response store configuration
   redis_response_store    = var.response_store_redis
+  valkey_response_store   = var.response_store_valkey
   dynamodb_response_store = var.response_store_dynamodb
   
   # WebSocket API configuration
@@ -225,8 +226,9 @@ module "response_handler_lambda" {
   layers                 = local.response_handler_layers
 
   s3_existing_package = var.is_production && local.response_handler_package_type == "S3Zip" ? {
-    bucket = data.aws_s3_object.signed_component_code[0].bucket
-    key    = data.aws_s3_object.signed_component_code[0].key
+    bucket     = data.aws_s3_object.signed_component_code[0].bucket
+    key        = data.aws_s3_object.signed_component_code[0].key
+    version_id = try(data.aws_s3_object.signed_component_code[0].version_id, null)
   } : var.s3_existing_package
 
   code_signing_config_arn = (local.response_handler_package_type == "S3Zip" && var.is_production) ? var.lambda_signing_config_arn : null
@@ -242,6 +244,9 @@ module "response_handler_lambda" {
     local.response_handler_env_vars,
     local.redis_response_store != null ? {
       AK_EXECUTION__RESPONSE_STORE__REDIS__URL = local.redis_response_store.url
+    } : {},
+    local.valkey_response_store != null ? {
+      AK_EXECUTION__RESPONSE_STORE__VALKEY__URL = local.valkey_response_store.url
     } : {},
     local.dynamodb_response_store != null ? {
       AK_EXECUTION__RESPONSE_STORE__DYNAMODB__TABLE_NAME = local.dynamodb_response_store.table_name

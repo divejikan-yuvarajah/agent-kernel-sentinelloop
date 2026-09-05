@@ -1,6 +1,13 @@
-.PHONY: lint lint-check lint-examples lint-examples-check lint-all lint-check-all help
+.PHONY: dev-setup lint lint-check lint-examples lint-examples-check lint-all lint-check-all deploy-inject deploy-revert help
 
 EXAMPLE_DIRS := examples
+
+# Example linters run standalone via uvx (isolated, no project env): black/isort only
+# format .py text and must never resolve an example's agentkernel dependency — some example
+# locks legitimately pin agentkernel to a local ../../../ak-py/dist source (an unreleased
+# extra), which a project-env sync would fail to resolve during lint. Pin black to match
+# the version examples pin in their dev groups so formatting is identical.
+BLACK_VERSION := 26.5.1
 
 # Ensure venv uses pyenv-managed Python when available
 define ENSURE_PYENV_VENV
@@ -13,13 +20,19 @@ endef
 
 help:
 	@echo "Available targets:"
+	@echo "  dev-setup           - Installs prerequisites (pyenv, Python, uv) and syncs ak-py"
 	@echo "  lint                - Formats python code in ak-py"
 	@echo "  lint-check          - Dry run to check code formatting in ak-py"
 	@echo "  lint-examples       - Formats python code in examples directory"
 	@echo "  lint-examples-check - Dry run to check code formatting in examples"
 	@echo "  lint-all            - Formats python code in both ak-py and examples"
 	@echo "  lint-check-all      - Dry run to check code formatting in both ak-py and examples"
+	@echo "  deploy-inject       - Injects local module sources/backend.tf into deployment examples"
+	@echo "  deploy-revert       - Reverts deployment examples back to registry module sources"
 	@echo "  help                - Show this help message"
+
+dev-setup:
+	@./scripts/dev-setup.sh
 
 lint: lint-fix
 
@@ -48,9 +61,8 @@ lint-examples:
 		echo "Processing $$dir..."; \
 		if [ -f "$$dir/pyproject.toml" ]; then \
 			cd $$dir && \
-			$(ENSURE_PYENV_VENV) && \
-			uv run --only-dev isort --skip .venv --skip .terraform --skip dist --skip __pycache__ . || true; \
-			uv run --only-dev black --exclude '/\.venv/|/\.terraform/|/dist/|/__pycache__/' . || true; \
+			uvx isort --skip .venv --skip .terraform --skip-glob "dist*" --skip __pycache__ . || true; \
+			uvx black@$(BLACK_VERSION) --exclude '/\.venv/|/\.terraform/|/dist[^/]*/|/__pycache__/' . || true; \
 			cd - > /dev/null; \
 		fi; \
 	done
@@ -62,9 +74,8 @@ lint-examples-check:
 		echo "Checking $$dir..."; \
 		if [ -f "$$dir/pyproject.toml" ]; then \
 			cd $$dir && \
-			$(ENSURE_PYENV_VENV) && \
-			uv run --only-dev isort --check-only --skip .venv --skip .terraform --skip dist --skip __pycache__ . || EXIT_CODE=1; \
-			uv run --only-dev black --check --exclude '/\.venv/|/\.terraform/|/dist/|/__pycache__/' . || EXIT_CODE=1; \
+			uvx isort --check-only --skip .venv --skip .terraform --skip-glob "dist*" --skip __pycache__ . || EXIT_CODE=1; \
+			uvx black@$(BLACK_VERSION) --check --exclude '/\.venv/|/\.terraform/|/dist[^/]*/|/__pycache__/' . || EXIT_CODE=1; \
 			cd - > /dev/null; \
 		fi; \
 	done; \
@@ -78,3 +89,9 @@ lint-all: lint lint-examples
 
 lint-check-all: lint-check lint-examples-check
 	@echo "All lint checks completed!"
+
+deploy-inject:
+	@python3 scripts/deploy/inject_dependencies.py
+
+deploy-revert:
+	@python3 scripts/deploy/inject_dependencies.py --revert

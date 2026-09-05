@@ -57,6 +57,12 @@ variable "enable_api_gateway" {
   }
 }
 
+variable "enable_api_gateway_logs" {
+  type        = bool
+  description = "When true, creates the API Gateway CloudWatch account role/log groups and enables access logging for the REST and WebSocket API Gateways. Off by default."
+  default     = false
+}
+
 variable "execution_mode" {
   type        = string
   description = "Execution mode for the deployment. Allowed values: rest_sync, async, stream (always allowed), rest_async (only when queue_mode is true). Use 'stream' for WebSocket streaming where each chunk is sent individually via SQS."
@@ -107,6 +113,12 @@ variable "create_redis_cluster" {
   default     = false
 }
 
+variable "create_valkey_cluster" {
+  type        = bool
+  description = "Create a Valkey (ElastiCache) cluster to store Agent memory"
+  default     = false
+}
+
 variable "create_dynamodb_memory_table" {
   type        = bool
   description = "Create a dynamodb table to store the Agent memory"
@@ -139,9 +151,46 @@ variable "create_dynamodb_response_store" {
   }
 }
 
+variable "create_valkey_response_store" {
+  type        = bool
+  description = "Create or reuse Valkey for response storage. Must be false in WebSocket modes (async/stream) — responses are pushed over the WebSocket connection and a response store is not used."
+  default     = false
+  nullable    = false
+  validation {
+    condition     = !(var.create_valkey_response_store && contains(["async", "stream"], var.execution_mode))
+    error_message = "create_valkey_response_store must be false when execution_mode is 'async' or 'stream'. WebSocket modes push responses directly over the connection and do not use a response store."
+  }
+  validation {
+    condition     = !(var.create_valkey_response_store && var.create_redis_response_store)
+    error_message = "create_valkey_response_store and create_redis_response_store cannot both be true."
+  }
+  validation {
+    condition     = !(var.create_valkey_response_store && var.create_dynamodb_response_store)
+    error_message = "create_valkey_response_store and create_dynamodb_response_store cannot both be true."
+  }
+}
+
 variable "create_dynamodb_multimodal_memory_table" {
   type        = bool
   description = "Create a dynamodb table to store the Agent multimodal memory"
+  default     = false
+}
+
+variable "create_dynamodb_thread_table" {
+  type        = bool
+  description = "Create a dynamodb table to store the conversation threads"
+  default     = false
+}
+
+variable "create_dynamodb_schedule_table" {
+  type        = bool
+  description = "Create a dynamodb table to store the scheduled tasks"
+  default     = false
+}
+
+variable "enable_scheduling" {
+  type        = bool
+  description = "Provision EventBridge Scheduler resources (schedule group + execution role) and inject their coordinates, so the application's `schedule.provider.type: eventbridge` has a group to register schedules in. Requires queue_mode: the schedules deliver their triggers to the Input Queue"
   default     = false
 }
 
@@ -308,7 +357,7 @@ variable "request_handler" {
     cloudwatch_logs_retention_in_days = optional(number, 90)
     environment_variables             = optional(map(string), {})
     event_source_mapping              = optional(any, [])
-    lambda_package_s3                 = optional(object({ bucket = string, key = string }), null)
+    lambda_package_s3                 = optional(object({ bucket = string, key = string, version_id = optional(string) }), null)
     ecr_image_uri                     = optional(string, null)
   })
   default = {}
@@ -344,7 +393,7 @@ variable "agent_runner" {
     layers                            = optional(list(string), [])
     cloudwatch_logs_retention_in_days = optional(number, 90)
     environment_variables             = optional(map(string), {})
-    lambda_package_s3                 = optional(object({ bucket = string, key = string }), null)
+    lambda_package_s3                 = optional(object({ bucket = string, key = string, version_id = optional(string) }), null)
     ecr_image_uri                     = optional(string, null)
   })
   default = {}
@@ -380,7 +429,7 @@ variable "response_handler" {
     layers                            = optional(list(string), [])
     cloudwatch_logs_retention_in_days = optional(number, 90)
     environment_variables             = optional(map(string), {})
-    lambda_package_s3                 = optional(object({ bucket = string, key = string }), null)
+    lambda_package_s3                 = optional(object({ bucket = string, key = string, version_id = optional(string) }), null)
     ecr_image_uri                     = optional(string, null)
   })
   default = {}

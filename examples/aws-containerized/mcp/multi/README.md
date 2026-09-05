@@ -9,7 +9,7 @@ Agents are exposed as MCP tools and can be accessed via both the **REST API** an
 
 * Containerized Agent Kernel running on AWS ECS
 * MCP server enabled and exposed via `/mcp` endpoint
-* Supports CrewAI and OpenAI Agent SDK agents
+* Supports Smolagents and OpenAI Agent SDK agents
 * Agents automatically registered as MCP tools
 * Redis-backed state (optional)
 
@@ -34,14 +34,14 @@ This automatically creates an MCP endpoint at:
 ```hcl
 # Containerized module configuration for deploying MCP in ECS
 module "containered_agents" {
-  source  = "yaalalabs/ak-containerized/aws"
-  version = "0.2.9"
+  source    = "yaalalabs/ak-containerized/aws"
+  version   = "0.8.1"
+  providers = { aws = aws, docker = docker }
 
   # Basic ECS configuration
   product_alias        = var.product_alias
   env_alias            = var.env_alias
   module_name          = var.module_name
-  package_path         = "../dist"
   container_type       = "ecs"
   region               = var.region
 
@@ -50,18 +50,19 @@ module "containered_agents" {
 
   product_display_name = "MCP Containerized Example"
 
-  # Container & networking
-  ecs_container_port   = 8000
-
   # Optional dependencies
   create_redis_cluster = true
 
   # Enable MCP server
   enable_mcp_server = true  # MCP endpoint => /<api_base_path>/<api_version>/mcp
 
-  # Environment variables passed to the container
-  environment_variables = {
-    OPENAI_API_KEY = var.openai_api_key
+  # REST service (container build, networking, and runtime env vars)
+  rest_service = {
+    package_path   = "../dist"
+    container_port = 8000
+    environment_variables = {
+      OPENAI_API_KEY = var.openai_api_key
+    }
   }
 }
 ```
@@ -79,6 +80,7 @@ mcp:
   enabled: true
   expose_agents: true
   agents: ['*']
+  stateless_http: true  # recommended for load-balanced/recyclable ECS deployments
 ```
 
 > **Endpoint**: The MCP server is always mounted internally at `/mcp` on the main API server. If you are connecting directly to the app, the internal URL is `http://{api.host}:{api.port}/mcp` (and `api.port` controls that port). In this AWS deployment, the external/public endpoint may include additional gateway or base-path prefixes, for example `/<api_base_path>/<api_version>/mcp`.
@@ -119,7 +121,7 @@ This endpoint supports MCP clients such as `fastmcp`.
 
 This package contains a demo of **Agent Kernel** running agents built with:
 
-* CrewAI
+* Smolagents
 * OpenAI Agent SDK
 
 Agents run in a single runtime and are exposed as **MCP tools**, allowing:

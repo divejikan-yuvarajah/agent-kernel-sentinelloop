@@ -81,6 +81,37 @@ resource "aws_iam_role_policy_attachment" "agent_runner_dynamodb_multimodal_atta
   policy_arn = aws_iam_policy.agent_runner_dynamodb_multimodal_policy[0].arn
 }
 
+resource "aws_iam_policy" "agent_runner_dynamodb_thread_policy" {
+  count = var.create_dynamodb_thread_table == true ? 1 : 0
+  name  = "${var.product_alias}-${var.env_alias}-${local.agent_runner_module_name}-${local.agent_runner_function_name}-ddb-thread"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:DescribeTable",
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:Scan"
+        ]
+        # No /index/*: list_threads Scans, this table has no GSI.
+        Resource = var.dynamodb_thread_table_arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "agent_runner_dynamodb_thread_attachment" {
+  count      = var.create_dynamodb_thread_table == true ? 1 : 0
+  role       = aws_iam_role.agent_runner_lambda_role.name
+  policy_arn = aws_iam_policy.agent_runner_dynamodb_thread_policy[0].arn
+}
+
 resource "aws_signer_signing_job" "agent_runner_lambda_signing_job" {
   count = var.is_production && var.agent_runner.package_type == "S3Zip" ? 1 : 0
 
@@ -173,6 +204,71 @@ resource "aws_iam_role_policy_attachment" "agent_runner_sqs_attachment" {
   policy_arn = aws_iam_policy.agent_runner_sqs_policy.arn
 }
 
+# Scheduling permissions (the create_schedule/update_schedule/delete_schedule agent tools)
+resource "aws_iam_policy" "agent_runner_scheduler_policy" {
+  count = var.enable_scheduling ? 1 : 0
+  name  = "${var.product_alias}-${var.env_alias}-${local.agent_runner_module_name}-${local.agent_runner_function_name}-scheduler"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ManageSchedules"
+        Effect = "Allow"
+        Action = [
+          "scheduler:CreateSchedule",
+          "scheduler:UpdateSchedule",
+          "scheduler:DeleteSchedule",
+          "scheduler:GetSchedule"
+        ]
+        Resource = "arn:aws:scheduler:*:${var.account_id}:schedule/${var.schedule_group_name}/*"
+      },
+      {
+        # Scheduler assumes the execution role, so registering a schedule passes it.
+        Sid      = "PassSchedulerExecutionRole"
+        Effect   = "Allow"
+        Action   = ["iam:PassRole"]
+        Resource = var.scheduler_execution_role_arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "agent_runner_scheduler_attachment" {
+  count      = var.enable_scheduling ? 1 : 0
+  role       = aws_iam_role.agent_runner_lambda_role.name
+  policy_arn = aws_iam_policy.agent_runner_scheduler_policy[0].arn
+}
+
+resource "aws_iam_policy" "agent_runner_schedule_store_policy" {
+  count = var.create_dynamodb_schedule_table ? 1 : 0
+  name  = "${var.product_alias}-${var.env_alias}-${local.agent_runner_module_name}-${local.agent_runner_function_name}-schedule-store"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+      ]
+      # No /index/* : listings Scan, this table has no GSI.
+      Resource = var.dynamodb_schedule_table_arn
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "agent_runner_schedule_store_attachment" {
+  count      = var.create_dynamodb_schedule_table ? 1 : 0
+  role       = aws_iam_role.agent_runner_lambda_role.name
+  policy_arn = aws_iam_policy.agent_runner_schedule_store_policy[0].arn
+}
+
 module "agent_runner_lambda" {
   source  = "terraform-aws-modules/lambda/aws"
   version = "8.0.1"
@@ -191,8 +287,9 @@ module "agent_runner_lambda" {
   layers                 = local.agent_runner_layers
 
   s3_existing_package = var.is_production && var.agent_runner.package_type == "S3Zip" ? {
-    bucket = data.aws_s3_object.signed_component_code[0].bucket
-    key    = data.aws_s3_object.signed_component_code[0].key
+    bucket     = data.aws_s3_object.signed_component_code[0].bucket
+    key        = data.aws_s3_object.signed_component_code[0].key
+    version_id = try(data.aws_s3_object.signed_component_code[0].version_id, null)
   } : var.s3_existing_package
 
   code_signing_config_arn = (var.agent_runner.package_type == "S3Zip" && var.is_production) ? var.lambda_signing_config_arn : null
@@ -209,11 +306,28 @@ module "agent_runner_lambda" {
     var.redis_url != null ? {
       AK_SESSION__REDIS__URL = var.redis_url
     } : {},
+    var.valkey_url != null ? {
+      AK_SESSION__VALKEY__URL = var.valkey_url
+    } : {},
     var.dynamodb_memory_table_arn != null ? {
       AK_SESSION__DYNAMODB__TABLE_NAME = var.dynamodb_memory_table_name
     } : {},
     var.dynamodb_multimodal_memory_table_arn != null ? {
       AK_MULTIMODAL__DYNAMODB__TABLE_NAME = var.dynamodb_multimodal_memory_table_name
+    } : {},
+    var.dynamodb_thread_table_arn != null ? {
+      AK_THREAD__DYNAMODB__TABLE_NAME = var.dynamodb_thread_table_name
+    } : {},
+    # Scheduling: the group/role/queue coordinates only. `schedule.provider.type` and
+    # `schedule.store.type` are deliberately never injected — the application declares them in its
+    # committed config.yaml, exactly like `thread.type`.
+    var.enable_scheduling ? {
+      AK_SCHEDULE__PROVIDER__EVENTBRIDGE__GROUP_NAME = var.schedule_group_name
+      AK_SCHEDULE__PROVIDER__EVENTBRIDGE__ROLE_ARN   = var.scheduler_execution_role_arn
+      AK_SCHEDULE__PROVIDER__EVENTBRIDGE__QUEUE_ARN  = local.queue_input_arn
+    } : {},
+    var.dynamodb_schedule_table_arn != null ? {
+      AK_SCHEDULE__STORE__DYNAMODB__TABLE_NAME = var.dynamodb_schedule_table_name
     } : {},
     {
       AK_EXECUTION__QUEUES__INPUT__MAX_RECEIVE_COUNT = tostring(local.queue_input_consumer_max_receive_count)

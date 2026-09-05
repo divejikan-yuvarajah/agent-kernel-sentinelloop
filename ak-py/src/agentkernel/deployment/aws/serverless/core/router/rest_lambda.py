@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, Optional
 from ......core.chat_service import ChatService
 from ......core.config import AKConfig
 from ......core.model import BaseRequest, ExecutionMode
-from ....core.response_store import ResponseDBHandler
+from ....core.response_store import ResponseStoreFactory
 from ....core.sqs_handler import SQSHandler
 from .common import BaseLambdaRouter
 
@@ -14,13 +14,16 @@ from .common import BaseLambdaRouter
 class DefaultEndpointsHandler:
     """Provides default endpoint routes depending on EXECUTION_MODE."""
 
+    # A record stored without a status predates the runner forwarding one, so it keeps its old meaning.
+    _DEFAULT_STATUS_CODE = 200
+
     def __init__(self):
         """Initialize default REST endpoints handler."""
         self._log = logging.getLogger("ak.aws.lambda.default_endpoints")
         self._default_chat_path = "default_chat_path"
         self._default_chat_method = "POST"
         self._config = AKConfig.get()
-        self._response_store = ResponseDBHandler().get_store() if self._config.execution.response_store is not None else None
+        self._response_store = ResponseStoreFactory.create() if self._config.execution.response_store is not None else None
         self._chat_service = ChatService()
 
     def get_default_endpoint_info(self):
@@ -100,20 +103,19 @@ class DefaultEndpointsHandler:
             error_body["request_id"] = request_id
         return error_body
 
-    def _handle_request(self, event: Dict[str, Any], operation: Callable[[BaseRequest], Dict[str, Any]]) -> tuple[int, Dict[str, Any]]:
+    def _handle_request(self, event: Dict[str, Any], operation: Callable[[BaseRequest], tuple[int, Dict[str, Any]]]) -> tuple[int, Dict[str, Any]]:
         """
         Execute operation with standard request parsing and error handling.
 
         :param event: API Gateway event
-        :param operation: Function executed with parsed payload
+        :param operation: Function executed with parsed payload, returning its own (statusCode, body)
         :return: API Gateway formatted response (statusCode, body)
         """
         request_id = None
         try:
             request = self._parse_body(event)
             request_id = request.request_id
-            result = operation(request)
-            return (200, result)  # (statusCode, body) will be handled in aklambda.py
+            return operation(request)  # (statusCode, body) will be handled in aklambda.py
 
         # Log and hide unexpected failures behind a generic 500 response.
         except Exception as e:
@@ -139,26 +141,44 @@ class DefaultEndpointsHandler:
             raise ValueError("session_id is required")
 
         response = SQSHandler.send_message_to_input_queue(
-            message_body=request_body,
-            message_group_id=session_id,
-            message_deduplication_id=payload.request_id,
+            message_body=request_body.model_dump(exclude_none=True),
+            attributes={"message_deduplication_id": payload.request_id},
             request_id=payload.request_id,
             user_id=payload.user_id,
         )
         return response
 
-    def _get_message(self, payload: BaseRequest) -> Dict[str, Any]:
+    def _get_record(self, payload: BaseRequest) -> Optional[Dict[str, Any]]:
         """
-        Fetch messages from response database.
+        Fetch a response record from the response database.
+
+        Records rather than bodies: the record is what carries the status the agent runner
+        forwarded for this request.
 
         :param payload: Request payload containing request_id
-        :return: Message for request
+        :return: Stored record for the request, or None when none arrived in time
         :raises ValueError: If request_id is missing
         """
         request_id = payload.request_id
         if not request_id:
             raise ValueError("request_id is required")
-        return self._response_store.get_message_with_retry(request_id=request_id, get_and_delete=True)
+        return self._response_store.get_record_with_retry(request_id=request_id, get_and_delete=True)
+
+    def _record_response(self, record: Dict[str, Any]) -> tuple[int, Dict[str, Any]]:
+        """
+        Map a stored response record to its (statusCode, body).
+
+        Keeps queue mode's contract identical to direct mode: the status the chat service
+        produced — 202 for a request deferred to a schedule, 4xx for one it rejected — reaches the
+        client instead of collapsing to 200. A record stored without a status_code, or a store
+        that hands back the body alone, keeps the previous 200.
+
+        :param record: Record returned by the response store
+        :return: Tuple of (status_code, body)
+        """
+        if "body" not in record:
+            return (self._DEFAULT_STATUS_CODE, record)
+        return (int(record.get("status_code") or self._DEFAULT_STATUS_CODE), record["body"])
 
     def _handle_rest_sync(self, event: Dict[str, Any], context: Any) -> tuple[int, Dict[str, Any]]:
         """
@@ -169,26 +189,29 @@ class DefaultEndpointsHandler:
         :return: Tuple of (status_code, response_body)
         """
 
-        def sync_operation(payload: BaseRequest) -> Dict[str, Any]:
+        def sync_operation(payload: BaseRequest) -> tuple[int, Dict[str, Any]]:
             request_id = payload.request_id
             self._log.info(f"Performing REST_SYNC operation for payload: '{payload}'")
             queue_result = self._send_to_queue(payload)
             self._log.info(f"Message sent to input queue, response from send_message function: '{queue_result}'")
 
-            message = self._get_message(payload)
-            self._log.info(f"Fetched message from database: {message}")
-            message = (
-                message
-                if message
-                else self._build_failure_body(
-                    request_id=request_id,
-                    status="NOT_FOUND",
-                    message=f"No response message found for request_id: '{request_id}'. Try increasing the retry_count or delay in the response store configuration.",
+            record = self._get_record(payload)
+            self._log.info(f"Fetched record from database: {record}")
+            if record is None:
+                # A response that never arrived keeps its established 200-with-error-body shape.
+                return (
+                    self._DEFAULT_STATUS_CODE,
+                    self._build_failure_body(
+                        request_id=request_id,
+                        status="NOT_FOUND",
+                        message=f"No response message found for request_id: '{request_id}'. Try increasing the retry_count or delay in the response store configuration.",
+                    ),
                 )
-            )
-            self._log.info(f"Returning response for REST_SYNC operation: '{message}'")
 
-            return message
+            status_code, body = self._record_response(record)
+            self._log.info(f"Returning response for REST_SYNC operation with status_code {status_code}: '{body}'")
+
+            return (status_code, body)
 
         return self._handle_request(event, sync_operation)
 
@@ -201,7 +224,7 @@ class DefaultEndpointsHandler:
         :return: Tuple of (status_code, response_body)
         """
 
-        def submit_operation(payload: BaseRequest) -> Dict[str, Any]:
+        def submit_operation(payload: BaseRequest) -> tuple[int, Dict[str, Any]]:
             self._log.info(f"Performing REST_ASYNC submit operation for payload: '{payload}'")
             queue_result = self._send_to_queue(payload)
 
@@ -209,7 +232,7 @@ class DefaultEndpointsHandler:
             response_body = {"status": "ACCEPTED", "request_id": payload.request_id}
 
             self._log.info(f"Returning response for REST_ASYNC submit operation: '{response_body}'")
-            return response_body
+            return (self._DEFAULT_STATUS_CODE, response_body)
 
         return self._handle_request(event, submit_operation)
 
@@ -222,24 +245,26 @@ class DefaultEndpointsHandler:
         :return: Tuple of (status_code, response_body)
         """
 
-        def poll_operation(payload: BaseRequest) -> Dict[str, Any]:
+        def poll_operation(payload: BaseRequest) -> tuple[int, Dict[str, Any]]:
             self._log.info(f"Performing REST_ASYNC poll operation for payload: '{payload}'")
 
             request_id = payload.request_id
-            message = self._get_message(payload)
-            self._log.info(f"Fetched message from database: {message}")
-            response_body = (
-                message
-                if message
-                else self._build_failure_body(
-                    request_id=request_id,
-                    status="NOT_FOUND",
-                    message=f"No response message found for request_id '{request_id}'. The message may be unavailable. Please try again.",
+            record = self._get_record(payload)
+            self._log.info(f"Fetched record from database: {record}")
+            if record is None:
+                # A response that has not arrived yet keeps its established 200-with-error-body shape.
+                return (
+                    self._DEFAULT_STATUS_CODE,
+                    self._build_failure_body(
+                        request_id=request_id,
+                        status="NOT_FOUND",
+                        message=f"No response message found for request_id '{request_id}'. The message may be unavailable. Please try again.",
+                    ),
                 )
-            )
 
-            self._log.info(f"Returning response for REST_ASYNC poll operation: '{response_body}'")
-            return response_body
+            status_code, response_body = self._record_response(record)
+            self._log.info(f"Returning response for REST_ASYNC poll operation with status_code {status_code}: '{response_body}'")
+            return (status_code, response_body)
 
         return self._handle_request(event, poll_operation)
 

@@ -10,14 +10,18 @@ from typing import Optional
 from singleton_type import Singleton
 
 from ..guardrail.guardrail import InputGuardrailFactory, OutputGuardrailFactory
+from ..sandbox.hooks import SandboxPreHookFactory
 from .base import Agent, Session
 from .builder import SessionStoreBuilder
+from .event import ReasoningDelta, TextDelta
 from .model import (
     AgentReply,
+    AgentReplyAny,
     AgentReplyImage,
     AgentReplyText,
     AgentRequest,
     AgentRequestAny,
+    AgentRequestAttachmentRef,
     AgentRequestFile,
     AgentRequestImage,
     AgentRequestText,
@@ -25,6 +29,10 @@ from .model import (
 )
 from .multimodal import MultimodalPreHookFactory
 from .session import SessionStore
+
+# Volatile-cache key under which the run's acting user is published, so hooks and tools can read
+# who the request was made on behalf of without threading user_id through every call.
+ACTING_USER_CACHE_KEY = "ak.acting_user_id"
 
 
 class Runtime:
@@ -34,8 +42,26 @@ class Runtime:
 
     _current: Optional[Runtime] = None
     _lock: RLock = RLock()
-    _system_pre_hooks: list = [InputGuardrailFactory.get(), MultimodalPreHookFactory.get()]
-    _system_post_hooks: list = [OutputGuardrailFactory.get()]
+    # System hooks are built on first use, not at import time, because the
+    # factories read AKConfig and importing agentkernel must not load it.
+    _system_pre_hooks: Optional[list] = None
+    _system_post_hooks: Optional[list] = None
+
+    @classmethod
+    def _get_system_pre_hooks(cls) -> list:
+        if Runtime._system_pre_hooks is None:
+            with Runtime._lock:
+                if Runtime._system_pre_hooks is None:
+                    Runtime._system_pre_hooks = [InputGuardrailFactory.get(), MultimodalPreHookFactory.get(), SandboxPreHookFactory.get()]
+        return Runtime._system_pre_hooks
+
+    @classmethod
+    def _get_system_post_hooks(cls) -> list:
+        if Runtime._system_post_hooks is None:
+            with Runtime._lock:
+                if Runtime._system_post_hooks is None:
+                    Runtime._system_post_hooks = [OutputGuardrailFactory.get()]
+        return Runtime._system_post_hooks
 
     def __init__(self, sessions: SessionStore):
         """
@@ -142,16 +168,16 @@ class Runtime:
         """
         self._log.debug(f"Executing pre hooks with agent '{agent.name}' and requests: {requests}")
 
-        pre_hooks = agent.pre_hooks + self._system_pre_hooks  # system pre-hooks are always executed last
+        pre_hooks = agent.pre_hooks + self._get_system_pre_hooks()  # system pre-hooks are always executed last
         for hook in pre_hooks:
             reply = await hook.on_run(session, agent, requests)
-            if isinstance(reply, (AgentReplyText, AgentReplyImage)):
+            if isinstance(reply, (AgentReplyText, AgentReplyImage, AgentReplyAny)):
                 return reply
 
             # Validation to ensure the correct type is returned from the hooks. This is important to avoid runtime errors.
             if isinstance(reply, list):
                 for item in reply:
-                    if not isinstance(item, (AgentRequestText, AgentRequestFile, AgentRequestImage, AgentRequestAny)):
+                    if not isinstance(item, (AgentRequestText, AgentRequestFile, AgentRequestImage, AgentRequestAny, AgentRequestAttachmentRef)):
                         raise TypeError(
                             f"PreHook '{hook.name()}' returned an invalid type in the requests list. Expected AgentRequest, got {type(item)}"
                         )
@@ -161,7 +187,7 @@ class Runtime:
 
         return requests
 
-    async def run(self, agent: Agent, session: Session, requests: list[AgentRequest]) -> AgentReply:
+    async def run(self, agent: Agent, session: Session, requests: list[AgentRequest], acting_user_id: Optional[str] = None) -> AgentReply:
         """
         Runs the specified agent with the multi-modal requests.
 
@@ -173,67 +199,91 @@ class Runtime:
         :param requests: The multi-modal inputs are provided to the agent.  It will be submitted to the agent as a single request
                         AgentRequestText objects will be concatenated into a single text prompt.
                         AgentRequestAny is handled only by pre-hooks, not by the agent itself
+        :param acting_user_id: When given, published under ACTING_USER_CACHE_KEY in the session's volatile
+                        cache for the duration of this run, so hooks and tools can attribute work to the caller.
         :return: The result of the agent's execution.
         """
         async with session:
             try:
-                requests_or_reply = await self._prepare_requests(agent, session, requests)
-                if isinstance(requests_or_reply, (AgentReplyText, AgentReplyImage)):
-                    self._log.debug(f"PreHook halted execution for agent '{agent.name}' by hook chain with reply: {requests_or_reply}")
-                    return requests_or_reply
-                requests = requests_or_reply
+                if acting_user_id:
+                    session.get_volatile_cache().set(ACTING_USER_CACHE_KEY, acting_user_id)
+                with agent._activate():
+                    requests_or_reply = await self._prepare_requests(agent, session, requests)
+                    if isinstance(requests_or_reply, (AgentReplyText, AgentReplyImage, AgentReplyAny)):
+                        self._log.debug(f"PreHook halted execution for agent '{agent.name}' by hook chain with reply: {requests_or_reply}")
+                        return requests_or_reply
+                    requests = requests_or_reply
 
-                self._log.debug(f"Running agent '{agent.name}' with requests: {requests}")
+                    self._log.debug(f"Running agent '{agent.name}' with requests: {requests}")
 
-                reply = await agent.runner.run(agent, session, requests)
+                    reply = await agent.runner.run(agent, session, requests)
 
-                post_hooks = self._system_post_hooks + agent.post_hooks  # system post-hooks are always executed first
-                for hook in post_hooks:
-                    reply = await hook.on_run(session, requests, agent, reply)
-                    if not isinstance(reply, (AgentReplyText, AgentReplyImage)):
-                        raise TypeError(f"PostHook '{hook.name()}' returned an invalid type. Expected AgentReply, got {type(reply)}")
-                    self._log.debug(f"PostHook executed for agent '{agent.name}' by hook '{hook.name()}' reply: {reply}")
+                    post_hooks = self._get_system_post_hooks() + agent.post_hooks  # system post-hooks are always executed first
+                    for hook in post_hooks:
+                        reply = await hook.on_run(session, requests, agent, reply)
+                        if not isinstance(reply, (AgentReplyText, AgentReplyImage, AgentReplyAny)):
+                            raise TypeError(f"PostHook '{hook.name()}' returned an invalid type. Expected AgentReply, got {type(reply)}")
+                        self._log.debug(f"PostHook executed for agent '{agent.name}' by hook '{hook.name()}' reply: {reply}")
 
-                self.sessions().store(session)
-                return reply
+                    self.sessions().store(session)
+                    return reply
             finally:
                 session.get_volatile_cache().clear()
 
-    async def stream(self, agent: Agent, session: Session, requests: list[AgentRequest]) -> AsyncGenerator[StreamChunk, None]:
+    async def stream(
+        self, agent: Agent, session: Session, requests: list[AgentRequest], acting_user_id: Optional[str] = None
+    ) -> AsyncGenerator[StreamChunk, None]:
         """
-        Streams the specified agent response token by token.
+        Streams the specified agent response as StreamChunks carrying typed stream events.
 
         Pre-hooks run first; if halted, yields a StreamChunk with error and done=True.
-        Each token delta from the runner is passed through the post-hook chain via
-        on_stream_chunk() before being yielded. The volatile cache is cleared on exit.
+        The runner's events pass through the post-hook chain via on_stream_chunk(), which sees
+        text only: TextDelta and ReasoningDelta content reaches the hooks, and a hook's edit is
+        written back into the event so `delta` and `event` never disagree. Returning None drops
+        the chunk entirely, event included. Only TextDelta content is projected into `delta`,
+        keeping reasoning out of consumers that concatenate it as the answer; every event still
+        reaches `event`. The volatile cache is cleared on exit.
 
         :param agent: The agent to run.
         :param session: The session to use for the agent.
         :param requests: The multi-modal inputs provided to the agent.
+        :param acting_user_id: When given, published under ACTING_USER_CACHE_KEY in the session's volatile
+                        cache for the duration of this run, so hooks and tools can attribute work to the caller.
         :return: An async generator of StreamChunk objects.
         """
         async with session:
             try:
-                requests_or_reply = await self._prepare_requests(agent, session, requests)
-                if isinstance(requests_or_reply, (AgentReplyText, AgentReplyImage)):
-                    self._log.debug(f"PreHook halted streaming for agent '{agent.name}' by hook chain with reply: {requests_or_reply}")
-                    yield StreamChunk(error=str(requests_or_reply), done=True)
-                    return
-                requests = requests_or_reply
+                if acting_user_id:
+                    session.get_volatile_cache().set(ACTING_USER_CACHE_KEY, acting_user_id)
+                with agent._activate():
+                    requests_or_reply = await self._prepare_requests(agent, session, requests)
+                    if isinstance(requests_or_reply, (AgentReplyText, AgentReplyImage, AgentReplyAny)):
+                        self._log.debug(f"PreHook halted streaming for agent '{agent.name}' by hook chain with reply: {requests_or_reply}")
+                        yield StreamChunk(error=str(requests_or_reply), done=True)
+                        return
+                    requests = requests_or_reply
 
-                self._log.debug(f"Streaming agent '{agent.name}' with requests: {requests}")
+                    self._log.debug(f"Streaming agent '{agent.name}' with requests: {requests}")
 
-                post_hooks = self._system_post_hooks + agent.post_hooks
-                async for delta in agent.runner.stream(agent, session, requests):
-                    for hook in post_hooks:
-                        delta = await hook.on_stream_chunk(session, requests, agent, delta)
-                        if delta is None:
-                            break
-                    if delta is not None:
-                        yield StreamChunk(delta=delta)
+                    post_hooks = self._get_system_post_hooks() + agent.post_hooks
 
-                self.sessions().store(session)
-                yield StreamChunk(done=True, session_id=session.id)
+                    async for ev in agent.runner.stream(agent, session, requests):
+                        text = ev.content if isinstance(ev, (TextDelta, ReasoningDelta)) else None
+
+                        if text is not None:
+                            for hook in post_hooks:
+                                text = await hook.on_stream_chunk(session, requests, agent, text)
+                                if text is None:
+                                    break
+                            if text is None:
+                                continue  # hook dropped the whole chunk, event included
+                            if text != ev.content:
+                                ev = ev.model_copy(update={"content": text})
+
+                        yield StreamChunk(delta=text if isinstance(ev, TextDelta) else None, event=ev)
+
+                    self.sessions().store(session)
+                    yield StreamChunk(done=True)
             finally:
                 session.get_volatile_cache().clear()
 

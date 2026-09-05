@@ -25,6 +25,7 @@ import {
   FaGithub,
   FaAws,
   FaMicrosoft,
+  FaDocker,
 } from "react-icons/fa";
 import { SiTerraform, SiGmail, SiGooglecloud } from "react-icons/si";
 import { useHistory } from "@docusaurus/router";
@@ -84,12 +85,12 @@ function WhatsNewBanner() {
           </svg>
         </span>
         <span ref={textRef} className={styles.whatsNewText}>
-          <strong>Knowledge Base Support</strong> - ChromaDB, Neo4j &amp;
-          Starburst Galaxy built-in, plus a custom adapter API{" "}
-          to plug in any backend.
+          <strong>Agent Kernel Execution Broker</strong> - sandboxed code
+          execution for any agent: Docker, E2B, Daytona, your own EC2,{" "}
+          or bring your own provider.
         </span>
         <Link
-          to="/docs/next/architecture/knowledge-bases"
+          to="/blog/agent-kernel-execution-broker"
           className={styles.whatsNewLink}
           ref={linkRef}
         >
@@ -360,6 +361,11 @@ function FrameworksStrip() {
       name: "Smolagents",
       logo: "/img/integrations/smolagents.png",
       link: "https://huggingface.co/docs/smolagents/index",
+    },
+    {
+      name: "Pydantic AI",
+      logo: "/img/integrations/pydantic-ai.png",
+      link: "/docs/frameworks/pydantic-ai",
     },
     {
       name: "LiveKit",
@@ -977,9 +983,9 @@ function Deployment() {
           </div>
           <h2 className={styles.deployTitle}>Deploy Anywhere</h2>
           <p className={styles.deploySubtitle}>
-            Run the same agent code on AWS, Azure, GCP, or your own on-prem Docker. Zero rewrites.
+            Run the same agent code on AWS, Azure, GCP, or your own Kubernetes cluster. Zero rewrites.
             <br />
-            Includes production-ready Terraform modules with best practices baked in.
+            Includes production-ready Terraform modules and a Helm chart with best practices baked in.
           </p>
         </div>
 
@@ -1039,6 +1045,163 @@ function Deployment() {
 
             </div>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Sandboxed Execution ───────────────────────────────────────────────── */
+
+const SANDBOX_PROVIDER_CARDS = [
+  {
+    key: "docker",
+    icon: <FaDocker />,
+    name: "Docker",
+    tag: "Container sandboxes on your own infrastructure",
+    link: "/docs/advanced/sandbox#docker-setup",
+  },
+  {
+    key: "e2b",
+    icon: (
+      <img
+        src="/img/integrations/e2b.png"
+        alt=""
+        className={`${styles.sandboxLogoImg} ${styles.sandboxLogoImgInvert}`}
+      />
+    ),
+    name: "E2B",
+    tag: "Managed micro-VM sandboxes",
+    link: "/docs/advanced/sandbox#e2b-setup",
+  },
+  {
+    key: "daytona",
+    icon: (
+      <img
+        src="/img/integrations/daytona.png"
+        alt=""
+        className={styles.sandboxLogoImg}
+      />
+    ),
+    name: "Daytona",
+    tag: "Managed cloud container sandboxes",
+    link: "/docs/advanced/sandbox#daytona-setup",
+  },
+  {
+    key: "ec2",
+    icon: <FaAws />,
+    name: "AWS EC2",
+    tag: "Attach to instances you already run",
+    link: "/docs/advanced/sandbox#ec2_ssm-setup",
+  },
+  {
+    key: "byo",
+    icon: <MdExtension />,
+    name: "Bring Your Own",
+    tag: "Plug in any sandbox backend you choose",
+    link: "/docs/advanced/sandbox#bring-your-own-provider",
+  },
+] as const;
+
+function SandboxSection() {
+  const sectionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    gsap.registerPlugin(ScrollTrigger);
+
+    const section = sectionRef.current;
+    if (!section) return;
+
+    const reducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const header = section.querySelector(`.${styles.sandboxHeader}`);
+    const cards = Array.from(
+      section.querySelectorAll(`.${styles.sandboxLogoCard}`),
+    );
+    const footer = section.querySelector(`.${styles.sandboxFooter}`);
+
+    if (reducedMotion) {
+      gsap.set([header, ...cards, footer], { opacity: 1, y: 0 });
+      return;
+    }
+
+    gsap.set(header, { opacity: 0, y: 24 });
+    gsap.set(cards, { opacity: 0, y: 20 });
+    gsap.set(footer, { opacity: 0, y: 16 });
+
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: section,
+        start: "top 78%",
+        toggleActions: "play none none none",
+        once: true,
+      },
+    });
+
+    tl.to(header, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" })
+      .to(
+        cards,
+        { opacity: 1, y: 0, duration: 0.45, stagger: 0.07, ease: "power2.out" },
+        "+=0.5",
+      )
+      .to(footer, { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" }, "-=0.2");
+
+    return () => {
+      tl.kill();
+      if (tl.scrollTrigger) {
+        tl.scrollTrigger.kill();
+      }
+    };
+  }, []);
+
+  return (
+    <section ref={sectionRef} id="sandbox" className={styles.sandboxSection}>
+      {/* Top border + gradient glow */}
+      <div className={styles.topGlow} />
+
+      <div className="container">
+        <div className={styles.sandboxHeader}>
+          <div className={styles.Badge}>
+            <span className={styles.badgeStar}>✦</span>
+            Sandboxed Execution
+          </div>
+          <h2 className={styles.sandboxTitle}>Let Agents Run Code, Safely</h2>
+          <p className={styles.sandboxSubtitle}>
+            Flip one switch and every agent gains code, shell, and file tools
+            that run in isolated sandboxes.
+            <br />
+            Each execution flows through the Agent Kernel Execution Broker to
+            a pluggable provider, governed by fail-closed policies.
+          </p>
+        </div>
+
+        {/* Provider logo cards */}
+        <div className={styles.sandboxLogoGrid}>
+          {SANDBOX_PROVIDER_CARDS.map((p) => (
+            <Link key={p.key} to={p.link} className={styles.sandboxLogoCard}>
+              <span className={styles.sandboxLogoIcon} aria-hidden="true">
+                {p.icon}
+              </span>
+              <p className={styles.sandboxLogoName}>{p.name}</p>
+              <p className={styles.sandboxLogoTag}>{p.tag}</p>
+            </Link>
+          ))}
+        </div>
+
+        {/* Footer: text left, CTA right */}
+        <div className={styles.sandboxFooter}>
+          <p className={styles.sandboxFooterText}>
+            Fully pluggable by design: swap sandbox providers, or bring your
+            own, without changing your agents.
+          </p>
+          <Link
+            className={`button button--primary button--md ${styles.terraformLink}`}
+            to="/docs/advanced/sandbox"
+          >
+            Explore the Sandbox
+          </Link>
         </div>
       </div>
     </section>
@@ -1547,7 +1710,7 @@ export default function Home() {
   return (
     <Layout
       title={`${siteConfig.title} - ${siteConfig.tagline}`}
-      description="Agent Kernel is the open-source operating system for scalable, compliant enterprise AI agents. Build, test, and deploy with OpenAI, LangGraph, CrewAI, or Google ADK to AWS, Azure, or GCP, with built-in messaging, memory, knowledge bases, guardrails, and observability."
+      description="Agent Kernel is the open-source operating system for scalable, compliant enterprise AI agents. Build, test, and deploy with OpenAI, LangGraph, CrewAI, Google ADK, Smolagents, or Pydantic AI to AWS, Azure, or GCP, with built-in messaging, memory, knowledge bases, guardrails, sandboxed code execution, and observability (Langfuse, OpenLLMetry, Pydantic Logfire)."
     >
       {/* <PlantParticlesBackground ref={backgroundRef} /> */}
       <WhatsNewBanner />
@@ -1559,6 +1722,7 @@ export default function Home() {
         </div>
         <AgentSkills />
         <Deployment />
+        <SandboxSection />
         <TrustSection />
         <FAQ />
         <Community sectionRef={communityRef} />

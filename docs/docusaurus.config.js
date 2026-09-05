@@ -204,7 +204,7 @@ const config = {
           'Framework-neutral runtime: OpenAI Agents, LangGraph, CrewAI, Google ADK, Smolagents, LiveKit',
           'Run multiple frameworks simultaneously in a single runtime',
           'Multi-cloud deployment to AWS, Azure, and GCP with full Terraform modules',
-          'Built-in Slack, WhatsApp, Messenger, Instagram, Telegram, and Gmail integrations',
+          'Built-in Slack, WhatsApp, Messenger, Instagram, Telegram, Microsoft Teams, and Gmail integrations',
           'Session and memory management with Redis, DynamoDB, Cosmos DB, and in-memory backends',
           'Knowledge bases with Neo4j, Starburst Galaxy, ChromaDB, and custom SQL sources',
           'Execution hooks for guardrails, RAG, analytics, and moderation',
@@ -324,6 +324,12 @@ const config = {
         },
         blog: {
           routeBasePath: 'blog',
+          blogTitle: 'Agent Kernel Blog',
+          blogDescription:
+            'Product announcements, engineering deep dives, and stories from the Agent Kernel team.',
+          // All posts render on one landing page so topic filtering works client-side.
+          postsPerPage: 'ALL',
+          blogSidebarCount: 0,
           showReadingTime: true,
           authorsMapPath: 'authors.json',
           feedOptions: {
@@ -337,7 +343,7 @@ const config = {
           onUntruncatedBlogPosts: 'warn',
         },
         theme: {
-          customCss: './src/css/custom.css',
+          customCss: ['./src/css/custom.css', './src/css/blog-medium.css'],
         },
         gtag: {
           trackingID: 'G-TFXXDHX2H5',
@@ -368,8 +374,9 @@ const config = {
                 if (url.endsWith('/search') || url.includes('/search/')) {
                   return false;
                 }
-                // Exclude versioned/preview docs routes from sitemap to reduce noise.
-                if (url.includes('/docs/next/') || url.match(/\/docs\/0\.[0-9]+\.[0-9]+/)) {
+                // Keep only the latest docs (the /docs/next routes) in the sitemap;
+                // drop versioned docs routes to avoid duplicate/stale entries.
+                if ((url.endsWith('/docs') || url.includes('/docs/')) && !url.includes('/docs/next')) {
                   return false;
                 }
                 return true;
@@ -377,9 +384,9 @@ const config = {
               .map((item) => {
               // Set highest priority for key landing pages
               if (item.url === 'https://kernel.yaala.ai/' ||
-                item.url === 'https://kernel.yaala.ai/docs' ||
-                item.url === 'https://kernel.yaala.ai/docs/quick-start' ||
-                item.url === 'https://kernel.yaala.ai/docs/installation' ||
+                item.url === 'https://kernel.yaala.ai/docs/next' ||
+                item.url === 'https://kernel.yaala.ai/docs/next/quick-start' ||
+                item.url === 'https://kernel.yaala.ai/docs/next/installation' ||
                 item.url === 'https://kernel.yaala.ai/features' ||
                 item.url === 'https://kernel.yaala.ai/use-cases' ||
                 item.url === 'https://kernel.yaala.ai/blog') {
@@ -509,9 +516,57 @@ const config = {
         respectPrefersColorScheme: false,
       },
       mermaid: {
+        // The site is dark-only; both entries point at the customized base theme.
+        theme: { light: 'base', dark: 'base' },
         options: {
-          look: "handDrawn",
-          handDrawnSeed: 300
+          fontFamily: 'Archivo, sans-serif',
+          fontSize: 15,
+          // ELK gives compact, orthogonal edge routing on graph/flowchart
+          // diagrams. Registered at module scope of src/theme/Mermaid/index.tsx
+          // (keeping elkjs out of the main bundle); mermaid falls back to dagre
+          // if it is ever unavailable.
+          layout: 'elk',
+          elk: { nodePlacementStrategy: 'NETWORK_SIMPLEX' },
+          flowchart: { curve: 'basis' },
+          sequence: { mirrorActors: false },
+          themeVariables: {
+            darkMode: true,
+            background: '#010002',
+            fontFamily: 'Archivo, sans-serif',
+            fontSize: '15px',
+            // nodes
+            primaryColor: '#0d1f3c',
+            primaryTextColor: '#eaf6ff',
+            primaryBorderColor: '#2e6f8f',
+            // edges + labels
+            lineColor: '#6db8cc',
+            edgeLabelBackground: '#081226',
+            // subgraphs / clusters
+            clusterBkg: '#05101f',
+            clusterBorder: '#1d3a5f',
+            titleColor: '#9fdcec',
+            // secondary/tertiary (misc fills)
+            secondaryColor: '#12294a',
+            tertiaryColor: '#081226',
+            tertiaryTextColor: '#cfe8f2',
+            // sequence diagrams
+            actorBkg: '#0d1f3c',
+            actorBorder: '#2e6f8f',
+            actorTextColor: '#eaf6ff',
+            actorLineColor: '#3a5a7a',
+            signalColor: '#8fd4e6',
+            signalTextColor: '#d7eef7',
+            labelBoxBkgColor: '#12294a',
+            labelBoxBorderColor: '#2e6f8f',
+            labelTextColor: '#eaf6ff',
+            loopTextColor: '#9fdcec',
+            noteBkgColor: '#1a2b4a',
+            noteBorderColor: '#31527f',
+            noteTextColor: '#dcecf7',
+            activationBkgColor: '#12294a',
+            activationBorderColor: '#2e6f8f',
+            sequenceNumberColor: '#010002',
+          },
         },
       }
     }),

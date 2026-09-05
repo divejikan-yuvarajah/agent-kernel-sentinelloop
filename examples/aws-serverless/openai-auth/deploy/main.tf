@@ -1,8 +1,9 @@
 # Lambda module configuration for deploying OpenAI Agent Lambda function
 module "serverless_agents" {
-  source = "yaalalabs/ak-serverless/aws"
-  version = "0.6.0"
+  source  = "yaalalabs/ak-serverless/aws"
+  version = "0.9.0"
 
+  providers = { aws = aws, docker = docker }
   # Basic lambda configuration
   product_alias        = var.product_alias
   env_alias            = var.env_alias
@@ -12,15 +13,18 @@ module "serverless_agents" {
   vpc_id               = var.vpc_id
   private_subnet_ids   = var.private_subnet_ids
 
+  # Memory DB Config - use existing Redis cluster
+  create_redis_cluster = false
+
   # Request handler configuration
   request_handler = {
-    function_name         = "openai-auth-agents"
-    function_description   = "Agent Kernel OpenAI Auth Sample Lambda"
-    handler_path          = "lambda.handler"
-    module_name           = var.module_name
-    package_path          = "../dist"
-    package_type          = "Image"
-    memory_size           = 256
+    function_name        = "openai-auth-agents"
+    function_description = "Agent Kernel OpenAI Auth Sample Lambda"
+    handler_path         = "lambda.handler"
+    module_name          = var.module_name
+    package_path         = "../dist"
+    package_type         = "Image"
+    memory_size          = 256
     environment_variables = {
       "OPENAI_API_KEY" = var.openai_api_key
     }
@@ -34,15 +38,15 @@ module "serverless_agents" {
   # Defining custom API endpoints
   gateway_endpoints = [
     {
-      path           = "app",
-      method         = "GET",
+      path   = "app",
+      method = "GET",
     },
     {
-      path           = "app_info",
-      method         = "POST",
+      path   = "app_info",
+      method = "POST",
     }
   ]
-  
+
   # Defining the API Gateway Authorizer
   authorizer = {
     description           = "API Gateway Lambda Authorizer"

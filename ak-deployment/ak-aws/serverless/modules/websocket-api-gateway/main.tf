@@ -55,14 +55,15 @@ module "websocket_api" {
 
   # Stage
   stage_name = var.stage_name
-
   stage_default_route_settings = {
-    data_trace_enabled       = var.enable_data_trace
-    detailed_metrics_enabled = var.enable_detailed_metrics
-    logging_level            = var.logging_level
+    data_trace_enabled       = var.enable_api_gateway_logs ? var.enable_data_trace : false
+    detailed_metrics_enabled = var.enable_api_gateway_logs ? var.enable_detailed_metrics : false
+    logging_level            = var.enable_api_gateway_logs ? var.logging_level : "OFF"
   }
 
-  stage_access_log_settings = {
+  # Access logging (only when enabled). Pass null (not {}) to disable: the upstream
+  # module treats a non-null object as "enabled" and defaults create_log_group to true.
+  stage_access_log_settings = var.enable_api_gateway_logs ? {
     create_log_group            = true
     log_group_retention_in_days = var.cloudwatch_logs_retention_in_days
     log_group_kms_key_arn       = var.cloudwatch_kms_key_arn
@@ -76,7 +77,7 @@ module "websocket_api" {
       responseLength          = "$context.responseLength"
       integrationErrorMessage = "$context.integrationErrorMessage"
     })
-  }
+  } : null
 
   tags = var.tags
 }

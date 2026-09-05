@@ -1,19 +1,35 @@
 import json
 import logging
+from typing import Optional
 
 from ....core.chat_service import ChatService
 from ....core.config import AKConfig
 from ....core.model import BaseRunRequest, ExecutionMode, StreamChunk
+from ....pipeline.envelope import ATTR_STATUS_CODE
 from ..core.sqs_handler import SQSHandler
 from .core import LambdaSQSConsumer
 
 
 class ServerlessAgentRunner(LambdaSQSConsumer):
+    """
+    handle() dispatches to ServerlessStreamAgentRunner when execution.mode is STREAM.
+    """
 
     _log = logging.getLogger("ak.aws.agentrunner")
     _chat_service = None
-    _config = AKConfig.get()
-    max_receive_count: int = _config.execution.queues.input.max_receive_count
+    # A run that exhausted its retries never produced a status of its own.
+    _PERMANENT_FAILURE_STATUS_CODE = 500
+
+    @classmethod
+    def _get_max_receive_count(cls) -> int:
+        return AKConfig.get().execution.queues.input.max_receive_count
+
+    @classmethod
+    def handle(cls, event: dict, context) -> dict:
+        """Dispatch to ServerlessStreamAgentRunner when execution.mode is STREAM."""
+        if AKConfig.get().execution.mode == ExecutionMode.STREAM:
+            return ServerlessStreamAgentRunner.handle(event, context)
+        return super().handle(event, context)
 
     @classmethod
     def _get_chat_service(cls) -> ChatService:
@@ -22,19 +38,50 @@ class ServerlessAgentRunner(LambdaSQSConsumer):
         return cls._chat_service
 
     @classmethod
-    def _get_record_attributes(cls, raw_queue_message: dict) -> dict:
+    def _body_from_record(cls, record: dict) -> Optional[BaseRunRequest]:
+        """
+        Best-effort parse of a record's body, for callers that have not already validated it.
+
+        A malformed body must not mask the missing-metadata error ``_get_record_attributes``
+        raises, so a parse failure resolves to None instead of propagating.
+
+        :param record: SQS record (``dict``) passed from the Lambda event
+        :return: The parsed body, or None when it is absent or unparseable
+        """
+        try:
+            return cls._parse_body(record)
+        except Exception:
+            cls._log.debug("Could not parse the record body for the request metadata fallback")
+            return None
+
+    @classmethod
+    def _get_record_attributes(cls, raw_queue_message: dict, body: Optional[BaseRunRequest] = None) -> dict:
         """
         Extract attributes from the raw SQS message record.
 
+        request_id and user_id fall back to the message body: scheduled triggers carry their
+        metadata there because EventBridge Scheduler cannot set SQS message attributes. Message
+        attributes keep precedence.
+
         :param raw_queue_message: Original SQS message (``dict``) received by the Lambda function
+        :param body: Already-validated body to use for the fallback; when omitted it is parsed
+            best-effort from the record
         :return: Dictionary (``dict``) containing extracted attributes
-        :raises ValueError: If request_id is missing
+        :raises ValueError: If request_id is present in neither the attributes nor the body
         """
         attributes = SQSHandler.get_message_system_attributes(raw_queue_message)
         message_attributes = SQSHandler.get_message_custom_attributes(raw_queue_message)
         request_id = message_attributes.get("request_id")
         user_id = message_attributes.get("user_id")
-        endpoint_url = message_attributes.get("endpoint_url") if cls._config.execution.mode in (ExecutionMode.ASYNC, ExecutionMode.STREAM) else None
+        endpoint_url = (
+            message_attributes.get("endpoint_url") if AKConfig.get().execution.mode in (ExecutionMode.ASYNC, ExecutionMode.STREAM) else None
+        )
+
+        if not request_id or not user_id:
+            body = body if body is not None else cls._body_from_record(raw_queue_message)
+            if body is not None:
+                request_id = request_id or getattr(body, "request_id", None)
+                user_id = user_id or body.user_id
 
         if not request_id:
             raise ValueError("request_id is required")
@@ -63,12 +110,14 @@ class ServerlessAgentRunner(LambdaSQSConsumer):
         return {"error": error_msg}
 
     @classmethod
-    def _send_to_output_queue(cls, message_body: dict, record_attributes: dict) -> None:
+    def _send_to_output_queue(cls, message_body: dict, record_attributes: dict, status_code: Optional[int] = None) -> None:
         """
         Send a prepared message to the configured response SQS queue using send_message_to_output_queue.
 
         :param message_body: Message body (``dict``) to be sent to the response queue
         :param record_attributes: Extracted attributes (``dict``) from the record
+        :param status_code: Status the chat service produced, forwarded so the REST surface can
+            answer with it instead of collapsing every queued reply to 200
         :return: None
         """
         cls._log.info("Sending message to output queue")
@@ -80,13 +129,19 @@ class ServerlessAgentRunner(LambdaSQSConsumer):
             custom_attributes.append(
                 SQSHandler.CustomAttribute(name="endpoint_url", value=record_attributes["endpoint_url"], datatype=SQSHandler.AttributeDataType.STRING)
             )
+        if status_code is not None:
+            custom_attributes.append(
+                SQSHandler.CustomAttribute(name=ATTR_STATUS_CODE, value=str(status_code), datatype=SQSHandler.AttributeDataType.STRING)
+            )
 
         cls._log.debug(f"Custom attributes: {custom_attributes}")
 
         SQSHandler.send_message_to_output_queue(
-            message_group_id=record_attributes["message_group_id"],
-            message_deduplication_id=record_attributes["message_deduplication_id"],
             message_body=message_body,
+            attributes={
+                "message_group_id": record_attributes["message_group_id"],
+                "message_deduplication_id": record_attributes["message_deduplication_id"],
+            },
             request_id=record_attributes["request_id"],
             user_id=record_attributes["user_id"],
             custom_message_attributes=custom_attributes,
@@ -111,10 +166,13 @@ class ServerlessAgentRunner(LambdaSQSConsumer):
         """
         cls._log.info(f"Processing message: {record}")
         body = cls._parse_body(record)
-        _, agent_response = cls._get_chat_service().process_chat_request(req=body)
-        cls._log.info(f"Chat service response: '{agent_response}'")
-        record_attributes = cls._get_record_attributes(raw_queue_message=record)
-        cls._send_to_output_queue(message_body=agent_response, record_attributes=record_attributes)
+        # ChatService(rest_api_mode=False) returns (status_code, response_dict). The status travels
+        # to the output message as an attribute so the deferred-schedule 202 and the validation 4xx
+        # survive the queue round trip instead of collapsing to 200 at the REST surface.
+        status_code, agent_response = cls._get_chat_service().process_chat_request(req=body)
+        cls._log.info(f"Chat service response: '{agent_response}' with status_code: {status_code}")
+        record_attributes = cls._get_record_attributes(raw_queue_message=record, body=body)
+        cls._send_to_output_queue(message_body=agent_response, record_attributes=record_attributes, status_code=status_code)
         cls._log.info(f"Sent Response message to Output Queue: '{SQSHandler.get_output_queue_url()}'")
 
     @classmethod
@@ -125,12 +183,16 @@ class ServerlessAgentRunner(LambdaSQSConsumer):
         :param record: SQS record (``dict``) that failed processing after all retries
         :return: None
         """
-        cls._log.info(f"Permanent failure: {record}: Retried message {cls.max_receive_count} times. Sending error message to Output Queue`")
+        cls._log.info(f"Permanent failure: {record}: Retried message {cls._get_max_receive_count()} times. Sending error message to Output Queue`")
         try:
             record_attributes = cls._get_record_attributes(raw_queue_message=record)
-            error_message_body = cls._construct_error_message_body(error_msg=f"Failed to process message. Retried {cls.max_receive_count} times")
+            error_message_body = cls._construct_error_message_body(
+                error_msg=f"Failed to process message. Retried {cls._get_max_receive_count()} times"
+            )
             error_message_body["session_id"] = record_attributes["message_group_id"]
-            cls._send_to_output_queue(message_body=error_message_body, record_attributes=record_attributes)
+            cls._send_to_output_queue(
+                message_body=error_message_body, record_attributes=record_attributes, status_code=cls._PERMANENT_FAILURE_STATUS_CODE
+            )
             cls._log.info(f"Sent Permanent Failure message to Output Queue: '{SQSHandler.get_output_queue_url()}'")
         except Exception as e:
             # Message comes to this function only if the message has reached its maximum no of retries
@@ -148,8 +210,10 @@ class ServerlessStreamAgentRunner(LambdaSQSConsumer):
 
     _log = logging.getLogger("ak.aws.streamagentrunner")
     _chat_service = None
-    _config = AKConfig.get()
-    max_receive_count: int = _config.execution.queues.input.max_receive_count
+
+    @classmethod
+    def _get_max_receive_count(cls) -> int:
+        return AKConfig.get().execution.queues.input.max_receive_count
 
     @classmethod
     def _get_chat_service(cls) -> ChatService:
@@ -158,11 +222,33 @@ class ServerlessStreamAgentRunner(LambdaSQSConsumer):
         return cls._chat_service
 
     @classmethod
-    def _get_record_attributes(cls, raw_queue_message: dict) -> dict:
+    def _body_from_record(cls, record: dict) -> Optional[BaseRunRequest]:
+        """
+        Best-effort parse of a record's body, for callers that have not already validated it.
+
+        A malformed body must not mask the missing-metadata error ``_get_record_attributes``
+        raises, so a parse failure resolves to None instead of propagating.
+
+        :param record: SQS record (``dict``) passed from the Lambda event
+        :return: The parsed body, or None when it is absent or unparseable
+        """
+        try:
+            return cls._parse_body(record)
+        except Exception:
+            cls._log.debug("Could not parse the record body for the request metadata fallback")
+            return None
+
+    @classmethod
+    def _get_record_attributes(cls, raw_queue_message: dict, body: Optional[BaseRunRequest] = None) -> dict:
         """
         Extract attributes from the raw SQS message record.
 
+        request_id and user_id fall back to the message body (see the non-streaming runner);
+        endpoint_url has no body fallback because it is an infrastructure detail of the sender.
+
         :param raw_queue_message: Original SQS message (``dict``) received by the Lambda function
+        :param body: Already-validated body to use for the fallback; when omitted it is parsed
+            best-effort from the record
         :return: Dictionary (``dict``) containing extracted attributes
         :raises ValueError: If request_id or endpoint_url is missing
         """
@@ -171,6 +257,12 @@ class ServerlessStreamAgentRunner(LambdaSQSConsumer):
         request_id = message_attributes.get("request_id")
         user_id = message_attributes.get("user_id")
         endpoint_url = message_attributes.get("endpoint_url")
+
+        if not request_id or not user_id:
+            body = body if body is not None else cls._body_from_record(raw_queue_message)
+            if body is not None:
+                request_id = request_id or getattr(body, "request_id", None)
+                user_id = user_id or body.user_id
 
         if not request_id:
             raise ValueError("request_id is required")
@@ -218,9 +310,11 @@ class ServerlessStreamAgentRunner(LambdaSQSConsumer):
         ]
 
         SQSHandler.send_message_to_output_queue(
-            message_group_id=record_attributes["message_group_id"],
-            message_deduplication_id=chunk_dedup_id,
             message_body=chunk_body,
+            attributes={
+                "message_group_id": record_attributes["message_group_id"],
+                "message_deduplication_id": chunk_dedup_id,
+            },
             request_id=record_attributes["request_id"],
             user_id=record_attributes["user_id"],
             custom_message_attributes=custom_attributes,
@@ -237,7 +331,9 @@ class ServerlessStreamAgentRunner(LambdaSQSConsumer):
         """
         cls._log.info(f"Processing stream message: {record}")
         body = cls._parse_body(record)
-        record_attributes = cls._get_record_attributes(raw_queue_message=record)
+        record_attributes = cls._get_record_attributes(raw_queue_message=record, body=body)
+        # Included in the dedup suffix below so a retry's chunks never collide with a prior attempt's.
+        receive_count = record.get("attributes", {}).get("ApproximateReceiveCount", "1")
 
         chunk_count = 0
         for raw_chunk in cls._get_chat_service().process_stream_chat_sync(req=body):
@@ -245,7 +341,7 @@ class ServerlessStreamAgentRunner(LambdaSQSConsumer):
             cls._send_chunk_to_output_queue(
                 chunk_body=chunk_dict,
                 record_attributes=record_attributes,
-                chunk_dedup_suffix=str(chunk_count),
+                chunk_dedup_suffix=f"{receive_count}-{chunk_count}",
             )
             chunk_count += 1
         cls._log.info(f"Streamed {chunk_count} chunks to output queue for request_id: {record_attributes['request_id']}")
@@ -258,11 +354,12 @@ class ServerlessStreamAgentRunner(LambdaSQSConsumer):
         :param record: SQS record (``dict``) that failed processing after all retries
         :return: None
         """
-        cls._log.info(f"Permanent failure: {record}: Retried message {cls.max_receive_count} times. Sending error chunk to Output Queue")
+        cls._log.info(f"Permanent failure: {record}: Retried message {cls._get_max_receive_count()} times. Sending error chunk to Output Queue")
         try:
             record_attributes = cls._get_record_attributes(raw_queue_message=record)
+            receive_count = record.get("attributes", {}).get("ApproximateReceiveCount", "1")
             error_chunk = StreamChunk(
-                error=f"Failed to process message. Retried {cls.max_receive_count} times",
+                error=f"Failed to process message. Retried {cls._get_max_receive_count()} times",
                 done=True,
             )
             error_chunk_body = error_chunk.model_dump(exclude_none=True)
@@ -270,7 +367,7 @@ class ServerlessStreamAgentRunner(LambdaSQSConsumer):
             cls._send_chunk_to_output_queue(
                 chunk_body=error_chunk_body,
                 record_attributes=record_attributes,
-                chunk_dedup_suffix="error",
+                chunk_dedup_suffix=f"{receive_count}-error",
             )
             cls._log.info(f"Sent Permanent Failure chunk to Output Queue: '{SQSHandler.get_output_queue_url()}'")
         except Exception as e:

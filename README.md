@@ -38,11 +38,12 @@ Most agent frameworks help you build a *prototype*. **Agent Kernel is the platfo
 |---|---|
 | 🔌 **Framework-Agnostic** | Run OpenAI Agents SDK, LangGraph, CrewAI, and Google ADK side by side. Swap with 2 import lines. |
 | ☁️ **Cloud-Agnostic** | The same agent code ships to AWS Lambda/ECS, Azure Functions/Container Apps, GCP Cloud Run, or on-prem. |
+| 🔁 **Queue-Pipeline Execution** | Every chat request runs through a queued pipeline: in-process by default (zero services, full retry/FIFO/dedup semantics locally), SQS, Kafka, and NATS JetStream transports for distributed deployments; a Helm chart ships the topology to any Kubernetes cluster. |
 | 🛡️ **Compliant by Default** | Built-in guardrails (OpenAI, AWS Bedrock), PII detection, full audit traces, jailbreak prevention. |
-| 🧠 **Stateful & Knowledge-Aware** | Pluggable session stores (Redis, DynamoDB, Cosmos DB) + knowledge bases (ChromaDB, Neo4j, Starburst). |
+| 🧠 **Stateful & Knowledge-Aware** | Pluggable session stores (Redis, Valkey, DynamoDB, Cosmos DB) + knowledge bases (ChromaDB, Neo4j, Starburst). |
 | 💬 **Channels Built-In** | Slack, WhatsApp, Teams, Telegram, Gmail, Messenger, Instagram — out of the box. |
-| 🔍 **Production Observability** | LangFuse and OpenLLMetry tracing wired in. Every agent, tool, and LLM call — visible. |
-| 🤝 **Open Standards** | Native **MCP** (Model Context Protocol) and **A2A** (Agent-to-Agent) support. |
+| 🔍 **Production Observability** | LangFuse, OpenLLMetry, and Pydantic Logfire tracing wired in. Every agent, tool, and LLM call — visible. |
+| 🤝 **Open Standards** | Native **MCP** (Model Context Protocol), **A2A** (Agent-to-Agent), and **AG-UI** (streamed event protocol for agent-facing frontends) support. |
 | 🆓 **Apache 2.0** | No licensing fees. No vendor lock-in. Production-ready open source. |
 
 > ⭐ **If Agent Kernel is solving real problems for you, please star the repo — it's the single best way to help us grow.**
@@ -109,14 +110,38 @@ Enterprises can't ship agents they can't audit. Agent Kernel makes compliance th
 - **Guardrails** — OpenAI and AWS Bedrock guardrails for PII detection, jailbreak prevention, content moderation.
 - **Pre/Post Execution Hooks** — Inject policy checks, RAG context, redaction, or moderation around every agent call.
 - **Full Traceability** — Every agent action, tool call, and LLM invocation logged with configurable verbosity.
-- **Observability** — LangFuse and OpenLLMetry tracing with a single config line.
+- **Observability** — LangFuse, OpenLLMetry, and Pydantic Logfire tracing with a single config line.
 - **Data Residency** — Pick your cloud, your region, your storage backend. Your data stays where you need it.
+
+### 📦 Sandboxed Code Execution
+
+Let agents run code and shell commands in an isolated, permission-bounded environment — the platform handles it, your agent code stays clean.
+
+- **Enable it in config** — agents automatically gain code/command/file tools and the usage guidance is injected into their prompt.
+- **Pluggable providers** — `local_subprocess` (dev), `docker` (container-isolated), `kubernetes` (pod per sandbox, RBAC as the boundary), `e2b` (managed micro-VMs), `daytona` (cloud containers), and `ec2_ssm` (attach to an existing EC2 instance); bring your own via a dotted path.
+- **Workload profiles** — per-call, per-session, or shared lifetimes; each with its own permission policy (network egress, filesystem, CPU/memory, timeout) enforced fail-closed.
+- **Per-user identity** — run sandboxed code under the invoking user's identity, not one shared agent identity, via a pluggable principal resolver.
+
+[Learn more →](https://kernel.yaala.ai/docs/advanced/sandbox)
+
+### ⏰ Deferred & Recurring Chats
+
+Let a chat run later, or on a schedule — the platform owns the timers, the persistence, and the management API.
+
+- **Enable it in config** — a `schedule` block turns on deferring and the agent tools with no code change; mount `ScheduleRESTRequestHandler` when you also want the management routes.
+- **One creation path, three callers** — a `schedule` block on any chat request (acknowledged with HTTP 202), the agent's own `create_schedule` tool, or a direct `ScheduleManager` call.
+- **Pluggable timers and stores** — `local` (in-process, for development) or AWS EventBridge Scheduler for production; task records in memory, Redis, Valkey, or DynamoDB.
+- **Managed over REST** — list, read, amend, pause and cancel via `/api/v1/schedules`, scoped to the owning user by a pluggable `Authoriser`.
+
+[Learn more →](https://kernel.yaala.ai/docs/advanced/scheduling)
 
 ### 🧠 Memory, Sessions & Knowledge Bases
 
 | Layer | Backends |
 |---|---|
-| **Session / Memory** | In-memory, Redis, DynamoDB (AWS), Cosmos DB (Azure), Firestore (GCP) |
+| **Session / Memory** | In-memory, Redis, Valkey (AWS), DynamoDB (AWS), Cosmos DB (Azure), Firestore (GCP) |
+| **Conversation Threads** | Persistent, named threads keyed by `session_id` — in-memory, Redis, Valkey, DynamoDB (AWS), Cosmos DB (Azure), Firestore (GCP) |
+| **Scheduled Tasks** | Deferred and recurring chat execution — in-memory, Redis, Valkey, DynamoDB (AWS) task stores; local in-process or AWS EventBridge Scheduler timers |
 | **Vector Knowledge** | ChromaDB |
 | **Graph Knowledge** | Neo4j |
 | **SQL Analytics** | Starburst Galaxy (Trino) |
@@ -132,6 +157,7 @@ Build once. Ship to every channel your users live on. No bespoke bot code.
 
 - **MCP (Model Context Protocol)** — Connect agents to external tools, data sources, and services. Optionally expose your agents *as* MCP tools.
 - **A2A (Agent-to-Agent)** — Native message passing, handoffs, and coordination between agents in a shared ecosystem.
+- **AG-UI** — Stream any agent's run (text, tool calls, reasoning, shared state) to a compliant AG-UI frontend, e.g. [CopilotKit](https://docs.copilotkit.ai).
 
 ### ⚡ Built-In Execution Modes
 
@@ -150,7 +176,7 @@ Same agent code. Pick your runtime. Full Terraform modules included.
 | **AWS** | [Lambda](https://registry.terraform.io/modules/yaalalabs/ak-serverless/aws) | [ECS / Fargate](https://registry.terraform.io/modules/yaalalabs/ak-containerized/aws) |
 | **Azure** | [Functions](https://registry.terraform.io/modules/yaalalabs/ak-serverless/azurerm) | [Container Apps](https://registry.terraform.io/modules/yaalalabs/ak-containerized/azurerm) |
 | **GCP** | [Cloud Run Serverless](https://github.com/yaalalabs/agent-kernel/tree/develop/ak-deployment/ak-gcp/serverless) | [Cloud Run Containerized](https://github.com/yaalalabs/agent-kernel/tree/develop/ak-deployment/ak-gcp/containerized) |
-| **On-Prem** | ✅ Docker image | ✅ REST API bundle |
+| **On-Prem / Kubernetes** | ✅ Docker image | [Helm chart](https://github.com/yaalalabs/agent-kernel/tree/develop/ak-deployment/ak-k8s) (baremetal + EKS, Kafka/NATS queue mode, KEDA autoscaling) |
 
 ---
 
@@ -166,10 +192,10 @@ ak skill install
 |---|---|
 | `ak-init` | Scaffold a new project — any framework, any deployment mode |
 | `ak-build` | Add tools, agents, handoffs — context-aware and framework-specific |
-| `ak-add-capabilities` | Wire in guardrails, tracing, sessions, MCP, A2A, hooks, multimodal |
+| `ak-add-capabilities` | Wire in guardrails, tracing, sessions, MCP, A2A, AG-UI, hooks, multimodal, conversation threads, sandbox, scheduled tasks |
 | `ak-add-integration` | Slack, WhatsApp, Messenger, Instagram, Telegram, Gmail |
 | `ak-cloud-deploy` | AWS Lambda, ECS, Azure Functions, Container Apps, GCP Cloud Run with full Terraform |
-| `ak-test` | Fuzzy, judge, and fallback test modes + a debugging playbook |
+| `ak-test` | Score, llm, and fallback test modes (pluggable evaluators) + a debugging playbook |
 
 See the [`use-cases/`](use-cases/) directory for complete end-to-end examples built using these skills — each starting from a `SPEC.md` and generating a fully deployed agent.
 
@@ -181,7 +207,7 @@ See the [`use-cases/`](use-cases/) directory for complete end-to-end examples bu
 pytest tests/
 ```
 
-Built-in fuzzy, semantic, and fallback comparison modes. CI/CD ready. Test agent behavior, not just code.
+Built-in score, llm, and fallback comparison modes, backed by a pluggable evaluator (DeepEval by default, or bring your own). CI/CD ready. Test agent behavior, not just code.
 
 ---
 
@@ -212,6 +238,7 @@ Agent Kernel is proud to be:
 - 📦 **PyPI:** [`pip install agentkernel`](https://pypi.org/project/agentkernel/)
 - ☁️ **Terraform Registry:** [Official modules](https://registry.terraform.io/modules/yaalalabs)
 - 🛠 **Developer Guide:** [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)
+- 🤖 **Contributing with AI agents:** [AGENTS.md](AGENTS.md)
 
 ---
 

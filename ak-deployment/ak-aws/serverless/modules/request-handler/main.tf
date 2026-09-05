@@ -90,6 +90,36 @@ resource "aws_iam_role_policy_attachment" "lambda_dynamodb_multimodal_describe_a
   policy_arn = aws_iam_policy.lambda_dynamodb_multimodal_describe_policy[0].arn
 }
 
+resource "aws_iam_policy" "lambda_dynamodb_thread_policy" {
+  count = var.create_dynamodb_thread_table == true ? 1 : 0
+  name  = "${var.product_alias}-${var.env_alias}-${var.module_name}-${var.function_name}-ddb-thread"
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "dynamodb:DescribeTable",
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:Scan"
+        ],
+        # No /index/*: list_threads Scans, this table has no GSI.
+        Resource = var.dynamodb_thread_table_arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_dynamodb_thread_attachment" {
+  count      = var.create_dynamodb_thread_table == true ? 1 : 0
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = aws_iam_policy.lambda_dynamodb_thread_policy[0].arn
+}
+
 # Response store DynamoDB permissions
 resource "aws_iam_policy" "lambda_response_store_dynamodb_policy" {
   count = var.response_store_dynamodb != null ? 1 : 0
@@ -184,6 +214,71 @@ resource "aws_iam_role_policy_attachment" "lambda_sqs_attachment" {
   policy_arn = aws_iam_policy.lambda_sqs_policy[0].arn
 }
 
+# Scheduling permissions (management routes: amend/cancel reach EventBridge Scheduler)
+resource "aws_iam_policy" "lambda_scheduler_policy" {
+  count = var.enable_scheduling ? 1 : 0
+  name  = "${var.product_alias}-${var.env_alias}-${var.module_name}-${var.function_name}-scheduler"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ManageSchedules"
+        Effect = "Allow"
+        Action = [
+          "scheduler:CreateSchedule",
+          "scheduler:UpdateSchedule",
+          "scheduler:DeleteSchedule",
+          "scheduler:GetSchedule"
+        ]
+        Resource = "arn:aws:scheduler:*:${var.account_id}:schedule/${var.schedule_group_name}/*"
+      },
+      {
+        # Scheduler assumes the execution role, so registering a schedule passes it.
+        Sid      = "PassSchedulerExecutionRole"
+        Effect   = "Allow"
+        Action   = ["iam:PassRole"]
+        Resource = var.scheduler_execution_role_arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_scheduler_attachment" {
+  count      = var.enable_scheduling ? 1 : 0
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = aws_iam_policy.lambda_scheduler_policy[0].arn
+}
+
+resource "aws_iam_policy" "lambda_schedule_store_policy" {
+  count = var.create_dynamodb_schedule_table ? 1 : 0
+  name  = "${var.product_alias}-${var.env_alias}-${var.module_name}-${var.function_name}-schedule-store"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+      ]
+      # No /index/* : listings Scan, this table has no GSI.
+      Resource = var.dynamodb_schedule_table_arn
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_schedule_store_attachment" {
+  count      = var.create_dynamodb_schedule_table ? 1 : 0
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = aws_iam_policy.lambda_schedule_store_policy[0].arn
+}
+
 resource "aws_signer_signing_job" "handler_lambda_signing_job" {
   count = var.is_production && var.package_type == "S3Zip" ? 1 : 0
 
@@ -245,8 +340,9 @@ module "lambda_deployment" {
   code_signing_config_arn = (var.package_type == "S3Zip" && var.is_production == true) ? var.lambda_signing_config_arn : null
 
   s3_existing_package = var.is_production && var.package_type == "S3Zip" ? {
-    bucket = data.aws_s3_object.signed_component_code[0].bucket
-    key    = data.aws_s3_object.signed_component_code[0].key
+    bucket     = data.aws_s3_object.signed_component_code[0].bucket
+    key        = data.aws_s3_object.signed_component_code[0].key
+    version_id = try(data.aws_s3_object.signed_component_code[0].version_id, null)
   } : var.s3_existing_package
 
   environment_variables = merge(var.environment_variables, {
@@ -257,14 +353,34 @@ module "lambda_deployment" {
       var.redis_url != null ? {
       AK_SESSION__REDIS__URL = var.redis_url
     } : {},
+      var.valkey_url != null ? {
+      AK_SESSION__VALKEY__URL = var.valkey_url
+    } : {},
       var.dynamodb_memory_table_arn != null ? {
       AK_SESSION__DYNAMODB__TABLE_NAME = var.dynamodb_memory_table_name
     } : {},
       var.dynamodb_multimodal_memory_table_arn != null ? {
       AK_MULTIMODAL__DYNAMODB__TABLE_NAME = var.dynamodb_multimodal_memory_table_name
     } : {},
+      var.dynamodb_thread_table_arn != null ? {
+      AK_THREAD__DYNAMODB__TABLE_NAME = var.dynamodb_thread_table_name
+    } : {},
+    # Scheduling: the group/role/queue coordinates only. `schedule.provider.type` and
+    # `schedule.store.type` are deliberately never injected — the application declares them in
+    # its committed config.yaml, exactly like `thread.type`.
+    var.enable_scheduling ? {
+      AK_SCHEDULE__PROVIDER__EVENTBRIDGE__GROUP_NAME = var.schedule_group_name
+      AK_SCHEDULE__PROVIDER__EVENTBRIDGE__ROLE_ARN   = var.scheduler_execution_role_arn
+      AK_SCHEDULE__PROVIDER__EVENTBRIDGE__QUEUE_ARN  = var.input_queue_arn
+    } : {},
+    var.dynamodb_schedule_table_arn != null ? {
+      AK_SCHEDULE__STORE__DYNAMODB__TABLE_NAME = var.dynamodb_schedule_table_name
+    } : {},
       var.response_store_redis != null ? {
       AK_EXECUTION__RESPONSE_STORE__REDIS__URL = var.response_store_redis.url
+    } : {},
+      var.response_store_valkey != null ? {
+      AK_EXECUTION__RESPONSE_STORE__VALKEY__URL = var.response_store_valkey.url
     } : {},
       var.response_store_dynamodb != null ? {
       AK_EXECUTION__RESPONSE_STORE__DYNAMODB__TABLE_NAME = var.response_store_dynamodb.table_name

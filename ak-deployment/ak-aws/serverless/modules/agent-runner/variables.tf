@@ -38,10 +38,11 @@ variable "source_version_id" {
 }
 
 variable "s3_existing_package" {
-  description = "Pre-built s3_existing_package object from lambda-package module (bucket + key). Pass null for non-S3Zip deployments."
+  description = "Pre-built s3_existing_package object (bucket + key + optional version_id) for S3Zip deployments. A non-null version_id pins a specific S3 object version so package updates are redeployed. Pass null for non-S3Zip deployments."
   type = object({
-    bucket = string
-    key    = string
+    bucket     = string
+    key        = string
+    version_id = optional(string)
   })
   default = null
 }
@@ -61,6 +62,12 @@ variable "create_dynamodb_memory_table" {
 variable "create_dynamodb_multimodal_memory_table" {
   type        = bool
   description = "Create a dynamodb table to store the Agent multimodal memory"
+  default     = false
+}
+
+variable "create_dynamodb_thread_table" {
+  type        = bool
+  description = "Create a dynamodb table to store the conversation threads"
   default     = false
 }
 
@@ -88,9 +95,69 @@ variable "dynamodb_multimodal_memory_table_name" {
   default     = null
 }
 
+variable "dynamodb_thread_table_arn" {
+  type        = string
+  description = "ARN of the DynamoDB conversation thread table"
+  default     = null
+}
+
+variable "dynamodb_thread_table_name" {
+  type        = string
+  description = "Name of the DynamoDB conversation thread table"
+  default     = null
+}
+
+variable "account_id" {
+  type        = string
+  description = "AWS account ID, used to scope the EventBridge Scheduler IAM resource ARNs"
+  default     = null
+}
+
+variable "enable_scheduling" {
+  type        = bool
+  description = "Whether the EventBridge Scheduler resources are provisioned"
+  default     = false
+}
+
+variable "schedule_group_name" {
+  type        = string
+  description = "EventBridge Scheduler schedule-group name the scheduled tasks register their schedules in"
+  default     = null
+}
+
+variable "scheduler_execution_role_arn" {
+  type        = string
+  description = "ARN of the role EventBridge Scheduler assumes to deliver scheduled triggers to the Input Queue"
+  default     = null
+}
+
+variable "create_dynamodb_schedule_table" {
+  type        = bool
+  description = "Whether the DynamoDB schedule store table is created"
+  default     = false
+}
+
+variable "dynamodb_schedule_table_arn" {
+  type        = string
+  description = "DynamoDB schedule store table ARN"
+  default     = null
+}
+
+variable "dynamodb_schedule_table_name" {
+  type        = string
+  description = "DynamoDB schedule store table name"
+  default     = null
+}
+
 variable "redis_url" {
   type        = string
   description = "URL of the Redis cluster"
+  default     = null
+}
+
+variable "valkey_url" {
+  type        = string
+  description = "URL of the Valkey cluster"
   default     = null
 }
 

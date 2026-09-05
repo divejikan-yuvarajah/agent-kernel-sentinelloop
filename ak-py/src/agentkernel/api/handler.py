@@ -2,10 +2,11 @@ import logging
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import ConfigDict
 
+from ..auth.authoriser import Authoriser
 from ..core import Config
 from ..core.chat_service import ChatService
 from ..core.model import BaseChatRequest, BaseRunRequest, ExecutionMode
@@ -20,15 +21,54 @@ class RESTRequestHandler(ABC):
         E.g.:
         - GET /api/v1/agents: List available agents
 
-        router = APIRouter()
-
-        @router.get("/api/v1/agents")
-        def list_agents():
+        def list_agents(self):
             from ..core.runtime import Runtime
             return {"agents": list(Runtime.current().agents().keys())}
 
+        def get_router(self) -> APIRouter:
+            router = APIRouter()
+            router.add_api_route("/api/v1/agents", self.list_agents, methods=["GET"])
+            return router
+
         """
         pass
+
+
+class AuthorisedRESTRequestHandler(RESTRequestHandler):
+    """
+    Base for resource-management route handlers protected by an optional, pluggable
+    Authoriser (e.g. conversation threads, scheduled tasks). Owns the Bearer-token
+    parsing and 401 mapping; when no Authoriser is configured, _resolve_user returns
+    None and the handler's routes remain open.
+    """
+
+    def __init__(self, authoriser: Optional[Authoriser] = None):
+        """
+        Initializes an AuthorisedRESTRequestHandler instance.
+        :param authoriser: Optional user-supplied Authoriser protecting the handler's routes.
+        """
+        self._authoriser = authoriser
+
+    def _resolve_user(self, request: Request) -> Optional[str]:
+        """
+        Resolve the caller's user_id via the configured Authoriser.
+        :param request: The incoming FastAPI request.
+        :return: The resolved user_id, or None when no Authoriser is configured.
+        :raises HTTPException: 401 when a token is missing or rejected.
+        """
+        if self._authoriser is None:
+            return None
+        auth_header = request.headers.get("authorization")
+        if auth_header is None:
+            raise HTTPException(status_code=401, detail="Missing authorization header")
+        scheme, _, token = auth_header.partition(" ")
+        token = token.strip()
+        if scheme.lower() != "bearer" or not token:
+            raise HTTPException(status_code=401, detail="Invalid authorization header")
+        user_id = self._authoriser.authorise(token)
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        return user_id
 
 
 class AgentRESTRequestHandler(RESTRequestHandler):
@@ -39,6 +79,11 @@ class AgentRESTRequestHandler(RESTRequestHandler):
     - POST /api/v1/chat: Run an agent (streams SSE when execution.mode=stream, otherwise returns JSON)
     - POST /api/v1/chat-multipart: Same as /api/v1/chat but accepts multipart form data with file/image uploads
     """
+
+    # Endpoint paths — shared with subclasses so route paths stay consistent.
+    AGENTS_PATH = "/api/v1/agents"
+    CHAT_PATH = "/api/v1/chat"
+    CHAT_MULTIPART_PATH = "/api/v1/chat-multipart"
 
     class BaseMultimodalRunRequest(BaseChatRequest):
         """Chat request with multipart file and image uploads (UploadFile format)."""
@@ -52,52 +97,57 @@ class AgentRESTRequestHandler(RESTRequestHandler):
         self._max_file_size = Config.get().api.max_file_size
         self.chat_service = ChatService(rest_api_mode=True)
 
+    def list_agents(self):
+        return {"agents": list(Runtime.current().agents().keys())}
+
+    async def run(self, body: BaseRunRequest):
+        if Config.get().execution.mode == ExecutionMode.STREAM:
+            try:
+                gen = await self.chat_service.process_stream_chat_async(req=body, sse_format=True)
+                return StreamingResponse(gen, media_type="text/event-stream")
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Streaming failed: {str(e)}")
+        return await self.chat_service.process_async_chat_request(req=body)
+
+    async def run_multipart(
+        self,
+        prompt: str = Form(...),
+        agent: Optional[str] = Form(None),
+        session_id: Optional[str] = Form(None),
+        user_id: Optional[str] = Form(None),
+        group_id: Optional[str] = Form(None),
+        thread_name: Optional[str] = Form(None),
+        files: Optional[List[UploadFile]] = File(None),
+        images: Optional[List[UploadFile]] = File(None),
+    ):
+        req = AgentRESTRequestHandler.BaseMultimodalRunRequest(
+            prompt=prompt,
+            agent=agent,
+            session_id=session_id,
+            user_id=user_id,
+            group_id=group_id,
+            thread_name=thread_name,
+            files=files,
+            images=images,
+        )
+        if Config.get().execution.mode == ExecutionMode.STREAM:
+            try:
+                gen = await self.chat_service.process_stream_chat_async(req=req, sse_format=True)
+                return StreamingResponse(gen, media_type="text/event-stream")
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Streaming failed: {str(e)}")
+        return await self.chat_service.process_async_chat_request(req=req)
+
     def get_router(self) -> APIRouter:
         """
         Returns the APIRouter instance.
         """
-
         router = APIRouter()
-
-        @router.get("/api/v1/agents")
-        def list_agents():
-            return {"agents": list(Runtime.current().agents().keys())}
-
-        @router.post("/api/v1/chat")
-        async def run(body: BaseRunRequest):
-            if Config.get().execution.mode == ExecutionMode.STREAM:
-                try:
-                    gen = await self.chat_service.process_stream_chat_async(req=body, sse_format=True)
-                    return StreamingResponse(gen, media_type="text/event-stream")
-                except ValueError as e:
-                    raise HTTPException(status_code=400, detail=str(e))
-                except Exception as e:
-                    raise HTTPException(status_code=500, detail=f"Streaming failed: {str(e)}")
-            return await self.chat_service.process_async_chat_request(req=body)
-
-        @router.post("/api/v1/chat-multipart")
-        async def run_multipart(
-            prompt: str = Form(...),
-            agent: Optional[str] = Form(None),
-            session_id: Optional[str] = Form(None),
-            files: Optional[List[UploadFile]] = File(None),
-            images: Optional[List[UploadFile]] = File(None),
-        ):
-            req = AgentRESTRequestHandler.BaseMultimodalRunRequest(
-                prompt=prompt,
-                agent=agent,
-                session_id=session_id,
-                files=files,
-                images=images,
-            )
-            if Config.get().execution.mode == ExecutionMode.STREAM:
-                try:
-                    gen = await self.chat_service.process_stream_chat_async(req=req, sse_format=True)
-                    return StreamingResponse(gen, media_type="text/event-stream")
-                except ValueError as e:
-                    raise HTTPException(status_code=400, detail=str(e))
-                except Exception as e:
-                    raise HTTPException(status_code=500, detail=f"Streaming failed: {str(e)}")
-            return await self.chat_service.process_async_chat_request(req=req)
-
+        router.add_api_route(self.AGENTS_PATH, self.list_agents, methods=["GET"])
+        router.add_api_route(self.CHAT_PATH, self.run, methods=["POST"])
+        router.add_api_route(self.CHAT_MULTIPART_PATH, self.run_multipart, methods=["POST"])
         return router
